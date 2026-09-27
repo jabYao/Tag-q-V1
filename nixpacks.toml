@@ -1,21 +1,25 @@
 # Tag q — Monolito Laravel + Vite (Blade + Livewire) — Railway/Nixpacks
-# AGENTS.md §2: monolito SSR, un solo proceso Laravel, PostgreSQL, Cloudinary, Vite solo como bundler
+# AGENTS.md §2: monolito SSR, un solo proceso Laravel, PostgreSQL, Cloudinary, Vite como bundler
 
-[providers]
-# Nixpacks detecta php y node automáticamente via composer.json + package.json
-# No forzar provider para que respete php ^8.3 de composer.json
+# `providers` se omite a propósito: Nixpacks detecta PHP (composer.json) y Node (package.json)
+# automáticamente. Si se declara, DEBE ser una lista (ej. providers = ["php", "node"]),
+# no una tabla: un [providers] vacío rompe el parseo del archivo.
+
+[variables]
+# Laravel sirve desde public/ (Symfony/Laravel lo requieren). Sin esto el server root
+# es /app y la app no responde. Se aplica en build y en runtime.
+NIXPACKS_PHP_ROOT_DIR = "/app/public"
 
 [phases.setup]
 nixPkgs = ["php", "phpPackages.composer", "nodejs_20", "postgresql"]
 
 [phases.install]
-# Nixpacks ya hace composer install + npm ci, pero lo dejamos explícito para cache óptimo
 cmds = ["composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader", "npm ci"]
 
 [phases.build]
 cmds = ["npm run build", "php artisan config:clear"]
 
 [start]
-# Railway inyecta $PORT. Healthcheck en /up (definido en bootstrap/app.php)
-# migrate --force es seguro con PostgreSQL y mantiene enum/check de orders status
+# Railway inyecta $PORT. Healthcheck en /up (definido en bootstrap/app.php).
+# migrate --force mantiene enum/check de orders y el esquema al día en cada deploy.
 cmd = "php artisan migrate --force && php artisan config:cache && php artisan serve --host=0.0.0.0 --port=$PORT"
