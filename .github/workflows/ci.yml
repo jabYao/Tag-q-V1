@@ -37,7 +37,9 @@ jobs:
     env:
       APP_ENV: testing
       APP_DEBUG: true
-      APP_KEY: base64:lLFqKTfGlbFBEbbJDiLYjgGtYrKxi0VsIn4u+oJ3Bnk=
+      # Key DESECHABLE solo para la suite de tests. Nunca reutilizar la de
+      # local ni la de producción: APP_KEY es por entorno.
+      APP_KEY: base64:rJFe3/tm4fX4rFY7VnTaXx8Im9sagKmZDeCJPiw8auU=
       DB_CONNECTION: pgsql
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
