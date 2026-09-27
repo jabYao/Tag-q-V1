@@ -1,23 +1,21 @@
 # Tag q — Monolito Laravel + Vite (Blade + Livewire) — Railway/Nixpacks
 # AGENTS.md §2: monolito SSR, un solo proceso Laravel, PostgreSQL, Cloudinary, Vite como bundler
-
-# `providers` se omite a propósito: Nixpacks detecta PHP (composer.json) y Node (package.json)
-# automáticamente. Si se declara, DEBE ser una lista (ej. providers = ["php", "node"]),
-# no una tabla: un [providers] vacío rompe el parseo del archivo.
+#
+# IMPORTANTE: NO declarar `php` en [phases.setup].nixPkgs. El proveedor PHP de Nixpacks
+# elige la versión leyendo el `require.php` de composer.json (^8.4.1 -> php84). Si se
+# agrega el paquete `php` genérico, se instala el PHP por defecto del canal (8.3) y
+# composer install falla porque el lock exige php >=8.4.1.
+#
+# Tampoco se declara `providers`: se detectan solos por composer.json (PHP) y package.json (Node).
+# Y si se declara, debe ser una lista (providers = ["php", "node"]), nunca una tabla.
 
 [variables]
-# Laravel sirve desde public/ (Symfony/Laravel lo requieren). Sin esto el server root
-# es /app y la app no responde. Se aplica en build y en runtime.
+# Laravel sirve desde public/. Sin esto el server root es /app y la app no responde.
 NIXPACKS_PHP_ROOT_DIR = "/app/public"
 
-[phases.setup]
-nixPkgs = ["php", "phpPackages.composer", "nodejs_20", "postgresql"]
-
-[phases.install]
-cmds = ["composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader", "npm ci"]
-
 [phases.build]
-cmds = ["npm run build", "php artisan config:clear"]
+# Vite/Tailwind: sin esto no existe public/build/manifest.json y las vistas @vite fallan.
+cmds = ["npm run build"]
 
 [start]
 # Railway inyecta $PORT. Healthcheck en /up (definido en bootstrap/app.php).
