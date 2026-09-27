@@ -5,6 +5,8 @@
 .env.production
 .phpactor.json
 .phpunit.result.cache
+/junit.xml
+/junit-*.xml
 /.codex
 /.cursor/
 /.idea

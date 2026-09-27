@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (PostgreSQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: tagq_testing
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tagq_testing"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      APP_KEY: base64:lLFqKTfGlbFBEbbJDiLYjgGtYrKxi0VsIn4u+oJ3Bnk=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: tagq_testing
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      # Los tests mockean CloudinaryService: no se necesita credencial real.
+      CLOUDINARY_URL: cloudinary://test_key:test_secret@test_cloud
+      CLOUDINARY_CLOUD_NAME: test_cloud
+      # Umbral de fallos tolerados SOLO en la suite general (variables del repo).
+      # Dinero/stock no pasan por aquí: se ejecutan sin tolerancia.
+      TEST_FAILURE_THRESHOLD: ${{ vars.TEST_FAILURE_THRESHOLD || 0 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_pgsql, gd, curl, dom, fileinfo, xml, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Instalar dependencias PHP
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Preparar entorno
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Instalar dependencias JS
+        run: npm ci
+
+      # --- Dinero y stock: tolerancia CERO (AGENTS.md §3 regla 4) ---
+      - name: Tests críticos (dinero/stock) — 0 fallos permitidos
+        run: php artisan test --group=critical
+
+      # --- Suite general: umbral configurable, por defecto 0 ---
+      - name: Tests generales (con umbral)
+        id: general
+        continue-on-error: true
+        run: php artisan test --exclude-group=critical --log-junit junit.xml
+
+      - name: Verificar umbral de fallos
+        run: php tools/ci-gate.php junit.xml "${TEST_FAILURE_THRESHOLD:-0}"
+
+      - name: Build de assets (Vite)
+        run: npm run build
+
+      # --- Estilo: informativo hasta que se normalice el repo con `vendor/bin/pint` ---
+      - name: Estilo de código (advisory)
+        continue-on-error: true
+        run: vendor/bin/pint --test

@@ -8,8 +8,11 @@ use App\Models\User;
 use App\Services\CartService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
+#[Group('critical')]
+#[Group('stock')]
 class CartServiceTest extends TestCase
 {
     use RefreshDatabase;
