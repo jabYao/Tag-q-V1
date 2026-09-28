@@ -18,6 +18,8 @@ NIXPACKS_PHP_ROOT_DIR = "/app/public"
 cmds = ["npm run build"]
 
 [start]
-# Railway inyecta $PORT. Healthcheck en /up (definido en bootstrap/app.php).
+# Railway inyecta $PORT. Se usa ${PORT:-8080} para que el arranque no falle si
+# la variable no estuviera definida (artisan serve --port= vacío reventaría).
+# Healthcheck en /up (definido en bootstrap/app.php).
 # migrate --force mantiene enum/check de orders y el esquema al día en cada deploy.
-cmd = "php artisan migrate --force && php artisan config:cache && php artisan serve --host=0.0.0.0 --port=$PORT"
+cmd = "php artisan migrate --force && php artisan config:cache && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
