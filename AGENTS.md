@@ -110,3 +110,10 @@ Reglas:
 ---
 
 
+## 4. Flujo de Git (regla del dueño)
+
+- **Commit** solo después de correr **toda** la suite (`php artisan test`) y verla **completa en verde**. Si algún test falla, no se commitea.
+- **Push** solo con **autorización explícita** del dueño. El agente **nunca** ejecuta `git push` por su cuenta, aunque el commit ya exista y esté listo.
+- El commit es **local** por defecto: commitear **no** implica publicar ni desplegar (Railway despliega con el push).
+- No saltarse hooks ni tests (`--no-verify`, tests omitidos) para "avanzar".
+
