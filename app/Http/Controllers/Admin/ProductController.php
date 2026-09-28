@@ -22,6 +22,9 @@ class ProductController extends Controller
 
     public function create(): View
     {
+        // Solo el admin puede crear productos (el empleado queda fuera)
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         $categories = \App\Models\Category::orderBy('name')->get();
         return view('admin.products.create', compact('categories'));
     }
@@ -71,7 +74,14 @@ class ProductController extends Controller
         $data['imagenes'] = array_values(array_merge($existentes, $nuevas));
         // Limitar a 5 como en validación (merge podría exceder si cliente manipula)
         $data['imagenes'] = array_slice($data['imagenes'], 0, 5);
-        $data['is_active'] = $request->boolean('is_active', true);
+
+        // Solo el admin puede cambiar el estado activo/inactivo.
+        // El empleado nunca toca is_active (prohibido en la validación).
+        // El checkbox se omite al desmarcar: la ausencia equivale a "inactivo".
+        if ($request->user()->isAdmin()) {
+            $data['is_active'] = $request->boolean('is_active', false);
+        }
+
         unset($data['imagenes_existentes']);
 
         $product->update($data);
@@ -81,6 +91,9 @@ class ProductController extends Controller
 
     public function destroy(Product $product): RedirectResponse
     {
+        // Solo el admin puede eliminar productos (el empleado queda fuera)
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         if (! empty($product->imagenes)) {
             $this->images->deleteByUrls($product->imagenes);
         }

@@ -15,20 +15,22 @@ class UpdateProductRequest extends FormRequest
     public function rules(): array
     {
         $productId = $this->route('product')?->id ?? $this->route('producto')?->id;
+        $esAdmin = (bool) $this->user()?->isAdmin();
 
         return [
             'category_id' => ['required', 'exists:categories,id'],
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'unique:products,slug,' . $productId],
             'descripcion' => ['nullable', 'string'],
-            'precio' => ['required', 'integer', 'min:0'],
-            'stock' => ['required', 'integer', 'min:0'],
+            // Campos sensibles: el admin los edita; el empleado tiene prohibido enviarlos.
+            'precio' => $esAdmin ? ['required', 'integer', 'min:0'] : ['prohibited'],
+            'stock' => $esAdmin ? ['required', 'integer', 'min:0'] : ['prohibited'],
             'marca' => ['nullable', 'string', 'max:255'],
             'material_pulso' => ['nullable', 'string', 'max:255'],
             'cristal' => ['nullable', 'string', 'max:255'],
             'ancho_correa' => ['nullable', 'string', 'max:255'],
             'movimiento' => ['nullable', 'string', 'max:255'],
-            'is_active' => ['sometimes', 'boolean'],
+            'is_active' => $esAdmin ? ['sometimes', 'boolean'] : ['prohibited'],
             'imagenes' => ['nullable', 'array', 'max:5'],
             'imagenes.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'imagenes_existentes' => ['nullable', 'array'],

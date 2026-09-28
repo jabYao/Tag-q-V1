@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role'])]
+#[Fillable(['name', 'email', 'password', 'role', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -29,6 +29,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -63,6 +64,30 @@ class User extends Authenticatable
     public function isCliente(): bool
     {
         return $this->role === 'cliente';
+    }
+
+    public function isActive(): bool
+    {
+        return (bool) $this->is_active;
+    }
+
+    /**
+     * ¿Es el único administrador activo que queda?
+     *
+     * Se usa para impedir que el sistema se quede sin admins activos:
+     * no se puede desactivar ni cambiar de rol al último de ellos.
+     */
+    public function isLastActiveAdmin(): bool
+    {
+        if (! $this->isAdmin() || ! $this->isActive()) {
+            return false;
+        }
+
+        return ! static::query()
+            ->where('role', 'admin')
+            ->where('is_active', true)
+            ->whereKeyNot($this->getKey())
+            ->exists();
     }
 
     /**

@@ -142,4 +142,38 @@ class LoginTest extends TestCase
             ->assertSee(route('admin.products.index'))
             ->assertDontSee(url('/dashboard'));
     }
+
+    public function test_usuario_inactivo_no_puede_iniciar_sesion(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'admin',
+            'is_active' => false,
+            'password' => 'secreto123',
+        ]);
+
+        Livewire::test(Login::class)
+            ->set('email', $user->email)
+            ->set('password', 'secreto123')
+            ->call('login')
+            ->assertHasErrors('email');
+
+        $this->assertGuest();
+    }
+
+    public function test_usuario_activo_puede_iniciar_sesion(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+            'password' => 'secreto123',
+        ]);
+
+        Livewire::test(Login::class)
+            ->set('email', $user->email)
+            ->set('password', 'secreto123')
+            ->call('login')
+            ->assertHasNoErrors();
+
+        $this->assertAuthenticatedAs($user);
+    }
 }

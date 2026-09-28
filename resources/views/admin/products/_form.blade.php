@@ -1,4 +1,7 @@
-@php $p = $product ?? null; @endphp
+@php
+    $p = $product ?? null;
+    $isAdmin = auth()->user()?->isAdmin() ?? false;
+@endphp
 
 @if($errors->any())
     <div class="bg-red-50 text-red-700 p-3 rounded text-sm">
@@ -23,10 +26,12 @@
         <input name="slug" value="{{ old('slug', $p?->slug) }}" class="w-full border rounded px-3 py-2" required>
     </label>
     <label class="block">Precio COP (sin puntos)
-        <input name="precio" type="number" value="{{ old('precio', $p?->precio) }}" class="w-full border rounded px-3 py-2" required>
+        <input name="precio" type="number" value="{{ old('precio', $p?->precio) }}" class="w-full border rounded px-3 py-2" required @disabled(!$isAdmin)>
+        @unless($isAdmin)<span class="text-xs text-gray-400">Solo el administrador puede modificar el precio.</span>@endunless
     </label>
     <label class="block">Stock
-        <input name="stock" type="number" value="{{ old('stock', $p?->stock ?? 0) }}" class="w-full border rounded px-3 py-2" required>
+        <input name="stock" type="number" value="{{ old('stock', $p?->stock ?? 0) }}" class="w-full border rounded px-3 py-2" required @disabled(!$isAdmin)>
+        @unless($isAdmin)<span class="text-xs text-gray-400">Solo el administrador puede modificar el stock.</span>@endunless
     </label>
     <label class="block">Marca
         <input name="marca" value="{{ old('marca', $p?->marca) }}" class="w-full border rounded px-3 py-2">
@@ -54,6 +59,8 @@
     <input type="file" name="imagenes[]" multiple accept="image/*" class="w-full border rounded px-3 py-2">
 </label>
 
+@if($isAdmin)
 <label class="flex items-center gap-2">
     <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $p?->is_active ?? true))> Activo
 </label>
+@endif

@@ -2,9 +2,12 @@
 @section('title', 'Productos')
 
 @section('content')
+@php $isAdmin = auth()->user()?->isAdmin() ?? false; @endphp
 <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">Productos</h1>
-    <a href="{{ route('admin.products.create') }}" class="bg-black text-white px-4 py-2 rounded">Nuevo producto</a>
+    @if($isAdmin)
+        <a href="{{ route('admin.products.create') }}" class="bg-black text-white px-4 py-2 rounded">Nuevo producto</a>
+    @endif
 </div>
 
 <table class="w-full bg-white rounded shadow overflow-hidden">
@@ -26,10 +29,12 @@
             <td class="px-4 py-2">{{ count($p->imagenes ?? []) }}</td>
             <td class="px-4 py-2 flex gap-2">
                 <a href="{{ route('admin.products.edit', $p) }}" class="text-blue-600 text-sm">Editar</a>
+                @if($isAdmin)
                 <form method="POST" action="{{ route('admin.products.destroy', $p) }}" onsubmit="return confirm('¿Eliminar?')">
                     @csrf @method('DELETE')
                     <button class="text-red-600 text-sm">Eliminar</button>
                 </form>
+                @endif
             </td>
         </tr>
     @empty

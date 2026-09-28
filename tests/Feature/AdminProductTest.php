@@ -17,6 +17,7 @@ class AdminProductTest extends TestCase
 
     private Category $category;
     private User $admin;
+    private User $empleado;
     private User $cliente;
 
     protected function setUp(): void
@@ -25,6 +26,7 @@ class AdminProductTest extends TestCase
 
         $this->category = Category::create(['name' => 'Caballero', 'slug' => 'caballero']);
         $this->admin = User::factory()->create(['role' => 'admin']);
+        $this->empleado = User::factory()->create(['role' => 'empleado']);
         $this->cliente = User::factory()->create(['role' => 'cliente']);
 
         // Mock CloudinaryService global para no tocar red en tests
@@ -163,6 +165,149 @@ class AdminProductTest extends TestCase
             ->assertRedirect(route('admin.products.index'));
 
         $this->assertDatabaseMissing('products', ['id' => $product->id]);
+    }
+
+    public function test_empleado_no_puede_crear_producto(): void
+    {
+        $this->actingAs($this->empleado)
+            ->get(route('admin.products.create'))
+            ->assertForbidden();
+
+        $this->actingAs($this->empleado)
+            ->post(route('admin.products.store'), $this->validData(['slug' => 'emp-forged']))
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('products', ['slug' => 'emp-forged']);
+    }
+
+    public function test_empleado_no_puede_eliminar_producto(): void
+    {
+        $product = Product::create($this->validData(['slug' => 'emp-del']));
+
+        $this->actingAs($this->empleado)
+            ->delete(route('admin.products.destroy', $product))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
+    }
+
+    public function test_empleado_puede_actualizar_campos_permitidos_sin_tocar_los_sensibles(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'emp-upd',
+            'precio' => 500000,
+            'stock' => 7,
+            'is_active' => true,
+        ]));
+
+        $this->actingAs($this->empleado)
+            ->put(route('admin.products.update', $product), [
+                'category_id' => $this->category->id,
+                'name' => 'Chronos Empleado',
+                'slug' => 'emp-upd',
+                'descripcion' => 'Editado por empleado',
+                'marca' => 'NuevaMarca',
+                'material_pulso' => 'Acero',
+                'movimiento' => 'Cuarzo',
+            ])
+            ->assertRedirect(route('admin.products.index'));
+
+        $product->refresh();
+        $this->assertSame('Chronos Empleado', $product->name);
+        $this->assertSame('NuevaMarca', $product->marca);
+        $this->assertSame('Acero', $product->material_pulso);
+        $this->assertSame(500000, $product->precio);
+        $this->assertSame(7, $product->stock);
+        $this->assertTrue($product->is_active);
+    }
+
+    public function test_admin_puede_desactivar_producto_al_omitir_el_checkbox(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'admin-deact',
+            'is_active' => true,
+        ]));
+
+        // El formulario omite is_active cuando el checkbox queda sin marcar.
+        $this->actingAs($this->admin)
+            ->put(route('admin.products.update', $product), [
+                'category_id' => $this->category->id,
+                'name' => 'Chronos Admin',
+                'slug' => 'admin-deact',
+                'precio' => 900000,
+                'stock' => 3,
+                'descripcion' => 'Editado por admin',
+            ])
+            ->assertRedirect(route('admin.products.index'));
+
+        $product->refresh();
+        $this->assertFalse($product->is_active);
+    }
+
+    public function test_empleado_no_puede_desactivar_producto_al_omitir_el_checkbox(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'emp-deact',
+            'is_active' => true,
+        ]));
+
+        $this->actingAs($this->empleado)
+            ->put(route('admin.products.update', $product), [
+                'category_id' => $this->category->id,
+                'name' => 'Chronos Empleado',
+                'slug' => 'emp-deact',
+                'descripcion' => 'Editado por empleado',
+            ])
+            ->assertRedirect(route('admin.products.index'));
+
+        $product->refresh();
+        $this->assertTrue($product->is_active);
+    }
+
+    public function test_empleado_no_puede_cambiar_precio_stock_ni_activo_con_request_forjado(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'emp-prot',
+            'precio' => 500000,
+            'stock' => 7,
+            'is_active' => true,
+        ]));
+
+        $this->actingAs($this->empleado)
+            ->from(route('admin.products.edit', $product))
+            ->put(route('admin.products.update', $product), [
+                'category_id' => $this->category->id,
+                'name' => 'Intento forzado',
+                'slug' => 'emp-prot',
+                'precio' => 999,
+                'stock' => 999,
+                'is_active' => 0,
+            ])
+            ->assertSessionHasErrors(['precio', 'stock', 'is_active'])
+            ->assertRedirect(route('admin.products.edit', $product));
+
+        $product->refresh();
+        $this->assertSame(500000, $product->precio);
+        $this->assertSame(7, $product->stock);
+        $this->assertTrue($product->is_active);
+        $this->assertSame('Chronos Test', $product->name);
+    }
+
+    public function test_empleado_no_ve_crear_ni_eliminar_en_el_listado(): void
+    {
+        Product::create($this->validData(['slug' => 'emp-ui']));
+
+        $this->actingAs($this->empleado)
+            ->get(route('admin.products.index'))
+            ->assertOk()
+            ->assertDontSee('Nuevo producto')
+            ->assertDontSee('Eliminar');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.products.index'))
+            ->assertOk()
+            ->assertSee('Nuevo producto')
+            ->assertSee('Eliminar');
     }
 
     protected function tearDown(): void

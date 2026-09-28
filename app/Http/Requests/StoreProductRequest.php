@@ -9,8 +9,8 @@ class StoreProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $user = $this->user();
-        return $user && in_array($user->role, ['admin', 'empleado']);
+        // Crear productos es exclusivo del admin; el empleado no puede.
+        return (bool) $this->user()?->isAdmin();
     }
 
     public function rules(): array
