@@ -22,4 +22,6 @@ cmds = ["npm run build"]
 # la variable no estuviera definida (artisan serve --port= vacío reventaría).
 # Healthcheck en /up (definido en bootstrap/app.php).
 # migrate --force mantiene enum/check de orders y el esquema al día en cada deploy.
-cmd = "php artisan migrate --force && php artisan config:cache && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
+# db:seed --class=ProductionSeeder es idempotente: crea las 3 categorías base y el
+# admin desde ADMIN_EMAIL/ADMIN_PASSWORD (si no están definidas, solo avisa y sigue).
+cmd = "php artisan migrate --force && php artisan db:seed --class=ProductionSeeder --force && php artisan config:cache && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"

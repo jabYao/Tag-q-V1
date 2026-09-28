@@ -2,7 +2,7 @@
 
 > **Para retomar rápido:** lee este archivo completo. Tiene el estado real, lo que falta y los errores ya resueltos (para no repetirlos).
 
-Última actualización: 2026-09-27
+Última actualización: 2026-09-28
 
 ---
 
@@ -13,9 +13,10 @@
 | App Laravel 13 (monolito Blade + Livewire) | ✅ sirviendo en Railway |
 | PostgreSQL 18.6 (Railway) | ✅ las 10 migraciones aplicadas |
 | Cloudinary | ✅ probado contra el cloud `dg6iut6sl` |
-| Suite de tests | ✅ `18/18` pasando (`php artisan test`) |
+| Autenticación (login Livewire) + roles | ✅ login, logout, throttle y `role:admin,empleado` |
+| Suite de tests | ✅ `43/43` pasando (`php artisan test`) |
 | CI GitHub Actions | ✅ `.github/workflows/ci.yml` (PostgreSQL 15 + gate de umbral) |
-| Último commit desplegado | `55614df` |
+| Último commit | `feat(auth): login Livewire, logout y control de acceso por roles` (local; pendiente push/deploy) |
 
 **Nada pendiente por commitear ni pushear.** `main` == `origin/main`.
 
@@ -26,7 +27,7 @@
   * **App** (repo `jabYao/Tag-q-V1`) — las variables se pegan aquí.
 * La app obtiene la conexión con las referencias `${{Postgres.PGHOST}}`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`.
 * Dominio: ver **Railway → servicio App → `Settings` → `Networking`**.
-* `APP_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}` — **el dominio público debe existir** o el build falla (ver §3).
+* `APP_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}` — **el dominio público debe existir** o el build falla (ver §4).
 
 ### Dónde viven las variables (nunca en el repo)
 
@@ -42,30 +43,57 @@
 
 ---
 
-## 2. Lo que falta (elegir por dónde seguir)
+## 2. Autenticación y roles (implementado 2026-09-28)
 
-**Huecos importantes hoy:**
+**Ya no faltan** el usuario admin ni la pantalla de login: ambos quedaron resueltos.
 
-1. **No hay usuario admin** → no se puede iniciar sesión (la base solo tiene tablas).
-2. **No existe pantalla de login** → `routes/web.php` tiene un stub que devuelve 401:
-   ```php
-   Route::get('/login', fn () => response('Login requerido', 401))->name('login');
-   ```
-   Por eso `/admin/products` es inalcanzable, aunque el CRUD ya está listo.
-3. `DatabaseSeeder` **no sirve para producción**: crea `test@example.com` con contraseña `password`
-   y 4 productos con imágenes de `picsum.photos` (placeholders).
+| Pieza | Ruta |
+|---|---|
+| Componente Livewire de login | `app/Livewire/Auth/Login.php` + `resources/views/livewire/auth/login.blade.php` |
+| Página + layout de invitado | `resources/views/auth/login.blade.php` + `resources/views/layouts/guest.blade.php` |
+| Rutas | `GET /login` (`guest`) · `POST /logout` (`auth`) en `routes/web.php` |
+| Middleware de rol | `app/Http/Middleware/EnsureUserHasRole.php`, alias `role` en `bootstrap/app.php` |
+| Helpers de rol | `User::isAdmin()/isEmpleado()/isCliente()/hasAnyRole()/canAccessAdmin()` |
+| Seeder de producción | `database/seeders/ProductionSeeder.php` + `config/tagq.php` |
 
-**Opciones acordadas:**
+**Reglas de acceso:**
 
-| Opción | Alcance | Test |
+| Rol | Panel `/admin/*` | Login |
 |---|---|---|
-| **A** ⭐ (recomendada) | Login (Livewire) + `ProductionSeeder` con 3 categorías y admin con `ADMIN_EMAIL`/`ADMIN_PASSWORD` desde variables de entorno | Feature |
-| **B** | Catálogo público: listado con Swiper + AOS + filtros Livewire por categoría | Feature |
-| **C** | Checkout con reserva de stock sin sobreventa | **Feature primero** (AGENTS.md §3 regla 4) |
+| `admin` | ✅ | ✅ redirige al panel |
+| `empleado` | ✅ | ✅ redirige al panel |
+| `cliente` | ⛔ 403 | ✅ redirige a `/` |
+| invitado | ⛔ redirect a `/login` | — |
+
+**Seguridad del login:** validación de email/contraseña, máximo 5 intentos por
+`email+IP` (bloqueo 60 s), `session()->regenerate()` al entrar. Mensajes en español.
+
+**Seeder de producción (idempotente):** crea las 3 categorías base y el admin desde
+`ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Si faltan las credenciales, solo avisa
+y no crea ningún admin (nunca deja contraseña por defecto). Corre en cada deploy
+(`nixpacks.toml` / `railway.json`): `migrate --force && db:seed --class=ProductionSeeder --force`.
+
+> **Acción pendiente en Railway:** definir `ADMIN_NAME`, `ADMIN_EMAIL` y `ADMIN_PASSWORD`
+> en las variables del servicio **App** (nunca en el repo). Al desplegar se crea el admin
+> y ya se puede entrar a `/login`.
 
 ---
 
-## 3. Errores ya resueltos — NO repetirlos
+## 3. Lo que falta (elegir por dónde seguir)
+
+| Opción | Alcance | Test |
+|---|---|---|
+| **B** ⭐ (recomendada) | Catálogo público: listado con Swiper + AOS + filtros Livewire por categoría | Feature |
+| **C** | Checkout con reserva de stock sin sobreventa | **Feature primero** (AGENTS.md §3 regla 4) |
+| **D** | Gestión de usuarios en el panel (admin crea empleados/clientes) | Feature |
+
+Además: `DatabaseSeeder` (local) sigue siendo el de desarrollo (`admin@tagq.local`,
+`test@example.com` y 4 productos placeholder) y duplica las 3 categorías; conviene
+que llame a `ProductionSeeder` para no divergir.
+
+---
+
+## 4. Errores ya resueltos — NO repetirlos
 
 Cada uno costó un deploy fallido. El porqué y el fix:
 
@@ -87,7 +115,7 @@ Cada uno costó un deploy fallido. El porqué y el fix:
 
 ---
 
-## 4. Arquitectura y convenciones (resumen de AGENTS.md)
+## 5. Arquitectura y convenciones (resumen de AGENTS.md)
 
 * **Monolito SSR**: Laravel 11+ con Blade + Livewire. Sin API separada, sin React, sin MySQL.
 * **PostgreSQL** obligatorio (los tests corren contra `tagq_testing`, nunca SQLite: `enum`, `json` y FK no se comportan igual).
@@ -98,31 +126,42 @@ Cada uno costó un deploy fallido. El porqué y el fix:
 
 ---
 
-## 5. Cómo retomar mañana
+## 6. Cómo retomar mañana
 
 ```bash
 cd "/home/airj/Documentos/practica/Tag q renovado"
 
-php artisan test              # debe dar 18/18
-git status -sb                # debe decir: ## main...origin/main (limpio)
+php artisan test              # debe dar 43/43
+git status -sb                # ver qué quedó por commitear (auth+roles)
 
 # ver la app en producción
 # Railway → servicio App → Settings → Networking → abrir el dominio
 ```
 
-Luego elegir la opción A, B o C de §2.
+Antes del próximo commit: definir `ADMIN_EMAIL`/`ADMIN_PASSWORD` en Railway, y luego
+elegir la opción B, C o D de §3.
 
 ### Mapa del código relevante
 
 | Ruta | Qué es |
 |---|---|
+| `app/Livewire/Auth/Login.php` | login Livewire: validación, throttle 5 intentos, redirect por rol |
+| `app/Http/Middleware/EnsureUserHasRole.php` | middleware `role:admin,empleado` (403 si el rol no alcanza) |
+| `app/Models/User.php` | helpers `isAdmin/isEmpleado/isCliente/hasAnyRole/canAccessAdmin` |
+| `database/seeders/ProductionSeeder.php` | 3 categorías + admin desde env (idempotente) |
+| `config/tagq.php` | credenciales de admin y categorías base |
+| `routes/web.php` | `/login`, `/logout` y grupos `/admin` protegidos |
 | `app/Services/CartService.php` | carrito con tope por stock (sin sobreventa) |
 | `app/Services/CloudinaryService.php` | wrapper del SDK (upload/destroy/ping) |
 | `app/Services/ProductImageService.php` | subida múltiple → `products.imagenes`; borra por `public_id` |
 | `app/Http/Controllers/Admin/ProductController.php` | CRUD admin de productos |
 | `app/Http/Requests/{Store,Update}ProductRequest.php` | validación + autorización `admin`/`empleado` |
 | `resources/views/admin/products/*` | vistas Blade del admin |
+| `tests/Feature/Auth/LoginTest.php` | login, errores, throttle, logout, inicio |
+| `tests/Feature/Auth/RoleAccessTest.php` | matriz de roles sobre `/admin` |
+| `tests/Feature/ProductionSeederTest.php` | seeder idempotente y admin desde config |
+| `tests/Unit/UserRoleTest.php` | helpers de rol |
 | `tests/Feature/CartServiceTest.php` | tests de stock (`#[Group('critical')]` → 0 fallos permitidos en CI) |
 | `tests/Feature/AdminProductTest.php` | CRUD + Cloudinary mockeado |
 | `config/cloudinary.php` | mapea `CLOUDINARY_*` y la carpeta `tag-q/producto` |
-| `nixpacks.toml` / `railway.json` | build (Vite) y start (`migrate --force` + `serve`) |
+| `nixpacks.toml` / `railway.json` | build (Vite) y start (`migrate` + `ProductionSeeder` + `serve`) |

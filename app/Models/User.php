@@ -41,4 +41,35 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class);
     }
+
+    /**
+     * ¿El usuario tiene alguno de los roles indicados?
+     */
+    public function hasAnyRole(string ...$roles): bool
+    {
+        return in_array($this->role, $roles, true);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isEmpleado(): bool
+    {
+        return $this->role === 'empleado';
+    }
+
+    public function isCliente(): bool
+    {
+        return $this->role === 'cliente';
+    }
+
+    /**
+     * Admin y empleado pueden entrar al panel; cliente e invitado no.
+     */
+    public function canAccessAdmin(): bool
+    {
+        return $this->hasAnyRole('admin', 'empleado');
+    }
 }

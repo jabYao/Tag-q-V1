@@ -103,7 +103,7 @@ class AdminProductTest extends TestCase
     public function test_invitado_redirige_a_login(): void
     {
         $this->post(route('admin.products.store'), $this->validData())
-            ->assertRedirect(); // auth middleware redirige a login
+            ->assertRedirect(route('login')); // auth middleware redirige a login
     }
 
     public function test_update_conserva_y_elimina_imagenes(): void
