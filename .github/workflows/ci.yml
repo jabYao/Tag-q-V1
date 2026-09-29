@@ -93,6 +93,9 @@ jobs:
       - name: Instalar dependencias JS
         run: npm ci
 
+      - name: Build de assets (Vite)
+        run: npm run build
+
       # --- Dinero y stock: tolerancia CERO (AGENTS.md §3 regla 4) ---
       - name: Tests críticos (dinero/stock) — 0 fallos permitidos
         run: php artisan test --group=critical
@@ -105,9 +108,6 @@ jobs:
 
       - name: Verificar umbral de fallos
         run: php tools/ci-gate.php junit.xml "${TEST_FAILURE_THRESHOLD:-0}"
-
-      - name: Build de assets (Vite)
-        run: npm run build
 
       # --- Estilo: informativo hasta que se normalice el repo con `vendor/bin/pint` ---
       - name: Estilo de código (advisory)
