@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\RegistrationController;
+use App\Http\Controllers\CatalogController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -10,6 +11,12 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+// Catálogo público — accesible sin autenticación (monolito Blade, AGENTS.md §1)
+Route::get('/catalogo', [CatalogController::class, 'index'])->name('catalog.index');
+
+// Detalle público de producto por slug (binding implícito: /catalogo/{slug})
+Route::get('/catalogo/{product:slug}', [CatalogController::class, 'show'])->name('catalog.show');
 
 // Autenticación — monolito Blade + Livewire (AGENTS.md §1)
 Route::middleware('guest')->group(function () {
