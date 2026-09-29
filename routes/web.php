@@ -18,6 +18,12 @@ Route::get('/catalogo', [CatalogController::class, 'index'])->name('catalog.inde
 // Detalle público de producto por slug (binding implícito: /catalogo/{slug})
 Route::get('/catalogo/{product:slug}', [CatalogController::class, 'show'])->name('catalog.show');
 
+// Carrito público — invitado en sesión, cliente autenticado en carts/cart_items.
+Route::get('/carrito', fn () => view('cart.index'))->name('cart.index');
+
+// Checkout público MVP contraentrega — accesible a invitado y cliente autenticado.
+Route::get('/checkout', fn () => view('checkout.index'))->name('checkout.index');
+
 // Autenticación — monolito Blade + Livewire (AGENTS.md §1)
 Route::middleware('guest')->group(function () {
     Route::get('/login', fn () => view('auth.login'))->name('login');

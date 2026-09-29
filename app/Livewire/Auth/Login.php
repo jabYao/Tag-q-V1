@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Auth;
 
+use App\Services\CartService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
@@ -54,6 +55,9 @@ class Login extends Component
 
         RateLimiter::clear($this->throttleKey());
         session()->regenerate();
+
+        // El carrito de invitado (sesión) se fusiona con el del cliente (BD) al iniciar sesión.
+        app(CartService::class)->mergeOnLogin(Auth::user());
 
         $this->password = '';
 

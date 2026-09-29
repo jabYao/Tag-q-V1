@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $product->name }} — {{ config('app.name', 'Tag q') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @livewireStyles
 </head>
 <body class="bg-gray-50 min-h-screen">
     @php
@@ -19,7 +20,10 @@
     @endphp
 
     <main class="max-w-4xl mx-auto px-6 py-8" data-product-detail>
-        <a href="{{ route('catalog.index') }}" class="text-sm text-blue-700 hover:underline">&larr; Volver al catálogo</a>
+        <div class="flex items-center justify-between">
+            <a href="{{ route('catalog.index') }}" class="text-sm text-blue-700 hover:underline">&larr; Volver al catálogo</a>
+            <a href="{{ route('cart.index') }}" class="text-sm text-blue-700 hover:underline">Ver carrito</a>
+        </div>
 
         <article class="mt-6 bg-white rounded shadow overflow-hidden">
             <div data-product-gallery class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 bg-gray-100">
@@ -45,6 +49,10 @@
                     <p class="text-gray-700 leading-relaxed">{{ $product->descripcion }}</p>
                 @endif
 
+                <div class="mt-2">
+                    @livewire('cart.add-to-cart', ['product' => $product], key('detail-'.$product->id))
+                </div>
+
                 <section class="mt-2">
                     <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Especificaciones</h2>
 
@@ -64,5 +72,6 @@
             </div>
         </article>
     </main>
+    @livewireScripts
 </body>
 </html>
