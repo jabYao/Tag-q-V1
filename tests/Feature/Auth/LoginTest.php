@@ -19,6 +19,18 @@ class LoginTest extends TestCase
             ->assertSeeLivewire(Login::class);
     }
 
+    public function test_el_script_de_livewire_usa_https_detras_del_proxy_de_railway(): void
+    {
+        $response = $this->withHeaders([
+            'X-Forwarded-Proto' => 'https',
+            'X-Forwarded-Host' => 'tag-q-v1-production.up.railway.app',
+        ])->get(route('login'));
+
+        $response->assertOk()
+            ->assertSee('https://tag-q-v1-production.up.railway.app/livewire-', false)
+            ->assertDontSee('http://tag-q-v1-production.up.railway.app/livewire-', false);
+    }
+
     public function test_usuario_autenticado_no_ve_el_login(): void
     {
         $user = User::factory()->create(['role' => 'admin']);
