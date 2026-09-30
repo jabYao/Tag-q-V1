@@ -62,10 +62,13 @@ Route::middleware('auth')->prefix('mis-pedidos')->name('customer.orders.')->grou
 Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('products', ProductController::class)->except(['show'])->parameters(['products' => 'product']);
 
-    // Pedidos — solo admin y empleado: listado, detalle y avance del flujo operativo.
+    // Pedidos — solo admin y empleado: listado, detalle, avance del flujo
+    // operativo y salidas de cancelación/reembolso (parte 4).
     Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::patch('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.status');
+    Route::patch('orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
+    Route::post('orders/{order}/refund', [OrderController::class, 'refund'])->name('orders.refund');
 });
 
 // Gestión de usuarios — solo admin (empleado, cliente e invitado quedan fuera)

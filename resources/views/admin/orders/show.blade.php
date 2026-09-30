@@ -110,4 +110,39 @@ $shipping = $order->shipping_address ?? [];
         </div>
     @endif
 </div>
+
+{{-- Pago y devoluciones (parte 4): cancelar sin pago o reembolsar un pago Wompi --}}
+<div class="bg-white rounded shadow p-4 mt-6">
+    <h2 class="font-semibold mb-3">Pago y devoluciones</h2>
+
+    <p class="text-sm"><span class="text-gray-500">Método:</span> {{ $order->payment_method ?? '—' }}</p>
+    <p class="text-sm"><span class="text-gray-500">Transacción Wompi:</span> {{ $order->wompi_transaction_id ?? '—' }}</p>
+    <p class="text-sm"><span class="text-gray-500">Reembolso Wompi:</span> {{ $order->wompi_refund_id ?? '—' }}</p>
+
+    @if($canCancel || $canRefund)
+        <div class="flex flex-wrap items-end gap-3 mt-4">
+            @if($canCancel)
+                <form method="POST" action="{{ route('admin.orders.cancel', $order) }}"
+                      onsubmit="return confirm('¿Cancelar este pedido y devolver el stock?');">
+                    @csrf @method('PATCH')
+                    <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded text-sm">Cancelar pedido</button>
+                </form>
+            @endif
+
+            @if($canRefund)
+                <form method="POST" action="{{ route('admin.orders.refund', $order) }}" class="flex items-end gap-2"
+                      onsubmit="return confirm('¿Reembolsar este pago con Wompi?');">
+                    @csrf
+                    <div>
+                        <label for="reason" class="block text-xs text-gray-500 mb-1">Motivo del reembolso</label>
+                        <input id="reason" type="text" name="reason" maxlength="255" class="border rounded px-3 py-2 text-sm w-64">
+                    </div>
+                    <button type="submit" class="bg-black text-white px-4 py-2 rounded text-sm">Reembolsar con Wompi</button>
+                </form>
+            @endif
+        </div>
+    @else
+        <p class="text-sm text-gray-400 mt-3">No hay acciones de cancelación o reembolso disponibles para este estado.</p>
+    @endif
+</div>
 @endsection

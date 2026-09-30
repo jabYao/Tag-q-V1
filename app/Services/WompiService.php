@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\DB;
  * centavos, moneda, firma de integridad y redirect URL) y valida/aplica los
  * eventos `transaction.updated` que Wompi envía por webhook: firma del evento,
  * referencia del pedido y coincidencia exacta de monto (`total * 100`) y moneda.
+ * También centraliza la cancelación segura de un pedido pendiente
+ * (`cancelPendingOrder`), que restaura el stock una sola vez bajo
+ * `lockForUpdate`: la usa el webhook ante un rechazo y el cierre de pedidos
+ * vencidos (`orders:expire-wompi-pending`) cuando el webhook nunca llega.
  *
  * Nunca expone ni registra `WOMPI_PRIVATE_KEY` ni `WOMPI_EVENTS_SECRET`: solo
  * viajan al navegador la public key, la firma derivada y los datos públicos del
@@ -51,6 +55,24 @@ class WompiService
     private const ORDER_PAID = 'pagado';
 
     private const ORDER_CANCELLED = 'cancelado';
+
+    /** Minutos de espera por defecto antes de cerrar un pedido Wompi sin pago. */
+    public const PENDING_TTL_DEFAULT_MINUTES = 30;
+
+    /** Clave de configuración de la TTL del cierre automático. */
+    private const PENDING_TTL_CONFIG = 'services.wompi.pending_ttl_minutes';
+
+    /**
+     * Id de la transacción del último evento cuya firma y monto se validaron.
+     *
+     * El controlador del webhook (`WompiWebhookController`) invoca
+     * `verifyEventAmount` inmediatamente antes de `applyTransactionStatus`, así
+     * que el servicio recuerda el id aquí para persistirlo en el pedido sin
+     * cambiar la firma pública que ya consume ese controlador. Una respuesta
+     * distinta de 200 no llega a `applyTransactionStatus`, por lo que el id
+     * recordado solo se guarda cuando el evento ya pasó todas las validaciones.
+     */
+    private ?string $verifiedEventTransactionId = null;
 
     /*
     |--------------------------------------------------------------------------
@@ -316,6 +338,18 @@ class WompiService
     }
 
     /**
+     * Id de la transacción del evento (`data.transaction.id`), o null si falta.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function eventTransactionId(array $payload): ?string
+    {
+        $id = $payload['data']['transaction']['id'] ?? null;
+
+        return is_string($id) && $id !== '' ? $id : null;
+    }
+
+    /**
      * Verifica que la transacción declare exactamente el monto y la moneda del
      * pedido: `data.transaction.amount_in_cents === order.total * 100` y
      * `data.transaction.currency === 'COP'`.
@@ -343,12 +377,24 @@ class WompiService
             return false;
         }
 
-        return $amountInCents === $this->amountInCents($order)
-            && $currency === self::CURRENCY;
+        if ($amountInCents !== $this->amountInCents($order) || $currency !== self::CURRENCY) {
+            return false;
+        }
+
+        // El evento ya pasó la validación de monto y moneda: se recuerda su id
+        // para que applyTransactionStatus lo persista en el pedido.
+        $this->verifiedEventTransactionId = $this->eventTransactionId($payload);
+
+        return true;
     }
 
     /**
      * Aplica el estado de la transacción al pedido de forma idempotente.
+     *
+     * Guarda `data.transaction.id` en `wompi_transaction_id` cuando el evento lo
+     * trae (aprobar, rechazar o cualquier estado final): es la referencia que
+     * necesita un reembolso posterior. El id ya guardado no se sobrescribe, así
+     * un evento duplicado o tardío no reemplaza la transacción original.
      *
      * APPROVED pasa de pendiente_de_pago a pagado (el stock ya estaba reservado).
      * DECLINED/ERROR/VOIDED/EXPIRED pasa de pendiente_de_pago a cancelado y
@@ -356,18 +402,24 @@ class WompiService
      * un estado ya resuelto se ignora, así los eventos duplicados o fuera de
      * orden no vuelven a descontar ni restaurar stock.
      *
+     * El tercer parámetro permite pasar el id de la transacción de forma
+     * explícita; si se omite se usa el último recordado por `verifyEventAmount`.
+     *
      * @return string 'approved' | 'cancelled' | 'ignored' | 'not_found'
      */
-    public function applyTransactionStatus(Order $order, ?string $status): string
+    public function applyTransactionStatus(Order $order, ?string $status, ?string $transactionId = null): string
     {
         $status = strtoupper((string) $status);
+        $transactionId ??= $this->verifiedEventTransactionId;
 
-        return DB::transaction(function () use ($order, $status): string {
+        return DB::transaction(function () use ($order, $status, $transactionId): string {
             $locked = Order::whereKey($order->getKey())->lockForUpdate()->first();
 
             if (! $locked) {
                 return 'not_found';
             }
+
+            $this->rememberTransactionId($locked, $transactionId);
 
             if ($status === self::STATUS_APPROVED) {
                 if ($locked->status === self::ORDER_PENDING) {
@@ -381,26 +433,142 @@ class WompiService
             }
 
             if (in_array($status, self::STATUS_CANCELLED, true)) {
-                if ($locked->status === self::ORDER_PENDING) {
-                    foreach ($locked->items()->get() as $item) {
-                        $product = Product::whereKey($item->product_id)->lockForUpdate()->first();
-
-                        if ($product) {
-                            $product->increment('stock', (int) $item->quantity);
-                        }
-                    }
-
-                    $locked->status = self::ORDER_CANCELLED;
-                    $locked->save();
-
-                    return 'cancelled';
-                }
-
-                return 'ignored';
+                return $this->cancelLockedOrder($locked);
             }
 
             return 'ignored';
         });
+    }
+
+    /**
+     * Guarda el id de la transacción en el pedido bloqueado, sin sobrescribir el
+     * que ya estaba registrado.
+     */
+    private function rememberTransactionId(Order $locked, ?string $transactionId): void
+    {
+        if ($transactionId === null || $transactionId === '') {
+            return;
+        }
+
+        if ($locked->wompi_transaction_id === $transactionId) {
+            return;
+        }
+
+        if (is_string($locked->wompi_transaction_id) && $locked->wompi_transaction_id !== '') {
+            return;
+        }
+
+        $locked->wompi_transaction_id = $transactionId;
+        $locked->save();
+    }
+
+    /**
+     * Cancela un pedido pendiente y devuelve su stock al inventario una sola vez.
+     *
+     * Es la misma operación segura que usa el webhook cuando Wompi rechaza el
+     * pago (DECLINED/ERROR/VOIDED/EXPIRED), pero invocable sin evento: la usa el
+     * cierre de pedidos vencidos cuando el webhook nunca llega. Toma el bloqueo
+     * de escritura del pedido dentro de una transacción, así dos llamadores
+     * concurrentes (webhook y comando) no restauran el stock dos veces: el
+     * segundo ve el estado ya resuelto y no hace nada.
+     *
+     * @return string 'cancelled' | 'ignored' | 'not_found'
+     */
+    public function cancelPendingOrder(Order $order): string
+    {
+        return DB::transaction(function () use ($order): string {
+            $locked = Order::whereKey($order->getKey())->lockForUpdate()->first();
+
+            if (! $locked) {
+                return 'not_found';
+            }
+
+            return $this->cancelLockedOrder($locked);
+        });
+    }
+
+    /**
+     * Cancela un pedido que ya tiene el bloqueo de escritura tomado.
+     *
+     * Solo un pedido en `pendiente_de_pago` se cancela y restaura stock; un
+     * pedido ya cancelado, pagado o en cualquier otro estado se ignora. Los
+     * items sin producto asociado se saltan sin romper el lote.
+     *
+     * @return string 'cancelled' | 'ignored'
+     */
+    private function cancelLockedOrder(Order $locked): string
+    {
+        if ($locked->status !== self::ORDER_PENDING) {
+            return 'ignored';
+        }
+
+        foreach ($locked->items()->get() as $item) {
+            $product = Product::whereKey($item->product_id)->lockForUpdate()->first();
+
+            if ($product) {
+                $product->increment('stock', (int) $item->quantity);
+            }
+        }
+
+        $locked->status = self::ORDER_CANCELLED;
+        $locked->save();
+
+        return 'cancelled';
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cierre de pedidos pendientes
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Minutos que se espera el pago de un pedido Wompi antes de cerrarlo.
+     *
+     * Se configura con `services.wompi.pending_ttl_minutes`
+     * (WOMPI_PENDING_TTL_MINUTES). Un valor no numérico o menor que 1 se trata
+     * como ausente y cae al default, para que una variable de entorno mal escrita
+     * no cierre pedidos recién creados.
+     */
+    public function pendingTtlMinutes(): int
+    {
+        $configured = config(self::PENDING_TTL_CONFIG);
+        $minutes = is_numeric($configured) ? (int) $configured : 0;
+
+        return $minutes >= 1 ? $minutes : self::PENDING_TTL_DEFAULT_MINUTES;
+    }
+
+    /**
+     * Cierra los pedidos Wompi que llevan más de la TTL en `pendiente_de_pago`.
+     *
+     * Solo considera `payment_method = wompi` con `status = pendiente_de_pago` y
+     * `created_at` igual o anterior al umbral: la contraentrega y cualquier pedido
+     * ya pagado, cancelado o en un estado posterior quedan fuera. Cada pedido se
+     * cancela con `cancelPendingOrder`, que bloquea la fila y restaura el stock
+     * una sola vez, así que repetir la ejecución no duplica stock. Los pedidos sin
+     * items (o con items cuyo producto ya no existe) se cierran sin romper el lote.
+     *
+     * @return int número de pedidos cerrados en esta pasada
+     */
+    public function expirePendingOrders(): int
+    {
+        $threshold = now()->subMinutes($this->pendingTtlMinutes());
+        $expired = 0;
+
+        Order::query()
+            ->where('payment_method', CheckoutService::WOMPI_PAYMENT_METHOD)
+            ->where('status', self::ORDER_PENDING)
+            ->where('created_at', '<=', $threshold)
+            ->orderBy('id')
+            ->chunkById(100, function ($orders) use (&$expired): void {
+                foreach ($orders as $order) {
+                    if ($this->cancelPendingOrder($order) === 'cancelled') {
+                        $expired++;
+                    }
+                }
+            });
+
+        return $expired;
     }
 
     /**

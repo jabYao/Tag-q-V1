@@ -280,6 +280,69 @@ class AdminOrderManagementTest extends TestCase
             ->assertSee('2.580.000');
     }
 
+    public function test_detalle_muestra_cancelar_para_pedido_pendiente_y_oculta_reembolsar(): void
+    {
+        $order = $this->order(['code' => 'TAG-CANCEL01', 'status' => 'pendiente_de_pago']);
+
+        $this->actingAs($this->empleado)
+            ->get(route('admin.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Cancelar pedido')
+            ->assertDontSee('Reembolsar con Wompi');
+    }
+
+    public function test_detalle_muestra_reembolsar_para_pedido_wompi_pagado_con_transaccion(): void
+    {
+        $order = $this->order([
+            'code' => 'TAG-REFUND01',
+            'status' => 'pagado',
+            'payment_method' => 'wompi',
+            'wompi_transaction_id' => 'txn_panel_01',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Reembolsar con Wompi')
+            ->assertDontSee('Cancelar pedido');
+    }
+
+    public function test_detalle_no_muestra_acciones_para_pedido_en_estado_no_operable(): void
+    {
+        $order = $this->order(['code' => 'TAG-SHIPPED1', 'status' => 'enviado']);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.show', $order))
+            ->assertOk()
+            ->assertDontSee('Cancelar pedido')
+            ->assertDontSee('Reembolsar con Wompi');
+    }
+
+    public function test_cliente_no_puede_cancelar_ni_reembolsar_desde_el_panel(): void
+    {
+        $order = $this->order(['code' => 'TAG-NOPERM01', 'status' => 'pendiente_de_pago']);
+
+        $this->actingAs($this->cliente)
+            ->patch(route('admin.orders.cancel', $order))
+            ->assertForbidden();
+
+        $this->actingAs($this->cliente)
+            ->post(route('admin.orders.refund', $order))
+            ->assertForbidden();
+
+        $this->assertSame('pendiente_de_pago', $order->fresh()->status);
+    }
+
+    public function test_invitado_es_redirigido_al_login_al_cancelar_o_reembolsar(): void
+    {
+        $order = $this->order(['code' => 'TAG-GUESTC01', 'status' => 'pendiente_de_pago']);
+
+        $this->patch(route('admin.orders.cancel', $order))->assertRedirect(route('login'));
+        $this->post(route('admin.orders.refund', $order))->assertRedirect(route('login'));
+
+        $this->assertSame('pendiente_de_pago', $order->fresh()->status);
+    }
+
     public function test_detalle_de_pedido_de_invitado_muestra_invitado(): void
     {
         $order = $this->order(['code' => 'TAG-GUESTSHW', 'user_id' => null]);

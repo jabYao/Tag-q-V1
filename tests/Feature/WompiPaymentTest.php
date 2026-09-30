@@ -501,6 +501,55 @@ class WompiPaymentTest extends TestCase
         $this->assertSame(5, $product->fresh()->stock, 'El stock se restaura al cancelar');
     }
 
+    public function test_webhook_aprobado_guarda_el_transaction_id_de_wompi_en_el_pedido(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->wompiOrder($product, 2);
+
+        $this->assertNull($order->wompi_transaction_id, 'El pedido nace sin id de transacción');
+
+        $payload = $this->eventPayload($this->transactionFor($order, 'APPROVED'));
+        $transactionId = $payload['data']['transaction']['id'];
+
+        $this->postJson(route('webhooks.wompi'), $payload)->assertOk();
+
+        $this->assertSame($transactionId, $order->fresh()->wompi_transaction_id);
+        $this->assertSame('pagado', $order->fresh()->status);
+    }
+
+    public function test_webhook_rechazado_tambien_guarda_el_transaction_id(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->wompiOrder($product, 2);
+
+        $payload = $this->eventPayload($this->transactionFor($order, 'DECLINED'));
+        $transactionId = $payload['data']['transaction']['id'];
+
+        $this->postJson(route('webhooks.wompi'), $payload)->assertOk();
+
+        $this->assertSame($transactionId, $order->fresh()->wompi_transaction_id);
+        $this->assertSame('cancelado', $order->fresh()->status);
+    }
+
+    public function test_triangulate_evento_duplicado_conserva_el_transaction_id_original(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->wompiOrder($product, 2);
+
+        $first = $this->eventPayload($this->transactionFor($order, 'APPROVED'));
+        $this->postJson(route('webhooks.wompi'), $first)->assertOk();
+
+        $originalId = $order->fresh()->wompi_transaction_id;
+        $this->assertNotNull($originalId);
+
+        // Un segundo evento (con otro id) no debe sobrescribir el id original.
+        $second = $this->eventPayload($this->transactionFor($order, 'APPROVED'));
+        $this->postJson(route('webhooks.wompi'), $second)->assertOk();
+
+        $this->assertSame($originalId, $order->fresh()->wompi_transaction_id);
+        $this->assertSame(3, $product->fresh()->stock);
+    }
+
     public function test_webhook_con_firma_invalida_responde_401_y_no_cambia_estado(): void
     {
         $product = $this->product(['stock' => 5]);

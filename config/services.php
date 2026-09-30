@@ -41,6 +41,11 @@ return [
         'integrity_secret' => env('WOMPI_INTEGRITY_SECRET'),
         'events_secret' => env('WOMPI_EVENTS_SECRET'),
         'api_url' => env('WOMPI_API_URL', 'https://sandbox.wompi.co/v1'),
+
+        // Minutos que se espera el pago de un pedido Wompi antes de cerrarlo y
+        // liberar su stock cuando el webhook nunca llega (ver
+        // orders:expire-wompi-pending).
+        'pending_ttl_minutes' => env('WOMPI_PENDING_TTL_MINUTES', 30),
     ],
 
 ];
