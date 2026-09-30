@@ -11,16 +11,22 @@ use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
 
 /**
- * Checkout MVP contraentrega (sin Wompi en esta entrega).
+ * Checkout público: contraentrega y Wompi Sandbox (Web Checkout).
  *
  * Crea el pedido dentro de una transacción con lockForUpdate por producto:
  * revalida producto activo, stock actual y precio; guarda el precio como
- * snapshot en order_items; descuenta stock al confirmar contraentrega; y limpia
- * el carrito solo después de confirmar todo el pedido.
+ * snapshot en order_items; reserva/descuenta stock al confirmar; y limpia el
+ * carrito solo después de confirmar todo el pedido.
+ *
+ * La diferencia entre métodos es solo `payment_method`: en ambos el stock se
+ * reserva al crear el pedido pendiente_de_pago. Wompi confirma después por
+ * webhook (ver WompiService/WompiWebhookController).
  */
 class CheckoutService
 {
     public const PAYMENT_METHOD = 'contraentrega';
+
+    public const WOMPI_PAYMENT_METHOD = 'wompi';
 
     public const STATUS = 'pendiente_de_pago';
 
@@ -45,7 +51,37 @@ class CheckoutService
      */
     public function confirm(array $shipping, ?User $user = null): Order
     {
-        return DB::transaction(function () use ($shipping, $user): Order {
+        return $this->createOrder($shipping, $user, self::PAYMENT_METHOD);
+    }
+
+    /**
+     * Confirma un pedido con pago en línea Wompi (Web Checkout).
+     *
+     * Igual que contraentrega: pedido pendiente_de_pago con payment_method wompi,
+     * items con precio snapshot y stock reservado/descontado en la misma
+     * transacción. El pago se confirma después por el webhook de Wompi.
+     *
+     * @param  array{nombre: string, email: string, telefono: string, direccion: string, ciudad: string}  $shipping
+     *
+     * @throws \RuntimeException si el carrito está vacío, un producto ya no está
+     *                           disponible o no hay stock suficiente
+     */
+    public function confirmWompi(array $shipping, ?User $user = null): Order
+    {
+        return $this->createOrder($shipping, $user, self::WOMPI_PAYMENT_METHOD);
+    }
+
+    /**
+     * Crea el pedido de forma atómica para el método de pago indicado.
+     *
+     * @param  array{nombre: string, email: string, telefono: string, direccion: string, ciudad: string}  $shipping
+     *
+     * @throws \RuntimeException si el carrito está vacío, un producto ya no está
+     *                           disponible o no hay stock suficiente
+     */
+    private function createOrder(array $shipping, ?User $user, string $paymentMethod): Order
+    {
+        return DB::transaction(function () use ($shipping, $user, $paymentMethod): Order {
             $entries = $this->cartEntries($user);
 
             if ($entries === []) {
@@ -79,7 +115,7 @@ class CheckoutService
                 'status' => self::STATUS,
                 'total' => $total,
                 'shipping_cost' => 0,
-                'payment_method' => self::PAYMENT_METHOD,
+                'payment_method' => $paymentMethod,
                 'shipping_address' => $this->normalizeShipping($shipping),
             ]);
 

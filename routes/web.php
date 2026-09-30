@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\RegistrationController;
 use App\Http\Controllers\CatalogController;
+use App\Http\Controllers\WompiWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +24,10 @@ Route::get('/carrito', fn () => view('cart.index'))->name('cart.index');
 
 // Checkout público MVP contraentrega — accesible a invitado y cliente autenticado.
 Route::get('/checkout', fn () => view('checkout.index'))->name('checkout.index');
+
+// Webhook de Wompi (transaction.updated): lo invoca Wompi, no el navegador.
+// Se excluye de CSRF en bootstrap/app.php; la autenticidad la da la firma del evento.
+Route::post('/webhooks/wompi', WompiWebhookController::class)->name('webhooks.wompi');
 
 // Autenticación — monolito Blade + Livewire (AGENTS.md §1)
 Route::middleware('guest')->group(function () {

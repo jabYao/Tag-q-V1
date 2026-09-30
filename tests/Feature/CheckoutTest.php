@@ -110,7 +110,7 @@ class CheckoutTest extends TestCase
             ->assertSeeLivewire(CheckoutForm::class);
     }
 
-    public function test_pagina_muestra_resumen_total_y_solo_contraentrega(): void
+    public function test_pagina_muestra_resumen_total_y_metodos_de_pago_disponibles(): void
     {
         $product = $this->product([
             'name' => 'Chronos Acero',
@@ -124,6 +124,7 @@ class CheckoutTest extends TestCase
             ->assertSee('Chronos Acero')
             ->assertSee('2.580.000')   // total / subtotal en COP
             ->assertSee('Contraentrega')
+            ->assertSee('Wompi')
             ->assertDontSee('Tarjeta')
             ->assertDontSee('Nequi')
             ->assertDontSee('PSE');

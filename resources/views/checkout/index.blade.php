@@ -4,6 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ config('app.name', 'Tag q') }} — Checkout</title>
+    {{--
+        Widget Checkout de Wompi (https://docs.wompi.co/docs/colombia/widget-checkout-web/):
+        el script oficial se incluye aquí, directamente en el <head> y una sola vez por
+        documento, para que `window.WidgetCheckout` exista antes de que Alpine evalúe
+        `new WidgetCheckout(config)`. Al no inyectarse desde Livewire, los rerenders del
+        componente no duplican la etiqueta.
+    --}}
+    <script type="text/javascript" src="https://checkout.wompi.co/widget.js"></script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>

@@ -18,6 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
         ]);
+
+        // El webhook de Wompi lo llama Wompi (no el navegador): sin token CSRF.
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/wompi',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
