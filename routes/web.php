@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\RegistrationController;
 use App\Http\Controllers\CatalogController;
+use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
 use App\Http\Controllers\WompiWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -49,9 +51,21 @@ Route::post('/logout', function (Request $request) {
     return redirect()->route('login');
 })->middleware('auth')->name('logout');
 
+// Historial de pedidos del cliente autenticado — parte 3 de pedidos (cara pública).
+// Cada usuario ve únicamente auth()->user()->orders(); pedido ajeno o inexistente = 404.
+Route::middleware('auth')->prefix('mis-pedidos')->name('customer.orders.')->group(function () {
+    Route::get('/', [CustomerOrderController::class, 'index'])->name('index');
+    Route::get('/{order}', [CustomerOrderController::class, 'show'])->name('show');
+});
+
 // Panel admin — solo admin y empleado (cliente e invitado quedan fuera)
 Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('products', ProductController::class)->except(['show'])->parameters(['products' => 'product']);
+
+    // Pedidos — solo admin y empleado: listado, detalle y avance del flujo operativo.
+    Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::patch('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.status');
 });
 
 // Gestión de usuarios — solo admin (empleado, cliente e invitado quedan fuera)
