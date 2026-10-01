@@ -28,6 +28,13 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Correo transaccional de pedidos. `override` redirige todos los correos de
+    // pedido a un único buzón cuando se define y es un email válido; sirve para
+    // QA/staging sin tocar el código. Vacío o inválido se ignora por completo.
+    'transactional_mail' => [
+        'override' => env('TRANSACTIONAL_MAIL_OVERRIDE'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
