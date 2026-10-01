@@ -10,6 +10,7 @@ use App\Services\CartService;
 use App\Services\CheckoutService;
 use App\Services\WompiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -194,6 +195,66 @@ class WompiPaymentTest extends TestCase
             'reference' => $order->code,
             'amount_in_cents' => ((int) $order->total) * 100,
             'currency' => 'COP',
+        ], $overrides);
+    }
+
+    /**
+     * Pedido Wompi ya pagado y con su transacción registrada, tal como queda tras
+     * el evento `transaction.updated` APPROVED: el stock sigue reservado.
+     */
+    private function paidWompiOrder(Product $product, int $quantity = 1, string $transactionId = 'txn_refund_base'): Order
+    {
+        $order = $this->wompiOrder($product, $quantity, 'pagado');
+        $order->wompi_transaction_id = $transactionId;
+        $order->save();
+
+        return $order->fresh();
+    }
+
+    /**
+     * Payload del evento `refund.updated` con el checksum firmado localmente.
+     *
+     * El checksum usa el mismo algoritmo documentado por Wompi:
+     * sha256(concat(valores de signature.properties) + timestamp + events_secret).
+     * El evento de reembolso no trae `currency`, así que no se firma moneda.
+     */
+    private function refundEventPayload(array $refund, ?array $properties = null, ?int $timestamp = null, ?string $secret = null, string $event = 'refund.updated'): array
+    {
+        $properties ??= ['refund.id', 'refund.transaction_id', 'refund.amount_in_cents'];
+        $timestamp ??= 1700000000;
+        $secret ??= self::EVENTS_SECRET;
+
+        $data = ['refund' => $refund];
+        $concatenated = '';
+
+        foreach ($properties as $path) {
+            $concatenated .= $this->valueAtPath($data, $path);
+        }
+
+        return [
+            'event' => $event,
+            'data' => $data,
+            'environment' => 'test',
+            'signature' => [
+                'properties' => $properties,
+                'checksum' => hash('sha256', $concatenated.$timestamp.$secret),
+            ],
+            'timestamp' => $timestamp,
+            'sent_at' => '2026-01-01T00:00:00.000Z',
+        ];
+    }
+
+    /**
+     * Reembolso tal como lo entrega Wompi: id, transacción, monto del pedido en
+     * centavos y estado. Sin moneda.
+     */
+    private function refundFor(Order $order, string $status = 'APPROVED', array $overrides = []): array
+    {
+        return array_merge([
+            'id' => 'refund_'.Str::random(10),
+            'transaction_id' => $order->wompi_transaction_id,
+            'amount_in_cents' => ((int) $order->total) * 100,
+            'status' => $status,
         ], $overrides);
     }
 
@@ -686,6 +747,270 @@ class WompiPaymentTest extends TestCase
             $this->assertSame('pendiente_de_pago', $order->fresh()->status, $label);
             $this->assertSame(3, $product->fresh()->stock, $label);
         }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook refund.updated: resolución por transaction id, sin llamar a la API
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_webhook_refund_updated_aprobado_marca_reembolsado_guarda_id_y_restaura_stock(): void
+    {
+        Http::fake();
+
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_ok');
+
+        $this->assertSame(3, $product->fresh()->stock, 'El pago ya había reservado el stock');
+        $this->assertNull($order->wompi_refund_id);
+
+        $payload = $this->refundEventPayload($this->refundFor($order, 'APPROVED', ['id' => 'refund_ok_123']));
+
+        $this->postJson(route('webhooks.wompi'), $payload)
+            ->assertOk()
+            ->assertJson([
+                'received' => true,
+                'reference' => $order->code,
+                'status' => 'APPROVED',
+                'result' => 'refunded',
+            ]);
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status);
+        $this->assertSame('refund_ok_123', $order->wompi_refund_id);
+        $this->assertSame('txn_refund_ok', $order->wompi_transaction_id, 'La transacción original se conserva');
+        $this->assertSame(5, $product->fresh()->stock, 'El stock se restaura una sola vez al confirmar el reembolso');
+
+        // El reembolso ya ocurrió en Wompi: el webhook solo lo confirma.
+        Http::assertNothingSent();
+    }
+
+    public function test_webhook_refund_updated_con_monto_manipulado_y_firma_valida_responde_422_sin_mutar(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_monto');
+
+        // Firma real, monto menor al del pedido: la firma válida no basta.
+        $payload = $this->refundEventPayload($this->refundFor($order, 'APPROVED', [
+            'amount_in_cents' => (((int) $order->total) * 100) - 1,
+        ]));
+
+        $response = $this->postJson(route('webhooks.wompi'), $payload)->assertStatus(422);
+
+        $this->assertSame(
+            'Los datos del reembolso no coinciden con el pedido.',
+            $response->json('error'),
+            'El rechazo usa un mensaje genérico',
+        );
+
+        $body = $response->getContent();
+
+        foreach ([self::EVENTS_SECRET, self::INTEGRITY_SECRET, self::PRIVATE_KEY] as $secret) {
+            $this->assertStringNotContainsString($secret, $body, 'La respuesta 422 nunca filtra secretos');
+        }
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status, 'El pedido no cambia de estado');
+        $this->assertNull($order->wompi_refund_id, 'No se guarda el id de un reembolso no validado');
+        $this->assertSame(3, $product->fresh()->stock, 'El stock no se restaura');
+    }
+
+    public function test_webhook_refund_updated_con_firma_invalida_responde_401_sin_mutar(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_firma');
+
+        $payload = $this->refundEventPayload($this->refundFor($order));
+        $payload['signature']['checksum'] = str_repeat('0', 64);
+
+        $this->postJson(route('webhooks.wompi'), $payload)->assertStatus(401);
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertNull($order->wompi_refund_id);
+        $this->assertSame(3, $product->fresh()->stock);
+    }
+
+    public function test_webhook_refund_updated_sin_transaction_id_responde_422_sin_mutar(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_sin_txid');
+
+        $refund = $this->refundFor($order);
+        unset($refund['transaction_id']);
+
+        $this->postJson(route('webhooks.wompi'), $this->refundEventPayload($refund))->assertStatus(422);
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertNull($order->wompi_refund_id);
+        $this->assertSame(3, $product->fresh()->stock);
+    }
+
+    public function test_webhook_refund_updated_con_transaccion_desconocida_responde_404_sin_mutar(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_otro');
+
+        $refund = $this->refundFor($order, 'APPROVED', ['transaction_id' => 'txn_que_no_existe']);
+
+        $this->postJson(route('webhooks.wompi'), $this->refundEventPayload($refund))->assertStatus(404);
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status, 'El pedido de otra transacción no se toca');
+        $this->assertNull($order->wompi_refund_id);
+        $this->assertSame(3, $product->fresh()->stock);
+    }
+
+    public function test_webhook_refund_updated_aprobado_sin_id_responde_422_sin_mutar(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_sin_id');
+
+        $refund = $this->refundFor($order, 'APPROVED');
+        unset($refund['id']);
+
+        // Un APPROVED sin id no se puede registrar de forma fiable: se rechaza
+        // sin mutar para que Wompi reintente en lugar de perder el reembolso.
+        $this->postJson(route('webhooks.wompi'), $this->refundEventPayload($refund))->assertStatus(422);
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertNull($order->wompi_refund_id);
+        $this->assertSame(3, $product->fresh()->stock);
+    }
+
+    public function test_webhook_refund_updated_rechazado_deja_el_pedido_pagado_y_el_stock_intacto(): void
+    {
+        foreach (['DECLINED', 'ERROR', 'CANCELLED'] as $status) {
+            $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+            $order = $this->paidWompiOrder($product, 2, 'txn_refund_'.strtolower($status));
+
+            $payload = $this->refundEventPayload($this->refundFor($order, $status));
+
+            // 200 para que Wompi no reintente un rechazo que ya se ignoró.
+            $this->postJson(route('webhooks.wompi'), $payload)
+                ->assertOk()
+                ->assertJson(['status' => $status, 'result' => 'ignored']);
+
+            $order->refresh();
+            $this->assertSame('pagado', $order->status, "El estado {$status} deja el pedido pagado");
+            $this->assertNull($order->wompi_refund_id, "El estado {$status} no guarda id de reembolso");
+            $this->assertSame(3, $product->fresh()->stock, "El estado {$status} no restaura stock");
+        }
+    }
+
+    public function test_triangulate_refund_updated_duplicado_restaura_stock_una_sola_vez(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_duplicado');
+
+        $payload = $this->refundEventPayload($this->refundFor($order, 'APPROVED', ['id' => 'refund_unico']));
+
+        $this->postJson(route('webhooks.wompi'), $payload)->assertOk()->assertJson(['result' => 'refunded']);
+        $this->postJson(route('webhooks.wompi'), $payload)->assertOk()->assertJson(['result' => 'ignored']);
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status);
+        $this->assertSame('refund_unico', $order->wompi_refund_id);
+        $this->assertSame(5, $product->fresh()->stock, 'El stock se restaura exactamente una vez');
+    }
+
+    public function test_triangulate_refund_updated_con_otro_id_no_sobrescribe_ni_duplica_stock(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_doble');
+
+        $first = $this->refundEventPayload($this->refundFor($order, 'APPROVED', ['id' => 'refund_primero']));
+        $this->postJson(route('webhooks.wompi'), $first)->assertOk();
+
+        $second = $this->refundEventPayload($this->refundFor($order, 'APPROVED', ['id' => 'refund_segundo']));
+        $this->postJson(route('webhooks.wompi'), $second)->assertOk()->assertJson(['result' => 'ignored']);
+
+        $order->refresh();
+        $this->assertSame('refund_primero', $order->wompi_refund_id, 'El primer reembolso registrado se conserva');
+        $this->assertSame(5, $product->fresh()->stock);
+    }
+
+    public function test_triangulate_refund_aprobado_de_un_pedido_aun_pendiente_se_ignora(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+
+        // Fuera de orden: el reembolso llega antes que la aprobación del pago, así
+        // que el pedido sigue pendiente y no se toca.
+        $order = $this->wompiOrder($product, 2);
+        $order->wompi_transaction_id = 'txn_refund_desordenado';
+        $order->save();
+
+        $payload = $this->refundEventPayload($this->refundFor($order->fresh(), 'APPROVED'));
+
+        $this->postJson(route('webhooks.wompi'), $payload)->assertOk()->assertJson(['result' => 'ignored']);
+
+        $order->refresh();
+        $this->assertSame('pendiente_de_pago', $order->status);
+        $this->assertNull($order->wompi_refund_id);
+        $this->assertSame(3, $product->fresh()->stock);
+    }
+
+    public function test_triangulate_evento_con_data_refund_sin_nombre_oficial_se_procesa_como_reembolso(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->paidWompiOrder($product, 2, 'txn_refund_variante');
+
+        $payload = $this->refundEventPayload(
+            $this->refundFor($order, 'APPROVED', ['id' => 'refund_variante']),
+            event: 'refunds.updated',
+        );
+
+        $this->postJson(route('webhooks.wompi'), $payload)->assertOk()->assertJson(['result' => 'refunded']);
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status);
+        $this->assertSame('refund_variante', $order->wompi_refund_id);
+        $this->assertSame(5, $product->fresh()->stock);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Regresión: transaction.updated no se rompe con el soporte de reembolsos
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_regresion_transaction_updated_sigue_aprobando_con_el_soporte_de_reembolsos(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->wompiOrder($product, 2);
+
+        $payload = $this->eventPayload($this->transactionFor($order, 'APPROVED'));
+
+        $this->postJson(route('webhooks.wompi'), $payload)
+            ->assertOk()
+            ->assertJson(['result' => 'approved']);
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertSame(3, $product->fresh()->stock, 'El stock reservado no se toca');
+    }
+
+    public function test_regresion_transaction_updated_no_se_confunde_con_un_reembolso(): void
+    {
+        $product = $this->product(['precio' => 1000000, 'stock' => 5]);
+        $order = $this->wompiOrder($product, 2);
+
+        // Un evento de transacción que además trae `refund` sigue resolviéndose
+        // por referencia: la bifurcación mira `data.transaction`.
+        $payload = $this->eventPayload($this->transactionFor($order, 'APPROVED'));
+        $payload['data']['refund'] = ['id' => 'refund_irrelevante', 'status' => 'APPROVED'];
+
+        $this->postJson(route('webhooks.wompi'), $payload)
+            ->assertOk()
+            ->assertJson(['result' => 'approved']);
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertNull($order->wompi_refund_id, 'Un transaction.updated nunca marca reembolso');
+        $this->assertSame(3, $product->fresh()->stock);
     }
 
     /*

@@ -11,8 +11,20 @@ use Illuminate\Support\Facades\DB;
  *
  * Construye el formulario de Web Checkout (public key, referencia, monto en
  * centavos, moneda, firma de integridad y redirect URL) y valida/aplica los
- * eventos `transaction.updated` que Wompi envía por webhook: firma del evento,
- * referencia del pedido y coincidencia exacta de monto (`total * 100`) y moneda.
+ * eventos que Wompi envía por webhook: firma del evento, resolución del pedido y
+ * coincidencia exacta de monto antes de mover estado o stock.
+ *
+ *   - `transaction.updated`: el pedido se resuelve por su referencia (código
+ *     TAG-) y se exige monto (`total * 100`) y moneda.
+ *   - `refund.updated`: el pedido se resuelve por
+ *     `data.refund.transaction_id` contra `orders.wompi_transaction_id` y solo
+ *     se exige el monto (el evento de reembolso no trae moneda). Un reembolso
+ *     APPROVED marca el pedido pagado como `reembolsado`, guarda
+ *     `wompi_refund_id` y restaura el stock una sola vez; DECLINED/ERROR/
+ *     CANCELLED y los duplicados dejan el pedido pagado y el stock intacto. El
+ *     webhook nunca llama a la API de Wompi: el reembolso ya ocurrió y el evento
+ *     solo lo confirma.
+ *
  * También centraliza la cancelación segura de un pedido pendiente
  * (`cancelPendingOrder`), que restaura el stock una sola vez bajo
  * `lockForUpdate`: la usa el webhook ante un rechazo y el cierre de pedidos
@@ -49,12 +61,26 @@ class WompiService
     /** Estados de transacción que cancelan el pedido y liberan el stock. */
     public const STATUS_CANCELLED = ['DECLINED', 'ERROR', 'VOIDED', 'EXPIRED'];
 
+    /** Nombre oficial del evento de transacción. */
+    public const EVENT_TRANSACTION_UPDATED = 'transaction.updated';
+
+    /** Nombre oficial del evento de reembolso. */
+    public const EVENT_REFUND_UPDATED = 'refund.updated';
+
+    /**
+     * Estado de reembolso que aprueba: solo este mueve el pedido. El resto
+     * (DECLINED/ERROR/CANCELLED y cualquier valor desconocido) lo deja pagado.
+     */
+    public const REFUND_STATUS_APPROVED = 'APPROVED';
+
     /** Estados de pedido usados en la transición del webhook. */
     private const ORDER_PENDING = 'pendiente_de_pago';
 
     private const ORDER_PAID = 'pagado';
 
     private const ORDER_CANCELLED = 'cancelado';
+
+    private const ORDER_REFUNDED = 'reembolsado';
 
     /** Minutos de espera por defecto antes de cerrar un pedido Wompi sin pago. */
     public const PENDING_TTL_DEFAULT_MINUTES = 30;
@@ -314,6 +340,18 @@ class WompiService
     }
 
     /**
+     * Nombre del evento (`event`), o null si falta.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function eventType(array $payload): ?string
+    {
+        $event = $payload['event'] ?? null;
+
+        return is_string($event) && $event !== '' ? $event : null;
+    }
+
+    /**
      * Referencia (código de pedido) del evento, o null si falta.
      *
      * @param  array<string, mixed>  $payload
@@ -370,7 +408,7 @@ class WompiService
             return false;
         }
 
-        $amountInCents = $this->eventAmountInCents($transaction);
+        $amountInCents = $this->declaredAmountInCents($transaction);
         $currency = $transaction['currency'] ?? null;
 
         if ($amountInCents === null || ! is_string($currency)) {
@@ -440,6 +478,146 @@ class WompiService
         });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Reembolsos (refund.updated)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * ¿El evento describe un reembolso?
+     *
+     * El nombre oficial es `refund.updated`. Además se tolera cualquier evento
+     * que traiga `data.refund` y no traiga `data.transaction`: un
+     * `transaction.updated` nunca se confunde con un reembolso porque siempre
+     * incluye `data.transaction`.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function isRefundEvent(array $payload): bool
+    {
+        if ($this->eventType($payload) === self::EVENT_REFUND_UPDATED) {
+            return true;
+        }
+
+        return ! is_array($payload['data']['transaction'] ?? null)
+            && is_array($payload['data']['refund'] ?? null);
+    }
+
+    /**
+     * `data.refund.transaction_id` del evento, o null si falta.
+     *
+     * Es el id con el que se resuelve el pedido: se compara contra
+     * `orders.wompi_transaction_id`, no contra la referencia `TAG-`.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function refundTransactionId(array $payload): ?string
+    {
+        return $this->stringValue($payload['data']['refund']['transaction_id'] ?? null);
+    }
+
+    /**
+     * `data.refund.id` del evento, o null si falta.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function refundId(array $payload): ?string
+    {
+        return $this->stringValue($payload['data']['refund']['id'] ?? null);
+    }
+
+    /**
+     * `data.refund.status` en mayúsculas, o null si falta.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function refundStatus(array $payload): ?string
+    {
+        $status = $this->stringValue($payload['data']['refund']['status'] ?? null);
+
+        return $status === null ? null : strtoupper($status);
+    }
+
+    /**
+     * Verifica que el reembolso declare exactamente el monto del pedido:
+     * `data.refund.amount_in_cents === order.total * 100`.
+     *
+     * El evento de reembolso no trae moneda, así que no se exige. La firma del
+     * evento solo prueba que Wompi emitió el payload; sin esta comparación un
+     * reembolso firmado por un monto distinto al del pedido pasaría. Si el monto
+     * falta o no coincide, devuelve false y el llamador no debe tocar el estado
+     * del pedido ni el stock.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function verifyRefundAmount(Order $order, array $payload): bool
+    {
+        $refund = $payload['data']['refund'] ?? null;
+
+        if (! is_array($refund)) {
+            return false;
+        }
+
+        $amountInCents = $this->declaredAmountInCents($refund);
+
+        return $amountInCents !== null && $amountInCents === $this->amountInCents($order);
+    }
+
+    /**
+     * Aplica el estado del reembolso al pedido de forma idempotente.
+     *
+     * Solo APPROVED mueve el pedido: un pedido pagado pasa a `reembolsado`, se
+     * guarda `wompi_refund_id` y se restaura el stock una sola vez bajo
+     * `lockForUpdate`. No se llama a la API de Wompi: el reembolso ya ocurrió y
+     * el evento solo lo confirma.
+     *
+     * DECLINED/ERROR/CANCELLED y cualquier otro estado se ignoran sin mutar: el
+     * pedido sigue pagado y el stock intacto. Un evento duplicado o fuera de
+     * orden de un pedido ya reembolsado, cancelado o aún pendiente también se
+     * ignora, así que el stock nunca se restaura dos veces ni se sobrescribe el
+     * id del primer reembolso.
+     *
+     * @return string 'refunded' | 'ignored' | 'not_found'
+     */
+    public function applyRefundStatus(Order $order, ?string $status, ?string $refundId = null): string
+    {
+        $status = strtoupper((string) $status);
+        $refundId = is_string($refundId) && $refundId !== '' ? $refundId : null;
+
+        if ($status !== self::REFUND_STATUS_APPROVED || $refundId === null) {
+            return 'ignored';
+        }
+
+        return DB::transaction(function () use ($order, $refundId): string {
+            $locked = Order::whereKey($order->getKey())->lockForUpdate()->first();
+
+            if (! $locked) {
+                return 'not_found';
+            }
+
+            // Solo un pedido pagado se reembolsa: ya reembolsado, cancelado o
+            // aún pendiente no restaura stock.
+            if ($locked->status !== self::ORDER_PAID) {
+                return 'ignored';
+            }
+
+            // Ya hay un reembolso registrado: un evento duplicado (mismo id) o
+            // uno distinto no lo sobrescribe ni vuelve a restaurar stock.
+            if (is_string($locked->wompi_refund_id) && $locked->wompi_refund_id !== '') {
+                return 'ignored';
+            }
+
+            $locked->wompi_refund_id = $refundId;
+            $locked->status = self::ORDER_REFUNDED;
+            $locked->save();
+
+            $this->restoreStock($locked);
+
+            return 'refunded';
+        });
+    }
+
     /**
      * Guarda el id de la transacción en el pedido bloqueado, sin sobrescribir el
      * que ya estaba registrado.
@@ -502,6 +680,20 @@ class WompiService
             return 'ignored';
         }
 
+        $this->restoreStock($locked);
+
+        $locked->status = self::ORDER_CANCELLED;
+        $locked->save();
+
+        return 'cancelled';
+    }
+
+    /**
+     * Devuelve al inventario el stock de cada item del pedido bloqueado, una sola
+     * vez. Los items sin producto asociado se saltan sin romper el lote.
+     */
+    private function restoreStock(Order $locked): void
+    {
         foreach ($locked->items()->get() as $item) {
             $product = Product::whereKey($item->product_id)->lockForUpdate()->first();
 
@@ -509,11 +701,6 @@ class WompiService
                 $product->increment('stock', (int) $item->quantity);
             }
         }
-
-        $locked->status = self::ORDER_CANCELLED;
-        $locked->save();
-
-        return 'cancelled';
     }
 
     /*
@@ -572,14 +759,15 @@ class WompiService
     }
 
     /**
-     * Monto en centavos declarado por la transacción, o null si falta o no es un
-     * entero (los montos manipulados o de tipo inesperado se rechazan).
+     * Monto en centavos declarado por un evento (transacción o reembolso), o null
+     * si falta o no es un entero (los montos manipulados o de tipo inesperado se
+     * rechazan).
      *
-     * @param  array<string, mixed>  $transaction
+     * @param  array<string, mixed>  $event
      */
-    private function eventAmountInCents(array $transaction): ?int
+    private function declaredAmountInCents(array $event): ?int
     {
-        $amount = $transaction['amount_in_cents'] ?? null;
+        $amount = $event['amount_in_cents'] ?? null;
 
         if (is_int($amount)) {
             return $amount;
@@ -590,6 +778,19 @@ class WompiService
         }
 
         return null;
+    }
+
+    /**
+     * Normaliza un valor escalar del payload (string o entero) a string no
+     * vacío, o null si falta o no es utilizable.
+     */
+    private function stringValue(mixed $value): ?string
+    {
+        if (is_int($value)) {
+            $value = (string) $value;
+        }
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /**

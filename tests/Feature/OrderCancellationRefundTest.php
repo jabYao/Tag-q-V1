@@ -40,6 +40,13 @@ class OrderCancellationRefundTest extends TestCase
 
     private const REFUND_URL = 'https://sandbox.wompi.co/v1/refunds';
 
+    private const PRODUCTION_API_URL = 'https://production.wompi.co/v1';
+
+    private const PRODUCTION_REFUND_URL = 'https://production.wompi.co/v1/refunds';
+
+    /** Escenario de prueba ficticio para el sandbox de Wompi. */
+    private const TEST_SCENARIO = 'test_scenario_sandbox';
+
     private Category $category;
 
     private User $admin;
@@ -56,6 +63,7 @@ class OrderCancellationRefundTest extends TestCase
 
         config()->set('services.wompi.private_key', self::PRIVATE_KEY);
         config()->set('services.wompi.api_url', self::API_URL);
+        config()->set('services.wompi.refund_test_scenario', null);
 
         $this->category = Category::create(['name' => 'Caballero', 'slug' => 'caballero']);
         $this->admin = User::factory()->create(['role' => 'admin']);
@@ -549,5 +557,247 @@ class OrderCancellationRefundTest extends TestCase
             ->assertOk()
             ->assertDontSee('Cancelar pedido')
             ->assertDontSee('Reembolsar con Wompi');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | WOMPI_REFUND_TEST_SCENARIO: solo sandbox, nunca producción
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Pedido Wompi pagado con transacción, listo para reembolsar.
+     */
+    private function wompiPaidOrder(string $transactionId): Order
+    {
+        $product = $this->product(['stock' => 5]);
+
+        return $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => $transactionId,
+        ]);
+    }
+
+    public function test_refund_en_sandbox_incluye_test_scenario_cuando_esta_configurado(): void
+    {
+        config()->set('services.wompi.api_url', self::API_URL);
+        config()->set('services.wompi.refund_test_scenario', self::TEST_SCENARIO);
+
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'data' => ['id' => 'refund_scenario_ok', 'status' => 'APPROVED'],
+            ], 200),
+        ]);
+
+        $order = $this->wompiPaidOrder('txn_scenario_sandbox');
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasNoErrors();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            return $request->url() === self::REFUND_URL
+                && array_key_exists('test_scenario', $request->data())
+                && $request['test_scenario'] === self::TEST_SCENARIO;
+        });
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status, 'El escenario de sandbox no altera el flujo de estados');
+    }
+
+    public function test_refund_en_sandbox_omite_test_scenario_cuando_no_esta_configurado(): void
+    {
+        config()->set('services.wompi.api_url', self::API_URL);
+        config()->set('services.wompi.refund_test_scenario', null);
+
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'data' => ['id' => 'refund_sin_scenario', 'status' => 'APPROVED'],
+            ], 200),
+        ]);
+
+        $order = $this->wompiPaidOrder('txn_sin_scenario');
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasNoErrors();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            return $request->url() === self::REFUND_URL
+                && ! array_key_exists('test_scenario', $request->data());
+        });
+    }
+
+    public function test_refund_en_produccion_omite_test_scenario_aunque_la_variable_exista(): void
+    {
+        config()->set('services.wompi.api_url', self::PRODUCTION_API_URL);
+        config()->set('services.wompi.refund_test_scenario', self::TEST_SCENARIO);
+
+        Http::fake([
+            self::PRODUCTION_REFUND_URL => Http::response([
+                'data' => ['id' => 'refund_produccion', 'status' => 'APPROVED'],
+            ], 200),
+        ]);
+
+        $order = $this->wompiPaidOrder('txn_produccion');
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasNoErrors();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            return $request->url() === self::PRODUCTION_REFUND_URL
+                && $request->method() === 'POST'
+                && ! array_key_exists('test_scenario', $request->data());
+        });
+
+        $this->assertSame('reembolsado', $order->fresh()->status);
+    }
+
+    public function test_refund_con_test_scenario_no_expone_ninguna_credencial(): void
+    {
+        config()->set('services.wompi.api_url', self::API_URL);
+        config()->set('services.wompi.refund_test_scenario', self::TEST_SCENARIO);
+
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'data' => ['id' => 'refund_sin_fuga', 'status' => 'APPROVED'],
+            ], 200),
+        ]);
+
+        $order = $this->wompiPaidOrder('txn_sin_fuga');
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasNoErrors();
+
+        $sent = Http::recorded()[0][0] ?? null;
+        $this->assertNotNull($sent);
+
+        $body = json_encode($sent->data()) ?: '';
+        $this->assertStringNotContainsString(self::PRIVATE_KEY, $body, 'La llave privada no viaja en el cuerpo');
+        $this->assertStringNotContainsString('public_key', strtolower($body));
+        $this->assertSame(['Bearer '.self::PRIVATE_KEY], $sent->header('Authorization'), 'La llave solo viaja en el Bearer');
+    }
+
+    public function test_triangulate_refund_rechazado_en_sandbox_con_test_scenario_conserva_pagado(): void
+    {
+        config()->set('services.wompi.api_url', self::API_URL);
+        config()->set('services.wompi.refund_test_scenario', self::TEST_SCENARIO);
+
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'data' => ['status' => 'DECLINED'],
+            ], 200),
+        ]);
+
+        $order = $this->wompiPaidOrder('txn_scenario_declined');
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasErrors('order');
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status, 'Solo APPROVED marca reembolsado');
+        $this->assertNull($order->wompi_refund_id);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook refund.updated sobre un pedido ya reembolsado por el panel
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Payload firmado del evento `refund.updated` de Wompi.
+     *
+     * El checksum usa el algoritmo documentado:
+     * sha256(concat(valores de signature.properties) + timestamp + events_secret).
+     */
+    private function signedRefundEvent(array $refund, string $eventsSecret): array
+    {
+        $properties = ['refund.id', 'refund.transaction_id', 'refund.amount_in_cents'];
+        $timestamp = 1700000000;
+        $data = ['refund' => $refund];
+        $concatenated = '';
+
+        foreach ($properties as $path) {
+            $current = $data;
+
+            foreach (explode('.', $path) as $segment) {
+                $current = is_array($current) && array_key_exists($segment, $current) ? $current[$segment] : '';
+            }
+
+            $concatenated .= is_scalar($current) ? (string) $current : '';
+        }
+
+        return [
+            'event' => 'refund.updated',
+            'data' => $data,
+            'environment' => 'test',
+            'signature' => [
+                'properties' => $properties,
+                'checksum' => hash('sha256', $concatenated.$timestamp.$eventsSecret),
+            ],
+            'timestamp' => $timestamp,
+            'sent_at' => '2026-01-01T00:00:00.000Z',
+        ];
+    }
+
+    /**
+     * El mismo reembolso se resuelve por dos vías: el panel llama a la API y
+     * Wompi además envía `refund.updated`. El segundo camino debe reconocerlo
+     * como ya aplicado y no volver a restaurar stock ni pisar el id original.
+     */
+    public function test_triangulate_webhook_refund_aprobado_tras_el_reembolso_del_panel_no_duplica_stock_ni_pisa_el_id(): void
+    {
+        $eventsSecret = 'test_events_fake_secret';
+        config()->set('services.wompi.events_secret', $eventsSecret);
+
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'data' => ['id' => 'refund_panel', 'status' => 'APPROVED'],
+            ], 200),
+        ]);
+
+        $product = $this->product(['precio' => 1290000, 'stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_webhook_duplicado',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasNoErrors();
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status);
+        $this->assertSame('refund_panel', $order->wompi_refund_id);
+        $this->assertSame(5, $product->fresh()->stock);
+
+        $payload = $this->signedRefundEvent([
+            'id' => 'refund_wompi',
+            'transaction_id' => 'txn_webhook_duplicado',
+            'amount_in_cents' => 129000000,
+            'status' => 'APPROVED',
+        ], $eventsSecret);
+
+        $this->postJson(route('webhooks.wompi'), $payload)
+            ->assertOk()
+            ->assertJson(['result' => 'ignored']);
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status);
+        $this->assertSame('refund_panel', $order->wompi_refund_id, 'El id del panel se conserva');
+        $this->assertSame(5, $product->fresh()->stock, 'El stock se restaura exactamente una vez');
+        Http::assertSentCount(1, 'El webhook no vuelve a llamar a la API de Wompi');
     }
 }

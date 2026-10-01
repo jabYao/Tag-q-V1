@@ -220,22 +220,56 @@ class OrderCancellationService
         $url = rtrim((string) config('services.wompi.api_url'), '/').self::REFUND_PATH;
         $reason = is_string($reason) && trim($reason) !== '' ? trim($reason) : self::DEFAULT_REASON;
 
+        $payload = [
+            'transaction_id' => $transactionId,
+            'amount_in_cents' => ((int) $order->total) * WompiService::CENTS_FACTOR,
+            'reason' => $reason,
+            'reference' => (string) $order->code,
+        ];
+
+        $testScenario = $this->refundTestScenario();
+
+        if ($testScenario !== null) {
+            $payload['test_scenario'] = $testScenario;
+        }
+
         try {
             return Http::withToken($privateKey)
                 ->timeout(self::REFUND_TIMEOUT_SECONDS)
                 ->acceptJson()
-                ->post($url, [
-                    'transaction_id' => $transactionId,
-                    'amount_in_cents' => ((int) $order->total) * WompiService::CENTS_FACTOR,
-                    'reason' => $reason,
-                    'reference' => (string) $order->code,
-                ]);
+                ->post($url, $payload);
         } catch (ConnectionException) {
             // Mensaje genérico: ni la URL ni la llave se filtran al usuario.
             throw new \RuntimeException(
                 'No se pudo contactar a Wompi para el reembolso. El pedido sigue pagado; verifica la conexión e intenta de nuevo.'
             );
         }
+    }
+
+    /**
+     * Escenario de prueba opcional para el sandbox de Wompi.
+     *
+     * Devuelve el valor configurado en `WOMPI_REFUND_TEST_SCENARIO` solo cuando
+     * la api_url apunta al sandbox; en producción devuelve null aunque la
+     * variable exista, para no alterar nunca un reembolso real.
+     */
+    private function refundTestScenario(): ?string
+    {
+        $apiUrl = strtolower((string) config('services.wompi.api_url'));
+
+        if (! str_contains($apiUrl, 'sandbox')) {
+            return null;
+        }
+
+        $scenario = config('services.wompi.refund_test_scenario');
+
+        if (! is_string($scenario)) {
+            return null;
+        }
+
+        $scenario = trim($scenario);
+
+        return $scenario === '' ? null : $scenario;
     }
 
     /**
