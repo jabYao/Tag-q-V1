@@ -6,14 +6,14 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\RegistrationController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
+use App\Http\Controllers\StorefrontHomeController;
 use App\Http\Controllers\WompiWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// Home público: categorías existentes y hasta cuatro productos activos recientes.
+Route::get('/', StorefrontHomeController::class)->name('home');
 
 // Catálogo público — accesible sin autenticación (monolito Blade, AGENTS.md §1)
 Route::get('/catalogo', [CatalogController::class, 'index'])->name('catalog.index');
