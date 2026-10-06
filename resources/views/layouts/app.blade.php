@@ -13,6 +13,10 @@
             <a href="{{ route('admin.products.index') }}" class="font-bold">Tag q — Admin</a>
             @auth
                 <a href="{{ route('admin.products.index') }}" class="text-sm text-gray-600 hover:text-black">Productos</a>
+                @if(auth()->user()->canAccessAdmin())
+                    {{-- Misma condición que el middleware role:admin,empleado de las rutas de pedidos. --}}
+                    <a href="{{ route('admin.orders.index') }}" class="text-sm text-gray-600 hover:text-black">Pedidos</a>
+                @endif
                 @if(auth()->user()->isAdmin())
                     <a href="{{ route('admin.users.index') }}" class="text-sm text-gray-600 hover:text-black">Usuarios</a>
                 @endif

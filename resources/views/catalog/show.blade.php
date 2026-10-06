@@ -1,13 +1,12 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $product->name }} — {{ config('app.name', 'Tag q') }}</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @livewireStyles
-</head>
-<body class="bg-gray-50 min-h-screen">
+@extends('layouts.storefront')
+
+@section('title', $product->name.' — '.config('app.name', 'Tag q'))
+
+@section('main-class', 'max-w-4xl mx-auto px-6 py-8')
+
+@section('main-attributes', ' data-product-detail')
+
+@section('content')
     @php
         $imagenes = array_values(array_filter($product->imagenes ?? []));
         $especificaciones = array_filter([
@@ -19,7 +18,6 @@
         ], fn ($valor) => filled($valor));
     @endphp
 
-    <main class="max-w-4xl mx-auto px-6 py-8" data-product-detail>
         <div class="flex items-center justify-between">
             <a href="{{ route('catalog.index') }}" class="text-sm text-blue-700 hover:underline">&larr; Volver al catálogo</a>
             <a href="{{ route('cart.index') }}" class="text-sm text-blue-700 hover:underline">Ver carrito</a>
@@ -71,7 +69,4 @@
                 </section>
             </div>
         </article>
-    </main>
-    @livewireScripts
-</body>
-</html>
+@endsection

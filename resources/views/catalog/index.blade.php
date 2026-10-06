@@ -1,14 +1,8 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ config('app.name', 'Tag q') }} — Catálogo</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @livewireStyles
-</head>
-<body class="bg-gray-50 min-h-screen">
-    <main class="max-w-6xl mx-auto px-6 py-8">
+@extends('layouts.storefront')
+
+@section('title', config('app.name', 'Tag q').' — Catálogo')
+
+@section('content')
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold">Catálogo</h1>
             <a href="{{ route('cart.index') }}" class="text-sm text-blue-700 hover:underline">Ver carrito</a>
@@ -170,7 +164,4 @@
 
             <div class="mt-6">{{ $products->links() }}</div>
         @endif
-    </main>
-    @livewireScripts
-</body>
-</html>
+@endsection

@@ -1,13 +1,8 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Mis pedidos — {{ config('app.name', 'Tag q') }}</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @livewireStyles
-</head>
-<body class="bg-gray-50 min-h-screen">
+@extends('layouts.storefront')
+
+@section('title', 'Mis pedidos — '.config('app.name', 'Tag q'))
+
+@section('content')
 @php
 $statusLabels = [
     'pendiente_de_pago' => 'Pendiente de pago',
@@ -26,7 +21,6 @@ $paymentLabels = [
     'wompi' => 'Wompi',
 ];
 @endphp
-<main class="max-w-6xl mx-auto px-6 py-8">
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
             <h1 class="text-2xl font-bold">Mis pedidos</h1>
@@ -68,7 +62,4 @@ $paymentLabels = [
     </table>
 
     <div class="mt-4">{{ $orders->links() }}</div>
-</main>
-@livewireScripts
-</body>
-</html>
+@endsection
