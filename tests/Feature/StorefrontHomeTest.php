@@ -17,7 +17,7 @@ use Tests\TestCase;
  * home construido solo con datos existentes del catálogo:
  *
  * - Usa el shell compartido `layouts.storefront` y su navegación (T1); el enlace
- *   de marca `Tag q` apunta al home y el resto de enlaces no cambia.
+ *   de marca `Tag Q` apunta al home y el resto de enlaces no cambia.
  * - Las categorías enlazan al filtro real del catálogo (`categoria`, el mismo
  *   parámetro que valida `CatalogFilterRequest`).
  * - Muestra como máximo cuatro productos activos recientes, reutilizando las
@@ -68,7 +68,7 @@ class StorefrontHomeTest extends TestCase
         libxml_use_internal_errors($previous);
 
         foreach ($document->getElementsByTagName('a') as $anchor) {
-            if (trim($anchor->textContent) === 'Tag q') {
+            if (trim($anchor->textContent) === 'Tag Q') {
                 return $anchor->getAttribute('href');
             }
         }

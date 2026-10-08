@@ -27,6 +27,16 @@ use Tests\TestCase;
  *   (estilos, scripts y componentes montados) y el script oficial del widget
  *   de Wompi dentro del <head> del checkout, una sola vez por documento.
  *
+ * T8 ajusta solo la presentación del encabezado: etiquetas de categoría en
+ * mayúsculas, utilidades solo-icono con nombre accesible, y una rejilla de tres
+ * columnas `1fr auto 1fr` que deja la marca centrada en el viewport. No cambia
+ * rutas, autorización ni destinos.
+ *
+ * T10 invierte las columnas laterales (categorías primarias a la izquierda,
+ * utilidades a la derecha), coloca el SVG del logo inmediatamente antes del
+ * wordmark `Tag Q`, sube las utilidades a 24px y agranda las etiquetas
+ * primarias a `text-sm`. Sigue sin tocar rutas, autorización ni destinos.
+ *
  * Fuera de alcance: cambios de rutas, autorización, backend, diseño nuevo
  * (home, animaciones, Swiper) y cualquier flujo real contra Wompi.
  */
@@ -380,16 +390,18 @@ class StorefrontNavigationTest extends TestCase
     {
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
-        // Los dos mensajes aprobados por el usuario, exactos.
-        $this->assertStringContainsString('Envíos a todo el país', $html, 'El top bar muestra el mensaje de envíos nacionales');
-        $this->assertStringContainsString('Envíos contraentrega', $html, 'El top bar muestra el mensaje de contraentrega');
+        // Los dos mensajes aprobados por el usuario, exactos y en mayúsculas.
+        $this->assertStringContainsString('REALIZAMOS ENVÍOS A TODA COLOMBIA', $html, 'El top bar muestra el mensaje de envíos nacionales');
+        $this->assertStringContainsString('REALIZAMOS TUS ENVÍOS CONTRAENTREGA', $html, 'El top bar muestra el mensaje de contraentrega');
 
         // La bandera de Colombia acompaña al mensaje de envíos nacionales.
         $this->assertStringContainsString('data-shipping-flag', $html, 'El top bar incluye la bandera de Colombia');
         $this->assertStringContainsString('Bandera de Colombia', $html, 'La bandera tiene un nombre accesible');
 
-        // Región viva: la rotación se anuncia a lectores de pantalla.
+        // Región viva: solo el bloque de anuncios rota y se anuncia a lectores
+        // de pantalla.
         $this->assertStringContainsString('data-shipping-topbar', $html, 'El top bar expone su hook de marcado');
+        $this->assertStringContainsString('data-shipping-announcements', $html, 'Los anuncios que rotan exponen su hook');
         $this->assertStringContainsString('role="status"', $html, 'El top bar es una región de estado');
         $this->assertStringContainsString('aria-live="polite"', $html, 'El top bar anuncia cambios sin interrumpir');
 
@@ -397,6 +409,175 @@ class StorefrontNavigationTest extends TestCase
         $this->assertStringContainsString('data-shipping-rotation="4000"', $html, 'La rotación se declara a 4000 ms');
         $this->assertStringContainsString('setInterval', $html, 'La rotación usa un temporizador existente (Alpine/JS)');
         $this->assertStringContainsString('% this.messages.length', $html, 'La rotación vuelve al primer mensaje');
+    }
+
+    public function test_el_top_bar_fija_el_telefono_y_lo_deja_fuera_de_los_mensajes_que_rotan(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('href="tel:+573113059507"', $html, 'El top bar fija el teléfono de contacto');
+
+        $xpath = $this->xpathDe($html);
+
+        $phone = $xpath->query('//a[@data-shipping-phone]');
+        $this->assertSame(1, $phone->length, 'El teléfono es un enlace único, marcado con su hook');
+        $this->assertNotNull($phone->item(0));
+        $this->assertSame('tel:+573113059507', $phone->item(0)->getAttribute('href'));
+
+        // El teléfono vive dentro del top bar pero fuera de la región viva que
+        // rota: no se anuncia en cada cambio ni puede desaparecer con la
+        // transición de los mensajes.
+        $this->assertSame(
+            1,
+            $xpath->query('//*[@data-shipping-topbar]//a[@data-shipping-phone]')->length,
+            'El teléfono vive dentro del top bar'
+        );
+        $this->assertSame(
+            0,
+            $xpath->query('//*[@data-shipping-announcements]//a[@data-shipping-phone]')->length,
+            'El teléfono queda fuera de los anuncios que rotan'
+        );
+    }
+
+    public function test_el_top_bar_anima_los_mensajes_con_transicion_de_alpine_y_movimiento_reducido(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        // La transición vive en los dos slots que rotan: fade corto con un
+        // deslizamiento vertical leve, neutralizado con `prefers-reduced-motion`.
+        foreach (['nacional', 'contraentrega'] as $slot) {
+            $node = $xpath->query('//*[@data-shipping-message="'.$slot.'"]')->item(0);
+
+            $this->assertNotNull($node, "El slot {$slot} existe");
+
+            $enter = (string) $node->getAttribute('x-transition:enter');
+            $enterStart = (string) $node->getAttribute('x-transition:enter-start');
+            $enterEnd = (string) $node->getAttribute('x-transition:enter-end');
+            $leave = (string) $node->getAttribute('x-transition:leave');
+            $leaveStart = (string) $node->getAttribute('x-transition:leave-start');
+            $leaveEnd = (string) $node->getAttribute('x-transition:leave-end');
+
+            $this->assertStringContainsString('duration-', $enter, "El slot {$slot} usa una transición corta de entrada");
+            $this->assertStringContainsString('motion-reduce:transition-none', $enter, "El slot {$slot} desactiva la transición con movimiento reducido");
+            $this->assertStringContainsString('opacity-0', $enterStart, "El slot {$slot} entra con fade");
+            $this->assertStringContainsString('translate-y-', $enterStart, "El slot {$slot} entra con un deslizamiento vertical leve");
+            $this->assertStringContainsString('motion-reduce:translate-y-0', $enterStart, "El slot {$slot} neutraliza el deslizamiento con movimiento reducido");
+            $this->assertStringContainsString('opacity-100', $enterEnd, "El slot {$slot} termina de entrar visible");
+            $this->assertStringContainsString('translate-y-0', $enterEnd, "El slot {$slot} termina de entrar sin desplazamiento");
+            $this->assertStringContainsString('motion-reduce:transition-none', $leave, "El slot {$slot} desactiva la salida con movimiento reducido");
+
+            // Salida explícita: sin estados de leave el mensaje anterior
+            // desaparecía de golpe en lugar de desvanecerse.
+            $this->assertStringContainsString('opacity-100', $leaveStart, "El slot {$slot} sale desde visible");
+            $this->assertStringContainsString('translate-y-0', $leaveStart, "El slot {$slot} sale desde su posición original");
+            $this->assertStringContainsString('opacity-0', $leaveEnd, "El slot {$slot} se desvanece al salir");
+            $this->assertStringContainsString('-translate-y-1', $leaveEnd, "El slot {$slot} sale con un deslizamiento vertical leve");
+            $this->assertStringContainsString('motion-reduce:translate-y-0', $leaveEnd, "El slot {$slot} neutraliza el deslizamiento de salida con movimiento reducido");
+        }
+
+        // El teléfono es persistente: no participa de la transición.
+        $phone = $xpath->query('//a[@data-shipping-phone]')->item(0);
+        $this->assertNotNull($phone);
+        $this->assertFalse($phone->hasAttribute('x-transition'), 'El teléfono no se anima ni rota');
+    }
+
+    public function test_el_top_bar_ensancha_el_espaciado_entre_letras_de_los_anuncios(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        foreach (['nacional', 'contraentrega'] as $slot) {
+            $node = $xpath->query('//*[@data-shipping-message="'.$slot.'"]')->item(0);
+
+            $this->assertNotNull($node, "El slot {$slot} existe");
+            $this->assertStringContainsString(
+                'tracking-[0.2em]',
+                (string) $node->getAttribute('class'),
+                "El slot {$slot} ensancha el espaciado entre letras"
+            );
+        }
+    }
+
+    public function test_el_top_bar_ocupa_todo_el_ancho_y_pega_el_telefono_a_la_derecha(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        // El contenedor de layout es el padre directo de los anuncios; dejar de
+        // limitar el ancho con `max-w-7xl` y centrar con `mx-auto` es lo que
+        // permite que la barra llegue al borde derecho real del viewport.
+        $announcements = $xpath->query('//*[@data-shipping-announcements]')->item(0);
+        $this->assertNotNull($announcements, 'El bloque de anuncios existe');
+
+        $layout = $announcements->parentNode;
+        $this->assertInstanceOf(\DOMElement::class, $layout, 'Los anuncios viven dentro del contenedor de layout');
+        $this->assertSame(
+            1,
+            $xpath->query('//*[@data-shipping-topbar]//*[@data-shipping-announcements]')->length,
+            'El contenedor de layout sigue dentro del top bar'
+        );
+
+        $classes = preg_split('/\s+/', trim((string) $layout->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertNotContains('mx-auto', $classes, 'El layout ya no centra la barra con auto-márgenes');
+        $this->assertNotContains('max-w-7xl', $classes, 'El layout ya no limita el ancho a 7xl');
+        $this->assertContains('w-full', $classes, 'El layout ocupa todo el ancho disponible');
+        $this->assertContains('px-2', $classes, 'El layout usa un padding horizontal pequeño (~8px)');
+        $this->assertNotContains('px-4', $classes, 'El layout ya no usa el padding horizontal ancho anterior');
+        $this->assertContains('flex-col', $classes, 'En móvil los anuncios y el teléfono se apilan en dos líneas');
+
+        // El teléfono persistente queda alineado a la derecha también en móvil:
+        // su propia línea con auto-margen izquierdo lo empuja contra el borde.
+        $phone = $xpath->query('//*[@data-shipping-topbar]//a[@data-shipping-phone]')->item(0);
+        $this->assertNotNull($phone, 'El teléfono persistente existe');
+
+        $phoneClasses = preg_split('/\s+/', trim((string) $phone->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('ml-auto', $phoneClasses, 'El teléfono se alinea a la derecha del viewport');
+        $this->assertContains('shrink-0', $phoneClasses, 'El teléfono conserva su tamaño sin comprimirse');
+    }
+
+    public function test_el_top_bar_con_el_telefono_se_repite_igual_en_todo_el_shell(): void
+    {
+        // Triangulación: la barra es compartida, así que los dos mensajes y el
+        // teléfono deben aparecer (una sola vez) en todas las páginas del shell,
+        // no solo en el catálogo.
+        $product = $this->product();
+
+        foreach ([
+            route('catalog.index'),
+            route('catalog.show', $product),
+            route('cart.index'),
+            route('checkout.index'),
+        ] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+
+            $this->assertStringContainsString('REALIZAMOS ENVÍOS A TODA COLOMBIA', $html, "El mensaje nacional aparece en {$url}");
+            $this->assertStringContainsString('REALIZAMOS TUS ENVÍOS CONTRAENTREGA', $html, "El mensaje de contraentrega aparece en {$url}");
+            $this->assertSame(
+                1,
+                substr_count($html, 'href="tel:+573113059507"'),
+                "El shell expone un único teléfono fijo en {$url}"
+            );
+        }
+    }
+
+    /**
+     * Documento parseado para comprobar estructura (no solo substrings).
+     */
+    private function xpathDe(string $html): \DOMXPath
+    {
+        $document = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $document->loadHTML('<?xml encoding="UTF-8">'.$html);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        return new \DOMXPath($document);
     }
 
     /*
@@ -422,7 +603,335 @@ class StorefrontNavigationTest extends TestCase
             $this->assertStringContainsString('data-nav-primary-item="'.$item.'"', $html, "El primario {$item} existe");
         }
 
-        $response->assertSee('Damas')->assertSee('Caballeros')->assertSee('Tienda');
+        // T8: las etiquetas visibles de las categorías van en mayúsculas.
+        $response->assertSee('DAMAS')->assertSee('CABALLEROS')->assertSee('TIENDA')
+            ->assertDontSee('>Damas<')
+            ->assertDontSee('>Caballeros<');
+    }
+
+    public function test_las_etiquetas_primarias_van_en_mayusculas_con_tracking(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        foreach (['damas' => 'DAMAS', 'caballeros' => 'CABALLEROS', 'tienda' => 'TIENDA'] as $item => $esperado) {
+            $node = $xpath->query('//*[@data-nav-primary-item="'.$item.'"]')->item(0);
+
+            $this->assertNotNull($node, "El primario {$item} existe");
+            $this->assertSame($esperado, trim($node->textContent), "El primario {$item} se muestra en mayúsculas");
+
+            $classes = preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+            $this->assertContains('uppercase', $classes, "El primario {$item} aplica mayúsculas de estilo");
+            $this->assertNotEmpty(
+                array_filter($classes, fn (string $class): bool => str_starts_with($class, 'tracking-')),
+                "El primario {$item} ensancha el espaciado entre letras"
+            );
+        }
+    }
+
+    public function test_los_controles_utilitarios_son_solo_icono_y_conservan_su_nombre_accesible(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $this->assertSame(
+            3,
+            $xpath->query('//*[@data-nav-utilities]//*[@data-nav-utility]')->length,
+            'Los tres controles utilitarios viven en la zona izquierda del encabezado'
+        );
+
+        foreach (['search' => 'Buscar', 'account' => 'Cuenta', 'bag' => 'Bolsa'] as $utility => $label) {
+            $node = $xpath->query('//*[@data-nav-utility="'.$utility.'"]')->item(0);
+
+            $this->assertNotNull($node, "El control {$utility} existe");
+
+            // Solo el icono es visible: ningún nodo de texto con contenido.
+            $this->assertSame('', trim($node->textContent), "El control {$utility} no muestra ninguna palabra");
+            $this->assertSame(
+                0,
+                $xpath->query('.//*[text()[normalize-space()]]', $node)->length,
+                "El control {$utility} no tiene nodos de texto visibles"
+            );
+            $this->assertSame(1, $xpath->query('.//*[@data-nav-icon]', $node)->length, "El control {$utility} contiene su icono en línea");
+
+            // El nombre accesible se conserva aunque no haya texto visible.
+            $this->assertSame($label, $node->getAttribute('aria-label'), "El control {$utility} conserva su aria-label");
+            $this->assertSame($label, $node->getAttribute('title'), "El control {$utility} conserva su title");
+        }
+    }
+
+    public function test_el_encabezado_pone_las_categorias_a_la_izquierda_y_las_utilidades_a_la_derecha(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $this->assertSame(1, $xpath->query('//*[@data-nav-brand]')->length, 'La marca aparece una sola vez');
+
+        $brand = $xpath->query('//*[@data-nav-brand]')->item(0);
+        $this->assertNotNull($brand, 'La marca del encabezado expone su hook');
+        $this->assertSame(route('home'), $brand->getAttribute('href'), 'La marca sigue llevando al home');
+        $this->assertSame('Tag Q', trim($brand->textContent), 'La marca conserva el wordmark exacto');
+
+        // Rejilla de tres columnas: la marca ocupa la columna central `auto`,
+        // así queda centrada en el viewport aunque los lados no pesen igual.
+        $layout = $brand->parentNode;
+        $this->assertInstanceOf(\DOMElement::class, $layout, 'La marca vive dentro del contenedor de layout');
+
+        $layoutClasses = preg_split('/\s+/', trim((string) $layout->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $brandClasses = preg_split('/\s+/', trim((string) $brand->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('grid', $layoutClasses, 'El encabezado usa rejilla');
+        $this->assertContains('grid-cols-[1fr_auto_1fr]', $layoutClasses, 'El encabezado usa una rejilla 1fr auto 1fr');
+        $this->assertContains('justify-self-center', $brandClasses, 'La marca se centra dentro de su columna');
+
+        // T10 invierte las columnas laterales: categorías primarias a la
+        // izquierda y utilidades (buscar, cuenta, bolsa) a la derecha.
+        $primary = $xpath->query('//*[@data-nav-primary]')->item(0);
+        $utilities = $xpath->query('//*[@data-nav-utilities]')->item(0);
+
+        $this->assertNotNull($primary, 'La zona de categorías existe');
+        $this->assertNotNull($utilities, 'La zona de utilidades existe');
+        $this->assertSame(3, $xpath->query('*', $layout)->length, 'El encabezado tiene exactamente tres zonas');
+
+        $cells = $xpath->query('*', $layout);
+
+        $left = $cells->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $left, 'La columna izquierda existe');
+        $this->assertContains(
+            'justify-start',
+            preg_split('/\s+/', trim((string) $left->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY),
+            'La columna izquierda alinea su contenido al inicio'
+        );
+        $this->assertSame($primary, $xpath->query('.//*[@data-nav-primary]', $left)->item(0), 'Las categorías ocupan la primera columna (izquierda)');
+        $this->assertSame(1, $xpath->query('.//*[@data-nav-mobile-toggle]', $left)->length, 'El control del menú móvil comparte la columna izquierda');
+
+        $this->assertSame($brand, $cells->item(1), 'La marca ocupa la columna central');
+
+        $this->assertSame($utilities, $cells->item(2), 'Las utilidades ocupan la tercera columna (derecha)');
+
+        $right = $cells->item(2);
+        $this->assertInstanceOf(\DOMElement::class, $right, 'La columna derecha existe');
+        $this->assertContains(
+            'justify-end',
+            preg_split('/\s+/', trim((string) $right->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY),
+            'La columna derecha alinea su contenido al final'
+        );
+    }
+
+    public function test_la_marca_renderiza_el_svg_del_logo_inmediatamente_antes_del_wordmark_exacto(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $brand = $xpath->query('//*[@data-nav-brand]')->item(0);
+        $this->assertNotNull($brand, 'La marca del encabezado existe');
+        $this->assertSame('Tag Q', trim($brand->textContent), 'La marca conserva el wordmark exacto Tag Q');
+
+        $images = $xpath->query('.//img', $brand);
+        $this->assertSame(1, $images->length, 'La marca incluye exactamente un SVG renderizado como imagen');
+
+        $mark = $images->item(0);
+        $this->assertNotNull($mark, 'La marca del SVG existe');
+        $this->assertSame(
+            asset('images/tag-q-logo.svg'),
+            $mark->getAttribute('src'),
+            'La marca carga el SVG público copiado a public/images'
+        );
+
+        // Decorativo: el wordmark contiguo ya nombra la marca, así que la
+        // imagen no compite por el nombre accesible.
+        $this->assertTrue($mark->hasAttribute('alt'), 'La imagen declara su atributo alt');
+        $this->assertSame('', $mark->getAttribute('alt'), 'La imagen es decorativa');
+        $this->assertSame('true', $mark->getAttribute('aria-hidden'), 'La imagen queda fuera del árbol accesible');
+
+        // El SVG entregado trae relleno pálido: se oscurece con filtros de
+        // Tailwind para que sea legible sobre el encabezado blanco, sin editar
+        // el archivo original.
+        $markClasses = preg_split('/\s+/', trim((string) $mark->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $this->assertContains('brightness-0', $markClasses, 'El SVG se oscurece con un filtro de Tailwind');
+        $this->assertContains('opacity-70', $markClasses, 'El SVG se atenúa con un filtro de Tailwind');
+
+        // Altura responsive del logo pedida por el usuario: 28px en móvil
+        // (`h-7`) y 56px desde el breakpoint `sm` (`sm:h-14`, Tailwind
+        // `height: calc(var(--spacing) * 14)`). La altura anterior `sm:h-8`
+        // (32px) queda fuera.
+        $this->assertContains('h-7', $markClasses, 'El logo conserva la altura móvil de 28px');
+        $this->assertContains('sm:h-14', $markClasses, 'El logo sube a 56px desde el breakpoint sm');
+        $this->assertNotContains('sm:h-8', $markClasses, 'El logo ya no usa la altura sm:h-8 de 32px');
+
+        $wordmark = $xpath->query('.//*[@data-nav-brand-wordmark]', $brand)->item(0);
+        $this->assertNotNull($wordmark, 'El wordmark exacto vive dentro de la marca');
+        $this->assertSame('Tag Q', $wordmark->textContent, 'El wordmark se mantiene literal');
+
+        // Sin ningún nodo de elemento entre ambos: el SVG queda inmediatamente
+        // a la izquierda del wordmark.
+        $intercalado = false;
+        for ($node = $mark->nextSibling; $node !== null && $node !== $wordmark; $node = $node->nextSibling) {
+            if ($node instanceof \DOMElement) {
+                $intercalado = true;
+            }
+        }
+        $this->assertFalse($intercalado, 'No hay nada entre el SVG y el wordmark Tag Q');
+    }
+
+    public function test_el_logo_publico_existe_y_conserva_el_svg_entregado(): void
+    {
+        $path = public_path('images/tag-q-logo.svg');
+
+        $this->assertFileExists($path, 'El logo vive en public/images para que Laravel lo sirva como asset');
+
+        $svg = (string) file_get_contents($path);
+
+        $this->assertStringContainsString('<svg', $svg, 'El asset es un SVG');
+        $this->assertStringContainsString('viewBox="508 226 252 345"', $svg, 'El asset conserva el viewBox del SVG entregado');
+        $this->assertStringContainsString('#ededed', $svg, 'El asset conserva el relleno pálido original, sin editar');
+
+        // Copia byte a byte del archivo entregado en la raíz del proyecto. La
+        // comparación solo aplica cuando ese original está presente.
+        if (is_file(base_path('logo.svg'))) {
+            $this->assertSame(
+                file_get_contents(base_path('logo.svg')),
+                $svg,
+                'El asset público es una copia byte a byte del SVG entregado'
+            );
+        }
+    }
+
+    public function test_los_iconos_utilitarios_se_renderizan_a_24px(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        foreach (['search', 'user', 'bag'] as $icon) {
+            $node = $xpath->query('//*[@data-nav-utilities]//*[@data-nav-icon="'.$icon.'"]')->item(0);
+            $this->assertNotNull($node, "El icono utilitario {$icon} existe");
+
+            $classes = preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+            $this->assertContains('h-6', $classes, "El icono {$icon} mide 24px de alto");
+            $this->assertContains('w-6', $classes, "El icono {$icon} mide 24px de ancho");
+            $this->assertNotContains('h-5', $classes, "El icono {$icon} ya no usa 20px de alto");
+            $this->assertNotContains('w-5', $classes, "El icono {$icon} ya no usa 20px de ancho");
+        }
+    }
+
+    public function test_las_etiquetas_primarias_crecen_a_text_sm_sin_perder_mayusculas(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        foreach (['damas', 'caballeros', 'tienda'] as $item) {
+            $node = $xpath->query('//*[@data-nav-primary-item="'.$item.'"]')->item(0);
+            $this->assertNotNull($node, "El primario {$item} existe");
+
+            $classes = preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+            $this->assertContains('text-sm', $classes, "El primario {$item} usa un tamaño algo mayor");
+            $this->assertNotContains('text-xs', $classes, "El primario {$item} ya no usa el tamaño anterior");
+            $this->assertContains('uppercase', $classes, "El primario {$item} conserva las mayúsculas");
+        }
+
+        // El menú móvil repite los mismos primarios, con el mismo tamaño.
+        foreach (['damas', 'caballeros', 'tienda'] as $item) {
+            $node = $xpath->query('//*[@data-nav-mobile-item="'.$item.'"]')->item(0);
+            $this->assertNotNull($node, "El ítem móvil {$item} existe");
+
+            $classes = preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+            $this->assertContains('text-sm', $classes, "El ítem móvil {$item} usa el tamaño mayor");
+            $this->assertNotContains('text-xs', $classes, "El ítem móvil {$item} ya no usa el tamaño anterior");
+            $this->assertContains('uppercase', $classes, "El ítem móvil {$item} conserva las mayúsculas");
+        }
+    }
+
+    public function test_en_movil_el_menu_queda_a_la_izquierda_y_las_utilidades_a_la_derecha(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $brand = $xpath->query('//*[@data-nav-brand]')->item(0);
+        $this->assertNotNull($brand, 'La marca del encabezado existe');
+        $this->assertInstanceOf(\DOMElement::class, $brand->parentNode, 'La marca vive dentro del layout');
+
+        $cells = $xpath->query('*', $brand->parentNode);
+        $left = $cells->item(0);
+        $right = $cells->item(2);
+
+        // El control del menú móvil comparte la columna izquierda con las
+        // categorías de escritorio: en móvil queda a la izquierda del encabezado.
+        $toggle = $xpath->query('.//*[@data-nav-mobile-toggle]', $left)->item(0);
+        $this->assertNotNull($toggle, 'El botón del menú móvil vive en la columna izquierda');
+        $this->assertContains(
+            'lg:hidden',
+            preg_split('/\s+/', trim((string) $toggle->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY),
+            'El botón del menú solo aparece en móvil'
+        );
+
+        // Las utilidades siguen visibles a la derecha también en móvil: son la
+        // tercera celda de la rejilla, alineada al final.
+        $this->assertInstanceOf(\DOMElement::class, $right, 'La columna derecha existe');
+        $this->assertTrue($right->hasAttribute('data-nav-utilities'), 'Las utilidades viven en la columna derecha');
+        $this->assertSame(3, $xpath->query('.//*[@data-nav-utility]', $right)->length, 'Los tres iconos siguen a la derecha en móvil');
+
+        // Las rutas y el panel móvil no cambian con el reordenamiento.
+        $this->assertSame(3, substr_count($html, 'data-nav-mobile-item'), 'El menú móvil conserva los tres primarios');
+        $this->assertStringContainsString(
+            'href="'.route('catalog.index', ['categoria' => 'dama']).'"',
+            $html,
+            'Damas conserva su filtro real del catálogo'
+        );
+        $this->assertStringContainsString(
+            'href="'.route('catalog.index', ['categoria' => 'caballero']).'"',
+            $html,
+            'Caballeros conserva su filtro real del catálogo'
+        );
+        $this->assertStringContainsString(
+            'href="'.route('cart.index').'"',
+            $html,
+            'La bolsa conserva su destino al carrito'
+        );
+    }
+
+    public function test_el_encabezado_usa_un_padding_amplio_y_la_marca_tipografia_de_logo(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        // Padding responsive ampliado del encabezado (T9): más aire horizontal y
+        // vertical en móvil, tablet y escritorio, sin tocar la estructura.
+        $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
+        $this->assertNotNull($nav, 'El encabezado expone su hook');
+
+        $navClasses = preg_split('/\s+/', trim((string) $nav->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        foreach (['px-5', 'py-4', 'sm:px-8', 'sm:py-5', 'lg:px-10'] as $class) {
+            $this->assertContains($class, $navClasses, "El encabezado aplica el padding {$class}");
+        }
+
+        foreach (['px-4', 'py-3', 'sm:px-6'] as $class) {
+            $this->assertNotContains($class, $navClasses, "El encabezado ya no usa el padding anterior {$class}");
+        }
+
+        // La marca se ve como un logotipo: serif del sistema, tamaño responsive
+        // mayor, peso semibold y tracking contenido. Sin fuentes externas.
+        $brand = $xpath->query('//*[@data-nav-brand]')->item(0);
+        $this->assertNotNull($brand, 'La marca del encabezado existe');
+        $this->assertSame('Tag Q', trim($brand->textContent), 'La marca muestra exactamente Tag Q');
+
+        $brandClasses = preg_split('/\s+/', trim((string) $brand->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        foreach (['font-serif', 'font-semibold', 'text-xl', 'sm:text-2xl', 'tracking-[0.12em]'] as $class) {
+            $this->assertContains($class, $brandClasses, "La marca aplica el estilo de logotipo {$class}");
+        }
     }
 
     public function test_damas_y_caballeros_enlazan_los_filtros_reales_del_catalogo(): void
@@ -546,5 +1055,27 @@ class StorefrontNavigationTest extends TestCase
 
         // Los niños siguen siendo alcanzables desde móvil.
         $this->assertStringContainsString('data-nav-mobile-child="ninos"', $html);
+        $this->assertStringContainsString('data-nav-mobile-child="ver-todo"', $html);
+        $this->assertStringContainsString(
+            'href="'.route('catalog.index', ['categoria' => 'ninos']).'"',
+            $html,
+            'El panel móvil conserva el destino real de Niños'
+        );
+
+        // T8: el panel móvil conserva las categorías, ahora en mayúsculas.
+        $xpath = $this->xpathDe($html);
+
+        foreach (['damas' => 'DAMAS', 'caballeros' => 'CABALLEROS', 'tienda' => 'TIENDA'] as $item => $esperado) {
+            $node = $xpath->query('//*[@data-nav-mobile-item="'.$item.'"]')->item(0);
+
+            $this->assertNotNull($node, "El ítem móvil {$item} existe");
+            $this->assertSame($esperado, trim($node->textContent), "El ítem móvil {$item} se muestra en mayúsculas");
+            $this->assertContains(
+                'uppercase',
+                preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY),
+                "El ítem móvil {$item} aplica mayúsculas de estilo"
+            );
+        }
     }
+
 }
