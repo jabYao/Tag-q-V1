@@ -18,6 +18,7 @@
                     <a href="{{ route('admin.orders.index') }}" class="text-sm text-gray-600 hover:text-black">Pedidos</a>
                 @endif
                 @if(auth()->user()->isAdmin())
+                    <a href="{{ route('admin.collections.index') }}" class="text-sm text-gray-600 hover:text-black">Colecciones</a>
                     <a href="{{ route('admin.users.index') }}" class="text-sm text-gray-600 hover:text-black">Usuarios</a>
                 @endif
             @endauth

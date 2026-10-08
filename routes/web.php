@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\CollectionController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UserController;
@@ -73,6 +74,9 @@ Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin
 
 // Gestión de usuarios — solo admin (empleado, cliente e invitado quedan fuera)
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    // Colecciones curadas — exclusivo del admin (el empleado no publica colecciones).
+    Route::resource('collections', CollectionController::class)->except(['show']);
+
     Route::patch('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
     Route::resource('users', UserController::class)->except(['show', 'destroy']);
 });
