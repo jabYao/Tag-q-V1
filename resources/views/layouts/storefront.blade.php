@@ -151,6 +151,10 @@
         x-data="{
             mobileOpen: false,
             searchOpen: false,
+            // T20 — el panel solo mide su contenido (barra + padding) mientras
+            // el área viva del componente Livewire está inactiva; desde la
+            // segunda letra se fija al 80% del alto restante.
+            searchAreaActive: false,
             searchPanelTop: 0,
             searchPanelHeight: 0,
             previousBodyOverflow: '',
@@ -193,6 +197,7 @@
             },
         }"
         @keydown.escape.window="closeSearch(); mobileOpen = false"
+        @storefront-search-area.window="searchAreaActive = !! ($event.detail && $event.detail.active)"
         class="relative z-50 bg-white border-b px-5 py-4 sm:px-8 sm:py-5 lg:px-10"
         aria-label="Navegación principal"
     >
@@ -420,15 +425,19 @@
         {{-- T11 — Panel blanco de búsqueda: diálogo modal justo debajo de la
              navbar, con el 80% del alto restante del viewport
              (`(window.innerHeight - nav.getBoundingClientRect().bottom) * 0.8`).
-             Se cierra con Escape, con su botón o con el fondo. T13 aloja aquí el
-             componente Livewire en vivo, que mantiene el `GET catalog.index` con
-             `name="q"` como respaldo/Enter y añade resultados y sugerencias. --}}
+             T20 — mientras el área viva no existe el alto es el de su contenido
+             (`auto`): con solo la barra no queda un bloque blanco vacío. En
+             cuanto el componente publica `storefront-search-area`, el alto
+             vuelve a `searchPanelHeight` (80%). Se cierra con Escape, con su
+             botón o con el fondo. T13 aloja aquí el componente Livewire en vivo,
+             que mantiene el `GET catalog.index` con `name="q"` como
+             respaldo/Enter y añade resultados y sugerencias. --}}
         <div
             id="storefront-search-panel"
             data-nav-search-panel
             x-show="searchOpen"
             x-cloak
-            :style="'top: ' + searchPanelTop + 'px; height: ' + searchPanelHeight + 'px'"
+            :style="'top: ' + searchPanelTop + 'px; height: ' + (searchAreaActive ? searchPanelHeight + 'px' : 'auto')"
             role="dialog"
             aria-modal="true"
             aria-label="Buscar"

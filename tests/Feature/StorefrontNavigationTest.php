@@ -1161,6 +1161,19 @@ class StorefrontNavigationTest extends TestCase
         $this->assertStringContainsString('searchPanelHeight', $panelStyle, 'El alto calculado alimenta el estilo del panel');
         $this->assertStringContainsString('searchPanelTop', $panelStyle, 'El panel se pega al fondo de la navbar');
 
+        // T20: el alto depende del área viva. Con solo la barra el panel mide
+        // su contenido (`auto`) en vez de dejar un bloque blanco vacío; desde
+        // la segunda letra vuelve a `searchPanelHeight` (80% restante).
+        $this->assertStringContainsString('searchAreaActive', $panelStyle, 'El alto del panel depende del área viva (T20)');
+        $this->assertStringContainsString('auto', $panelStyle, 'Sin área viva el panel mide su contenido (T20)');
+
+        // T20: la navbar escucha el evento que publica el componente Livewire y
+        // arranca con el área viva inactiva, así el panel abre content-sized.
+        $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
+        $this->assertNotNull($nav, 'La navbar existe');
+        $this->assertTrue($nav->hasAttribute('@storefront-search-area.window'), 'La navbar escucha el estado del área viva (T20)');
+        $this->assertStringContainsString('searchAreaActive: false', (string) $nav->getAttribute('x-data'), 'El estado inicial del área viva es inactivo (T20)');
+
         // El fondo atenúa solo el área restante: empieza donde termina la
         // navbar, así la navbar y el top bar siguen visibles.
         $backdrop = $xpath->query('//*[@data-nav-search-backdrop]')->item(0);

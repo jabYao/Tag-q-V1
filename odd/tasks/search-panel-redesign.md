@@ -115,3 +115,16 @@ Verificado como árbol aislado (checkout temporal del índice): **389/389 tests,
   - Suite completa: **391/391 tests, 2,392 assertions, 0 fallos**; `npm run build` OK.
   - Dusk E2E re-corrido tras el cambio: **1/1, 30 assertions** (las 2 nuevas comprueban que la rejilla no existe con el input vacío). Servidor 8001 y chromedriver detenidos.
 - Re-baseline honesto (la rejilla ya no existe con consulta vacía): `test_el_panel_monta_un_componente_livewire_en_todo_el_shell` ahora exige **0** copias de los hooks de rejilla y 1 de `data-nav-search-form`; `test_la_seccion_de_resultados_y_sugerencias_...`, `test_el_rediseno_del_panel_...`, `test_el_panel_tiene_las_pestanas_...`, `test_el_tab_de_colecciones_...` y `test_el_panel_de_busqueda_sale_de_sus_contenedores` ahora manejan el componente con `Livewire::test(...)->set('query', 'Ch')` + `html()`/`xpathDe()`; el T13 de `StorefrontNavigationTest` exige la ausencia de la rejilla con consulta vacía; el Dusk añade `assertMissing` de la rejilla en el paso 1.
+
+### T20 — El panel encoge a la altura de la barra sin área viva
+- Status: completed (commit de este work unit).
+- Pedido del dueño: con T19 mostrando solo la barra, el contenedor del panel no debe dejar el espacio vacío del 80% del viewport: el div blanco tiene que medir lo que ocupa la barra y nada más; al activarse (segunda letra) vuelve al 80% de alto restante.
+- Decisión de diseño: NO se divide el div. El panel sigue siendo el mismo `fixed`, pero su `:style` pasa a `height: auto` mientras `searchAreaActive` es falso, y `searchPanelHeight` (80%) cuando es verdadero. `searchAreaActive` lo publica el componente Livewire con un dispatch por render (`storefront-search-area`), que Alpine escucha en `window` desde la navbar; el estado inicial es `false`, igual que la consulta inicial.
+- Quedan intactos `searchPanelTop` (top pegado al fondo de la navbar), el backdrop y las pruebas de resize/foco de T11.
+
+- Evidencia (observada):
+  - RED: `StorefrontSearchPanelTest` 20 tests, 19 passed, **1 failed** — `test_el_panel_publica_si_el_area_viva_esta_activa_para_alto_auto` (el evento `storefront-search-area` no se despachaba).
+  - GREEN: `StorefrontSearchPanelTest` **20/20, 161 assertions**; `StorefrontNavigationTest` **46/46, 573**.
+  - Suite completa: **392/392 tests, 2,401 assertions, 0 fallos**; `npm run build` OK.
+  - Dusk E2E con las nuevas mediciones: **1/1, 35 assertions** — con el input vacío el panel mide su contenido (< 400px) y tras escribir vuelve al 80% del alto restante con Δ ≤ 2px respecto de `(window.innerHeight - nav.bottom) * 0.8`.
+- Mecanismo: `SearchPanel::render()` despacha `storefront-search-area` con `active`; la navbar escucha `@storefront-search-area.window` y alterna el `:style` del panel entre `height: auto` y `searchPanelHeight`. Estado inicial `false`, coherente con la consulta inicial vacía; `searchAreaActive` no se resetea al cerrar, igual que `query`.

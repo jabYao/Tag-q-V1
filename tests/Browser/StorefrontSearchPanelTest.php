@@ -80,8 +80,11 @@ class StorefrontSearchPanelTest extends DuskTestCase
     public function test_el_panel_de_busqueda_funciona_de_punta_a_punta_en_el_navegador(): void
     {
         $positions = null;
+        $emptyPanelHeight = null;
+        $activePanelHeight = null;
+        $expectedActivePanelHeight = null;
 
-        $this->browse(function (Browser $browser) use (&$positions) {
+        $this->browse(function (Browser $browser) use (&$positions, &$emptyPanelHeight, &$activePanelHeight, &$expectedActivePanelHeight) {
             // 1. Abrir el panel desde el home. `x-cloak` se retira cuando Alpine
             //    arranca; esperarlo evita pulsar el botón antes de que su
             //    `@click` esté enlazado.
@@ -98,6 +101,9 @@ class StorefrontSearchPanelTest extends DuskTestCase
                 ->assertMissing('[data-search-panel-results]')
                 ->assertMissing('[data-search-panel-suggestions]');
 
+            // T20: con solo la barra el panel mide su contenido, no el 80%.
+            $emptyPanelHeight = (float) $browser->script("return document.querySelector('[data-nav-search-panel]').getBoundingClientRect().height;")[0];
+
             // 2. Escribir y esperar el ida y vuelta de Livewire. `waitUntil` sobre
             //    el texto de los resultados garantiza que el debounce de 250 ms
             //    ya resolvió el término completo antes de tocar la sugerencia.
@@ -107,6 +113,11 @@ class StorefrontSearchPanelTest extends DuskTestCase
                 ->waitUntil(self::resultsExclude(self::OTHER_NAME), 20)
                 ->assertSeeIn('[data-search-panel-results]', self::MATCHING_NAME)
                 ->assertSeeIn('[data-search-panel-suggestions]', self::MATCHING_NAME);
+
+            // T20: con el área viva el panel recupera el 80% del alto restante
+            // por debajo de la navbar.
+            $activePanelHeight = (float) $browser->script("return document.querySelector('[data-nav-search-panel]').getBoundingClientRect().height;")[0];
+            $expectedActivePanelHeight = (float) $browser->script("return (window.innerHeight - document.querySelector('[data-storefront-nav]').getBoundingClientRect().bottom) * 0.8;")[0];
 
             // 3. La sugerencia rellena el input con su propio texto.
             $browser->click('[data-search-panel-suggestions] [data-search-suggestion]')
@@ -158,6 +169,14 @@ class StorefrontSearchPanelTest extends DuskTestCase
             $suggestionsLeft,
             'La columna de sugerencias queda estrictamente a la izquierda de la de resultados'
         );
+
+        // T20: el panel pasa de medir su contenido (solo la barra) a recuperar
+        // el 80% del alto restante en cuanto existe área viva.
+        $this->assertNotNull($emptyPanelHeight, 'Se midió el panel con solo la barra');
+        $this->assertNotNull($activePanelHeight, 'Se midió el panel con el área viva');
+        $this->assertLessThan(400, $emptyPanelHeight, 'Con solo la barra el panel mide su contenido, no el 80% del viewport');
+        $this->assertGreaterThan($emptyPanelHeight, $activePanelHeight, 'Con área viva el panel crece de nuevo');
+        $this->assertEqualsWithDelta($expectedActivePanelHeight, $activePanelHeight, 2, 'Con área viva el panel vuelve al 80% del alto restante');
     }
 
     /**

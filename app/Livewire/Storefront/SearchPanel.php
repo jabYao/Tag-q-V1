@@ -79,6 +79,13 @@ class SearchPanel extends Component
         // base de datos en cada pulsación antes de la segunda letra.
         $active = mb_strlen($term) >= 2;
 
+        // T20 — el diálogo debe medir solo su contenido (barra + padding)
+        // mientras el área viva no existe, y volver al 80% del alto restante en
+        // cuanto aparece. El marcado del panel vive en el layout, fuera de este
+        // componente Livewire, así que se publica el estado a la página para
+        // que Alpine ajuste el alto sin duplicar la lógica del gate de T19.
+        $this->dispatch('storefront-search-area', active: $active);
+
         // T17 — el esquema secundario de colecciones puede faltar (migración
         // pendiente en el entorno). Se comprueba una sola vez por render y se
         // pasa a las rutas que lo necesitan, para que el panel degrade en la

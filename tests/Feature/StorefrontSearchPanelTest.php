@@ -721,6 +721,32 @@ class StorefrontSearchPanelTest extends TestCase
     }
 
     /**
+     * T20 — el panel publica si su área viva está activa para que Alpine
+     * ajuste el alto del diálogo: `auto` mientras solo existe la barra y el 80%
+     * del alto restante en cuanto vuelve la rejilla de resultados.
+     */
+    public function test_el_panel_publica_si_el_area_viva_esta_activa_para_alto_auto(): void
+    {
+        $product = $this->product($this->category(), ['name' => 'Chronos Alto', 'slug' => 'chronos-alto']);
+
+        // Sin consulta: solo la barra, el diálogo mide su contenido.
+        Livewire::test(SearchPanel::class)
+            ->assertDispatched('storefront-search-area', active: false);
+
+        // Una sola letra: sigue sin área viva.
+        Livewire::test(SearchPanel::class)
+            ->set('query', 'C')
+            ->assertDispatched('storefront-search-area', active: false);
+
+        // Dos letras: vuelve el área viva con un producto real y el panel
+        // recupera el 80% del alto restante.
+        Livewire::test(SearchPanel::class)
+            ->set('query', 'Ch')
+            ->assertDispatched('storefront-search-area', active: true)
+            ->assertViewHas('products', fn ($products) => $products->contains($product));
+    }
+
+    /**
      * T19 — el panel inactivo no toca la base de datos.
      *
      * Antes de la segunda letra no debe ejecutar ni las tres consultas de
