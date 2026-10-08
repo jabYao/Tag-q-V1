@@ -71,7 +71,13 @@
 
             {{-- Velo oscuro: mantiene legible el texto sobre cualquier imagen y
                  no captura clics, así el arrastre táctil llega al carrusel. --}}
-            <div data-home-hero-veil aria-hidden="true" class="pointer-events-none absolute inset-0 bg-gray-950/60"></div>
+            {{-- T21 — capas del carrusel: Swiper publica `.swiper-wrapper`
+                 con `z-index: 1`, así que las fotos ocupan el nivel 1 dentro
+                 del carrusel. El velo (2) y el bloque de texto (3) declaran su
+                 propio z-index para quedar POR ENCIMA de las fotos y POR
+                 DEBAJO de las flechas y los puntos de Swiper (`z-index: 10`);
+                 sin ellos el hero se veía mudo, con la foto sola. --}}
+            <div data-home-hero-veil aria-hidden="true" class="pointer-events-none absolute inset-0 z-[2] bg-gray-950/60"></div>
 
             {{-- Texto y acciones del hero, superpuestos a las imágenes. El
                  contenedor deja pasar los clics y solo el bloque de contenido
@@ -80,7 +86,7 @@
                  las flechas y de los puntos. --}}
             <div
                 data-home-hero-overlay
-                class="pointer-events-none absolute inset-0 flex items-center pl-14 pr-6 pt-10 pb-16 sm:pl-20 sm:pr-10 sm:pt-14 sm:pb-16"
+                class="pointer-events-none absolute inset-0 z-[3] flex items-center pl-14 pr-6 pt-10 pb-16 sm:pl-20 sm:pr-10 sm:pt-14 sm:pb-16"
             >
                 <div class="pointer-events-auto w-full max-w-xl">
                     <p data-home-hero-eyebrow class="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">

@@ -70,3 +70,14 @@ Replace the static editorial home hero's decorative CSS watch with a full-width,
 Commit `9052f5e feat(home): add full-bleed swipeable hero carousel` en `feat/storefront-experience`: `home.blade.php`, `resources/css/app.css`, `resources/js/app.js` y `StorefrontHomeTest`. Incluye de paso la eliminación del segundo Alpine en `app.js` (T16.5); su guard vive en el test del panel de búsqueda (`4f954e0`).
 
 Verificado como árbol aislado (checkout temporal del índice): **363/363 tests, 2,109 assertions**. La nota de "pending native review preflight" queda cubierta por la secuencia completa: el preflight sobre todo el workspace fue rechazado con `lens_context_budget_exceeded` y por eso se partió en commits encadenados. Push pendiente de autorización (AGENTS.md §4).
+
+### T21 — El velo y el texto del hero quedaban debajo de las imágenes
+- Status: completed (commit de este work unit).
+- Reporte del dueño: el hero no se ve (ni texto ni overlay). Constatado en navegador con una sonda Dusk temporal (no commiteada) + captura: la foto, las flechas y los puntos se veían, pero ni el velo ni el bloque de contenido aparecían.
+- Causa: Swiper publica `.swiper-wrapper { position: relative; z-index: 1 }` (`node_modules/swiper/swiper.css`), y el velo y el overlay son hermanos `absolute` **sin z-index** (auto = 0), así que se pintaban por debajo de las fotos. Medido en el navegador: `wrapper z=1`, `veil z=auto`, `overlay z=auto`, flechas `z=10`.
+- Fix: `z-[2]` en `data-home-hero-veil` y `z-[3]` en `data-home-hero-overlay` (velo sobre las fotos, texto sobre el velo, ambos por debajo de los controles Swiper `z-index: 10`).
+- Test-first: `test_el_velo_y_el_texto_del_hero_se_pintan_encima_de_las_imagenes` en `StorefrontHomeTest`.
+  - RED observado: 1 test, 0 passed, 3 assertions previas, **1 failure** en `assertContains('z-[2]', ...)`.
+  - GREEN observado: `StorefrontHomeTest` **25/25, 201 assertions**.
+  - Suite completa: **393/393 tests, 2,408 assertions, 0 fallos**; `npm run build` OK.
+- Verificación visual: segunda captura Dusk tras el fix — velo oscurecido, titular "Relojes de pulso para cada estilo", párrafo y los botones "Ver catálogo" / "Ir a mi bolsa" visibles sobre la foto, con flechas y puntos encima. Sonda y captura borradas después.

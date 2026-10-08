@@ -707,4 +707,38 @@ class StorefrontHomeTest extends TestCase
             'app.js debe publicar --storefront-header-h en el documento',
         );
     }
+
+    /**
+     * T21 — el velo y el texto del hero se pintan ENCIMA de las imágenes.
+     *
+     * Swiper publica `.swiper-wrapper { position: relative; z-index: 1 }`
+     * (`node_modules/swiper/swiper.css`), así que las fotos ocupan el nivel 1
+     * del apilamiento dentro del carrusel. El velo y el bloque de contenido son
+     * hermanos `absolute` del wrapper: sin z-index propio se pintan por debajo
+     * de las fotos y el hero queda mudo (medido en navegador, no supuesto).
+     *
+     * El contrato es: velo por encima del wrapper (1) y por debajo del bloque
+     * de texto, y ambos por debajo de las flechas y los puntos de Swiper, que
+     * usan `z-index: 10`.
+     */
+    public function test_el_velo_y_el_texto_del_hero_se_pintan_encima_de_las_imagenes(): void
+    {
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        $veil = $xpath->query('//*[@data-home-hero-veil]')->item(0);
+        $this->assertNotNull($veil, 'El velo oscurecedor del hero existe');
+        $veilClasses = preg_split('/\s+/', trim((string) $veil->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $this->assertContains('z-[2]', $veilClasses, 'El velo queda por encima del wrapper de Swiper (z-index 1)');
+
+        $overlay = $xpath->query('//*[@data-home-hero-overlay]')->item(0);
+        $this->assertNotNull($overlay, 'El bloque de texto del hero existe');
+        $overlayClasses = preg_split('/\s+/', trim((string) $overlay->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $this->assertContains('z-[3]', $overlayClasses, 'El texto va sobre el velo y por debajo de los controles (z-index 10)');
+
+        // El contenido concreto sigue en el documento: no es decorativo.
+        $this->assertStringContainsString('Relojes de pulso para cada estilo', $html, 'El titular del hero está en el HTML');
+        $this->assertStringContainsString('Ver catálogo', $html, 'La acción principal del hero está en el HTML');
+    }
 }
