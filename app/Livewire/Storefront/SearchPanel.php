@@ -17,10 +17,13 @@ use Livewire\Component;
  * el panel blanco de T11 con:
  *
  * - Pestañas `Productos` y `Colecciones`.
- * - Productos: sin consulta el panel permanece vacío; al escribir muestra como
- *   máximo cuatro coincidencias de productos ACTIVOS reales, con nombre,
+ * - T19 — el área viva de resultados solo existe a partir de la SEGUNDA letra:
+ *   con la consulta vacía o de un solo carácter la vista renderiza únicamente
+ *   la barra de búsqueda y no se ejecuta ninguna consulta.
+ * - Productos: hasta la segunda letra (T19) no hay área viva; después muestra
+ *   como máximo cuatro coincidencias de productos ACTIVOS reales, con nombre,
  *   imagen/fallback, categoría, precio COP y enlace al detalle existente.
- * - Colecciones: sin consulta el panel permanece vacío; al escribir lista
+ * - Colecciones: hasta la segunda letra (T19) no hay área viva; después lista
  *   colecciones ACTIVAS persistidas que coinciden por nombre/slug/descripción y
  *   que tienen membresía útil (al menos un producto activo), con su descripción
  *   y conteo de productos; estado vacío honesto cuando no hay ninguna.
@@ -68,20 +71,31 @@ class SearchPanel extends Component
     {
         $term = trim($this->query);
 
+        // T19 — pedido del dueño: mientras la consulta esté vacía o tenga una
+        // sola letra, la vista renderiza SOLO la barra de búsqueda. No es una
+        // ocultación por CSS: la rejilla de resultados (sugerencias, pestañas,
+        // tarjetas y filas de colecciones) no se emite en el DOM. Aquí se
+        // corta también la ejecución de las tres consultas para no golpear la
+        // base de datos en cada pulsación antes de la segunda letra.
+        $active = mb_strlen($term) >= 2;
+
         // T17 — el esquema secundario de colecciones puede faltar (migración
         // pendiente en el entorno). Se comprueba una sola vez por render y se
         // pasa a las rutas que lo necesitan, para que el panel degrade en la
         // pestaña de colecciones en vez de reventar entero: `collections()`
         // usa `withCount` sobre el pivote y `suggestions()` lo une, así que
-        // ambas tablas deben existir.
-        $collectionsAvailable = Schema::hasTable('collections')
+        // ambas tablas deben existir. Con `$active` en falso ni siquiera se
+        // sondea el esquema: el panel inactivo no toca la base de datos.
+        $collectionsAvailable = $active
+            && Schema::hasTable('collections')
             && Schema::hasTable('collection_product');
 
         return view('livewire.storefront.search-panel', [
             'term' => $term,
-            'products' => $this->products($term),
-            'collections' => $this->collections($term, $collectionsAvailable),
-            'suggestions' => $this->suggestions($term, $collectionsAvailable),
+            'active' => $active,
+            'products' => $active ? $this->products($term) : collect(),
+            'collections' => $active ? $this->collections($term, $collectionsAvailable) : collect(),
+            'suggestions' => $active ? $this->suggestions($term, $collectionsAvailable) : [],
         ]);
     }
 

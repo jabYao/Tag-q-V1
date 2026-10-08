@@ -1208,10 +1208,12 @@ class StorefrontNavigationTest extends TestCase
 
         // T13: el panel monta el componente Livewire de búsqueda en vivo y
         // conserva el GET sin token CSRF como respaldo/Enter.
+        // T19: con la consulta vacía el panel solo renderiza la barra, así que
+        // la rejilla en vivo (resultados y sugerencias) no está en el DOM.
         $panelHtml = (string) $xpath->document->saveHTML($panel);
         $this->assertStringContainsString('wire:model', $panelHtml, 'El panel enlaza el campo al componente Livewire');
-        $this->assertStringContainsString('data-search-panel-results', $panelHtml, 'El panel muestra resultados en vivo');
-        $this->assertStringContainsString('data-search-panel-suggestions', $panelHtml, 'El panel muestra sugerencias en vivo');
+        $this->assertStringNotContainsString('data-search-panel-results', $panelHtml, 'Con la consulta vacía el panel no emite la zona de resultados (T19)');
+        $this->assertStringNotContainsString('data-search-panel-suggestions', $panelHtml, 'Con la consulta vacía el panel no emite la zona de sugerencias (T19)');
         $this->assertStringNotContainsString('_token', $panelHtml, 'El formulario GET no lleva token CSRF');
     }
 

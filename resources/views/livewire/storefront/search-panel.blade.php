@@ -14,6 +14,12 @@
     lateral) y la rejilla de sugerencias + resultados se extiende al 100% del
     ancho disponible (sin `mx-auto` ni `max-w-6xl`).
 
+    T19 — mientras la consulta esté vacía o tenga una sola letra, el panel
+    renderiza SOLO el formulario de búsqueda: la rejilla de resultados
+    (sugerencias, pestañas, tarjetas y filas de colecciones) no se emite en el
+    DOM — sus hooks `data-search-*` dejan de existir, no se ocultan por CSS —
+    hasta que el usuario escribe la segunda letra.
+
     Hooks estables para los tests (Feature y Dusk):
     - `data-search-field`            contenedor redondeado del campo.
     - `data-search-field-icon`       lupa dentro del campo.
@@ -76,7 +82,12 @@
     {{-- T16 — reparto 30% sugerencias (izquierda) / 70% resultados (derecha) en
          escritorio; apilado en móvil. El orden del DOM decide la columna.
          T18 — la rejilla sale de su contenedor: sin `mx-auto` ni `max-w-6xl`,
-         ocupa el 100% del ancho disponible dentro del panel. --}}
+         ocupa el 100% del ancho disponible dentro del panel.
+         T19 — la rejilla completa solo existe a partir de la SEGUNDA letra:
+         con la consulta vacía o de un solo carácter no se renderiza nada más
+         que el formulario de arriba, de modo que no hay área viva ni hooks
+         `data-search-*` en el DOM. --}}
+    @if(! empty($active))
     <div class="mt-6 grid w-full grid-cols-1 gap-6 lg:grid-cols-[3fr_7fr] lg:gap-8">
         {{-- Columna izquierda: sugerencias reales (solo datos activos). --}}
         <aside data-search-panel-suggestions class="min-w-0 lg:border-r lg:border-gray-100 lg:pr-6">
@@ -193,4 +204,5 @@
             @endif
         </section>
     </div>
+    @endif
 </div>

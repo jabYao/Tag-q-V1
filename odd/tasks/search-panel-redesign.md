@@ -100,3 +100,18 @@ Give the navbar search panel a noticeably better visual style, move the suggesti
 Commit `4f954e0 feat(search): add live navbar search panel with redesign and guards` en `feat/storefront-experience`: shell T11 en `layouts/storefront.blade.php`, componente `SearchPanel` + vista, rediseño T16/T18, guard T17, y los tests Feature (`StorefrontSearchPanelTest`, `StorefrontNavigationTest`) + Dusk (`tests/Browser/StorefrontSearchPanelTest`).
 
 Verificado como árbol aislado (checkout temporal del índice): **389/389 tests, 2,373 assertions**. El fix de Alpine (T16.5) viajó en `9052f5e` porque vive en `resources/js/app.js`; las colecciones que lee T12 viajaron en `0b163d9`. Push pendiente de autorización (AGENTS.md §4).
+
+### T19 — El panel muestra solo la barra hasta la segunda letra
+- Status: completed (uncommitted → commit de este work unit).
+- Pedido del dueño: con la consulta vacía (o con menos de dos caracteres) el panel debe mostrar **únicamente** el div de la barra de búsqueda; las sugerencias, las tarjetas de productos y las colecciones quedan **invisibles** hasta que el usuario escribe la segunda letra.
+- Cambio previsto: `render()` calcula `$active = mb_strlen(trim($query)) >= 2`, salta las tres consultas cuando no está activo (sin tocar la BD) y la vista solo emite la rejilla con `@if($active)`.
+- Tests afectados (re-baseline): los que asumen la rejilla presente con consulta vacía (`test_el_panel_monta_un_componente_livewire_en_todo_el_shell`, `test_la_seccion_de_resultados_y_sugerencias_es_responsive_con_hooks_estables`, `test_el_panel_de_busqueda_sale_de_sus_contenedores`, y el T13 de `StorefrontNavigationTest`).
+
+- Evidencia (observada):
+  - RED (worker): `StorefrontSearchPanelTest` 18 tests, 17 passed, **1 failed** — `test_el_panel_solo_muestra_la_barra_hasta_la_segunda_letra` veía `data-search-panel-results` con consulta vacía.
+  - RED (orquestador): `test_el_panel_inactivo_no_ejecuta_consultas_de_base_de_datos` falló con **6 consultas** (los dos `Schema::hasTable` de T17 × 3 renders) → el gate de esquema también corre con el panel inactivo.
+  - GREEN: `StorefrontSearchPanelTest` **19/19, 157 assertions**; `StorefrontNavigationTest` **46/46, 568**.
+  - Fix final: `$collectionsAvailable = $active && Schema::hasTable(...) && Schema::hasTable(...)`, de modo que el panel inactivo no emite ninguna consulta SQL.
+  - Suite completa: **391/391 tests, 2,392 assertions, 0 fallos**; `npm run build` OK.
+  - Dusk E2E re-corrido tras el cambio: **1/1, 30 assertions** (las 2 nuevas comprueban que la rejilla no existe con el input vacío). Servidor 8001 y chromedriver detenidos.
+- Re-baseline honesto (la rejilla ya no existe con consulta vacía): `test_el_panel_monta_un_componente_livewire_en_todo_el_shell` ahora exige **0** copias de los hooks de rejilla y 1 de `data-nav-search-form`; `test_la_seccion_de_resultados_y_sugerencias_...`, `test_el_rediseno_del_panel_...`, `test_el_panel_tiene_las_pestanas_...`, `test_el_tab_de_colecciones_...` y `test_el_panel_de_busqueda_sale_de_sus_contenedores` ahora manejan el componente con `Livewire::test(...)->set('query', 'Ch')` + `html()`/`xpathDe()`; el T13 de `StorefrontNavigationTest` exige la ausencia de la rejilla con consulta vacía; el Dusk añade `assertMissing` de la rejilla en el paso 1.

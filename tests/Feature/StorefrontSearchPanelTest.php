@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Collection;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -111,8 +112,11 @@ class StorefrontSearchPanelTest extends TestCase
             $html = $this->get($url)->assertOk()->getContent();
 
             $this->assertStringContainsString('wire:', $html, "El panel usa Livewire en {$url}");
-            $this->assertSame(1, substr_count($html, 'data-search-panel-results'), "Los resultados aparecen una vez en {$url}");
-            $this->assertSame(1, substr_count($html, 'data-search-panel-suggestions'), "Las sugerencias aparecen una vez en {$url}");
+            // T19: con la consulta vacía el panel solo renderiza la barra, así
+            // que la rejilla en vivo no existe en el DOM de ninguna página.
+            $this->assertSame(0, substr_count($html, 'data-search-panel-results'), "Con la consulta vacía la rejilla de resultados no se emite en {$url} (T19)");
+            $this->assertSame(0, substr_count($html, 'data-search-panel-suggestions'), "Con la consulta vacía la columna de sugerencias no se emite en {$url} (T19)");
+            $this->assertSame(1, substr_count($html, 'data-nav-search-form'), "La barra de búsqueda sigue una vez en {$url}");
         }
     }
 
@@ -292,7 +296,10 @@ class StorefrontSearchPanelTest extends TestCase
 
     public function test_el_panel_tiene_las_pestanas_productos_y_colecciones(): void
     {
+        // T19: con la consulta vacía el panel solo muestra la barra, así que
+        // las pestañas se comprueban a partir de la segunda letra.
         Livewire::test(SearchPanel::class)
+            ->set('query', 'Ch')
             ->assertSet('tab', 'productos')
             ->assertSee('Productos')
             ->assertSee('Colecciones')
@@ -428,7 +435,9 @@ class StorefrontSearchPanelTest extends TestCase
 
     public function test_el_tab_de_colecciones_muestra_un_estado_vacio_honesto_sin_colecciones(): void
     {
+        // T19: el área viva solo existe a partir de la segunda letra.
         Livewire::test(SearchPanel::class)
+            ->set('query', 'Ch')
             ->call('setTab', 'colecciones')
             ->assertViewHas('collections', fn ($collections) => $collections->count() === 0)
             ->assertSee('No hay colecciones')
@@ -509,14 +518,15 @@ class StorefrontSearchPanelTest extends TestCase
         // y podamos comprobar sus pasos responsive 1/2/4.
         $this->product($this->category(), ['name' => 'Chronos Responsive', 'slug' => 'chronos-responsive']);
 
-        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+        // T19: con la consulta vacía la rejilla no existe, así que se conduce
+        // el componente con dos letras para inspeccionar su marcado real.
+        $html = Livewire::test(SearchPanel::class)->set('query', 'Chronos')->html();
 
         $xpath = $this->xpathDe($html);
-        $panel = $xpath->query('//*[@data-nav-search-panel]')->item(0);
-        $panelHtml = (string) $xpath->document->saveHTML($panel);
+        $panelHtml = $html;
 
-        $results = $xpath->query('.//*[@data-search-panel-results]', $panel)->item(0);
-        $suggestions = $xpath->query('.//*[@data-search-panel-suggestions]', $panel)->item(0);
+        $results = $xpath->query('//*[@data-search-panel-results]')->item(0);
+        $suggestions = $xpath->query('//*[@data-search-panel-suggestions]')->item(0);
 
         $this->assertNotNull($results, 'Existe la zona de resultados');
         $this->assertNotNull($suggestions, 'Existe la zona de sugerencias');
@@ -531,7 +541,7 @@ class StorefrontSearchPanelTest extends TestCase
         // T16 — el orden del DOM es el que decide la columna: las sugerencias
         // van antes que los resultados, por lo que quedan a la izquierda en la
         // grid de escritorio (y arriba en el apilado móvil).
-        $ordered = $xpath->query('.//*[@data-search-panel-suggestions or @data-search-panel-results]', $panel);
+        $ordered = $xpath->query('//*[@data-search-panel-suggestions or @data-search-panel-results]');
         $this->assertSame(2, $ordered->length, 'El panel expone una vez las sugerencias y una vez los resultados');
         $this->assertSame(
             'suggestions',
@@ -545,8 +555,8 @@ class StorefrontSearchPanelTest extends TestCase
         );
 
         // Pestañas con hooks estables para productos y colecciones.
-        $this->assertSame(1, $xpath->query('.//*[@data-search-tab="productos"]', $panel)->length, 'Existe la pestaña de productos');
-        $this->assertSame(1, $xpath->query('.//*[@data-search-tab="colecciones"]', $panel)->length, 'Existe la pestaña de colecciones');
+        $this->assertSame(1, $xpath->query('//*[@data-search-tab="productos"]')->length, 'Existe la pestaña de productos');
+        $this->assertSame(1, $xpath->query('//*[@data-search-tab="colecciones"]')->length, 'Existe la pestaña de colecciones');
     }
 
     /**
@@ -576,11 +586,16 @@ class StorefrontSearchPanelTest extends TestCase
             'El contenedor del campo es redondeado'
         );
 
-        // Pestañas como control segmentado con contenedor estable.
-        $tabs = $xpath->query('.//*[@data-search-tabs]', $panel)->item(0);
+        // Pestañas como control segmentado con contenedor estable (T19: solo
+        // existen a partir de la segunda letra, así que se inspecciona el
+        // fragmento del componente conducido).
+        $tabsXpath = $this->xpathDe(
+            Livewire::test(SearchPanel::class)->set('query', 'Chronos')->html()
+        );
+        $tabs = $tabsXpath->query('//*[@data-search-tabs]')->item(0);
         $this->assertNotNull($tabs, 'Las pestañas tienen su contenedor estable');
         $this->assertSame('tablist', strtolower($tabs->getAttribute('role')), 'El contenedor de pestañas es un tablist');
-        $this->assertSame(2, $xpath->query('.//*[@role="tab"]', $tabs)->length, 'El control agrupa las dos pestañas');
+        $this->assertSame(2, $tabsXpath->query('.//*[@role="tab"]', $tabs)->length, 'El control agrupa las dos pestañas');
 
         $tabsClasses = preg_split('/\s+/', trim((string) $tabs->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
         $this->assertNotSame(
@@ -651,7 +666,11 @@ class StorefrontSearchPanelTest extends TestCase
         $this->assertContains('mx-auto', $formClasses, 'La barra sigue centrada con el margen reducido');
 
         // 2) Div que contiene sugerencias y resultados: −100% de margen.
-        $results = $xpath->query('.//*[@data-search-panel-results]', $panel)->item(0);
+        //    T19: la rejilla solo existe a partir de la segunda letra, así que
+        //    se inspecciona el fragmento del componente con dos letras.
+        $fragment = Livewire::test(SearchPanel::class)->set('query', 'Chronos')->html();
+        $xpath = $this->xpathDe($fragment);
+        $results = $xpath->query('//*[@data-search-panel-results]')->item(0);
         $this->assertNotNull($results, 'Existe la zona de resultados');
         $grid = $results->parentNode;
         $this->assertSame(1, $xpath->query('.//*[@data-search-panel-suggestions]', $grid)->length, 'La misma rejilla contiene las sugerencias');
@@ -660,6 +679,72 @@ class StorefrontSearchPanelTest extends TestCase
         $this->assertNotContains('max-w-6xl', $gridClasses, 'La rejilla ya no vive en el contenedor max-w-6xl');
         $this->assertNotContains('mx-auto', $gridClasses, 'La rejilla no tiene margen lateral');
         $this->assertContains('w-full', $gridClasses, 'La rejilla ocupa el 100% del ancho disponible');
+    }
+
+    /**
+     * T19 — la rejilla de resultados solo existe a partir de la SEGUNDA letra.
+     *
+     * Pedido del dueño: con la consulta vacía o de un solo carácter el panel
+     * debe renderizar únicamente la barra de búsqueda. Las sugerencias, las
+     * pestañas y las tarjetas no deben existir en el DOM (no basta con
+     * ocultarlas), para que no haya área viva hasta que el usuario escriba la
+     * segunda letra; de la segunda en adelante todo funciona como hoy.
+     */
+    public function test_el_panel_solo_muestra_la_barra_hasta_la_segunda_letra(): void
+    {
+        $this->product($this->category(), ['name' => 'Chronos Gate', 'slug' => 'chronos-gate']);
+
+        // Consulta vacía: solo la barra de búsqueda.
+        Livewire::test(SearchPanel::class)
+            ->assertSet('query', '')
+            ->assertSeeHtml('data-nav-search-form')
+            ->assertDontSeeHtml('data-search-panel-results')
+            ->assertDontSeeHtml('data-search-panel-suggestions')
+            ->assertDontSeeHtml('data-search-tabs');
+
+        // Una sola letra: sigue sin área viva.
+        Livewire::test(SearchPanel::class)
+            ->set('query', 'C')
+            ->assertSeeHtml('data-nav-search-form')
+            ->assertDontSeeHtml('data-search-panel-results')
+            ->assertDontSeeHtml('data-search-panel-suggestions')
+            ->assertDontSeeHtml('data-search-tabs');
+
+        // Dos letras: vuelve la rejilla completa, con un producto real.
+        Livewire::test(SearchPanel::class)
+            ->set('query', 'Ch')
+            ->assertSeeHtml('data-nav-search-form')
+            ->assertSeeHtml('data-search-panel-results')
+            ->assertSeeHtml('data-search-panel-suggestions')
+            ->assertSeeHtml('data-search-tabs')
+            ->assertSee('Chronos Gate');
+    }
+
+    /**
+     * T19 — el panel inactivo no toca la base de datos.
+     *
+     * Antes de la segunda letra no debe ejecutar ni las tres consultas de
+     * resultados ni la comprobación de esquema de colecciones de T17: el panel
+     * está montado en el shell compartido, así que esas consultas se
+     * repetirían en cada página del storefront con el panel cerrado.
+     */
+    public function test_el_panel_inactivo_no_ejecuta_consultas_de_base_de_datos(): void
+    {
+        $this->product($this->category(), ['name' => 'Chronos Sin Consulta', 'slug' => 'chronos-sin-consulta']);
+
+        $captured = [];
+        DB::listen(static function ($query) use (&$captured): void {
+            $captured[] = $query->sql;
+        });
+
+        Livewire::test(SearchPanel::class)->html();
+        Livewire::test(SearchPanel::class)->set('query', 'C')->html();
+
+        $this->assertSame(
+            [],
+            $captured,
+            'Con consulta vacía o de una sola letra el panel no emite ninguna consulta SQL'
+        );
     }
 
     public function test_el_bundle_de_app_no_arranca_una_segunda_instancia_de_alpine(): void

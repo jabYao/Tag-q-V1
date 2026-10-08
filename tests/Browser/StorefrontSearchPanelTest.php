@@ -15,7 +15,9 @@ use Tests\DuskTestCase;
  * home, no solo que su HTML existe:
  *
  *   1. El botón `[data-nav-utility="search"]` abre el panel
- *      `[data-nav-search-panel]` (Alpine `x-show`, `fixed` bajo la navbar).
+ *      `[data-nav-search-panel]` (Alpine `x-show`, `fixed` bajo la navbar), y
+ *      con el input vacío el panel solo muestra la barra (T19: la rejilla de
+ *      resultados no existe en el DOM hasta la segunda letra).
  *   2. Al escribir en `#storefront-search-q` el round-trip de Livewire
  *      (`wire:model.live.debounce.250ms`) trae una tarjeta real
  *      `[data-search-product]` y una sugerencia real `[data-search-suggestion]`.
@@ -89,7 +91,12 @@ class StorefrontSearchPanelTest extends DuskTestCase
                 ->click('[data-nav-utility="search"]')
                 ->waitFor('[data-nav-search-panel]', 10)
                 ->assertVisible('[data-nav-search-panel]')
-                ->assertAttribute('[data-nav-utility="search"]', 'aria-expanded', 'true');
+                ->assertAttribute('[data-nav-utility="search"]', 'aria-expanded', 'true')
+                // T19: con el input todavía vacío el panel solo muestra la
+                // barra; la rejilla en vivo no existe en el DOM hasta la
+                // segunda letra (no se oculta por CSS).
+                ->assertMissing('[data-search-panel-results]')
+                ->assertMissing('[data-search-panel-suggestions]');
 
             // 2. Escribir y esperar el ida y vuelta de Livewire. `waitUntil` sobre
             //    el texto de los resultados garantiza que el debounce de 250 ms
