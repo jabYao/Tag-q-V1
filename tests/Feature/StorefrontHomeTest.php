@@ -404,7 +404,7 @@ class StorefrontHomeTest extends TestCase
 
         // Encabezado principal y acciones hacia los flujos ya existentes.
         $response->assertSee('<h1', false)
-            ->assertSee('Relojes de pulso')
+            ->assertSee('Precisión que se nota en cada vuelta')
             ->assertSee('href="'.route('catalog.index').'"', false)
             ->assertSee('href="'.route('cart.index').'"', false);
     }
@@ -527,7 +527,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringContainsString('data-home-hero-eyebrow', $main);
         $this->assertStringContainsString('data-home-hero-actions', $main);
         $this->assertStringContainsString('<h1', $main);
-        $this->assertStringContainsString('Relojes de pulso', $main);
+        $this->assertStringContainsString('Precisión que se nota en cada vuelta', $main);
         $response->assertSee('href="'.route('catalog.index').'"', false)
             ->assertSee('href="'.route('cart.index').'"', false);
     }
@@ -738,7 +738,88 @@ class StorefrontHomeTest extends TestCase
         $this->assertContains('z-[3]', $overlayClasses, 'El texto va sobre el velo y por debajo de los controles (z-index 10)');
 
         // El contenido concreto sigue en el documento: no es decorativo.
-        $this->assertStringContainsString('Relojes de pulso para cada estilo', $html, 'El titular del hero está en el HTML');
+        $this->assertStringContainsString('Precisión que se nota en cada vuelta', $html, 'El titular del hero está en el HTML');
         $this->assertStringContainsString('Ver catálogo', $html, 'La acción principal del hero está en el HTML');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Texto por diapositiva y cortina de transición (T22)
+    |--------------------------------------------------------------------------
+    |
+    | Cada imagen del carrusel lleva su propio bloque de texto (ceja, titular y
+    | cuerpo) y una cortina avanza a color por diapositiva para tapar el cambio.
+    | Sin JS solo se ve el texto de la primera diapositiva: los otros dos viajan
+    | con `hidden` para que el servidor no muestre textos superpuestos.
+    */
+
+    public function test_cada_imagen_del_hero_tiene_su_texto_y_solo_el_primero_visible(): void
+    {
+        $html = $this->get('/')->assertOk()->getContent();
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        $copies = $xpath->query('//*[@data-home-hero-copy]');
+
+        $this->assertSame(3, $copies->length, 'Cada diapositiva del hero aporta su propio bloque de texto');
+
+        $this->assertFalse($copies->item(0)->hasAttribute('hidden'), 'Sin JS se ve el texto de la primera diapositiva');
+        $this->assertTrue($copies->item(1)->hasAttribute('hidden'), 'El segundo texto espera oculto a la cortina');
+        $this->assertTrue($copies->item(2)->hasAttribute('hidden'), 'El tercer texto espera oculto a la cortina');
+
+        $overlay = $xpath->query('//*[@data-home-hero-overlay]')->item(0);
+        $this->assertNotNull($overlay, 'El bloque de texto del hero existe');
+
+        // Un único encabezado principal: la primera diapositiva usa <h1>; el
+        // resto usa <h2> con las mismas clases, para no repetir el h1.
+        $this->assertSame(1, $xpath->query('.//h1', $overlay)->length, 'Solo la primera diapositiva usa <h1>');
+        $this->assertSame(2, $xpath->query('.//h2', $overlay)->length, 'Las diapositivas 2 y 3 usan <h2>');
+
+        $titles = [];
+        foreach ($xpath->query('//*[@data-home-hero-title]') as $title) {
+            $titles[] = trim($title->textContent);
+        }
+
+        $this->assertSame([
+            'Precisión que se nota en cada vuelta',
+            'El dorado nunca pasa de moda',
+            'Brillo que se regala solo',
+        ], $titles, 'Los titulares son distintos y siguen el orden de las diapositivas');
+
+        // Las mismas dos acciones viajan con cada diapositiva.
+        $this->assertStringContainsString('Ver catálogo', $html);
+        $this->assertStringContainsString('Ir a mi bolsa', $html);
+        $this->assertSame(3, $xpath->query('//*[@data-home-hero-actions]')->length, 'Cada diapositiva repite las acciones');
+    }
+
+    public function test_el_hero_expone_la_cortina_de_transicion_con_su_color_por_diapositiva(): void
+    {
+        $html = $this->get('/')->assertOk()->getContent();
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        $curtain = $xpath->query('//*[@data-home-hero-curtain]')->item(0);
+        $this->assertNotNull($curtain, 'La cortina de transición del hero existe');
+
+        $classes = preg_split('/\s+/', trim((string) $curtain->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $this->assertContains('pointer-events-none', $classes, 'La cortina no captura clics ni arrastre');
+        $this->assertContains('z-[4]', $classes, 'La cortina tapa el texto y queda bajo los controles de Swiper (z-index 10)');
+
+        // Un color por diapositiva, declarado en el marcado.
+        $colors = $curtain->getAttribute('data-home-hero-curtain-colors');
+        $this->assertSame('#0b3d3b,#5a1f2b,#8a5a12', $colors);
+        $this->assertCount(3, array_filter(array_map('trim', explode(',', $colors))), 'Tres colores, uno por diapositiva');
+
+        // Relación de capas: la cortina (4) cubre el texto (3), que cubre el velo (2).
+        $overlay = $xpath->query('//*[@data-home-hero-overlay]')->item(0);
+        $overlayClasses = preg_split('/\s+/', trim((string) $overlay->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $this->assertContains('z-[3]', $overlayClasses, 'El texto sigue bajo la cortina');
+
+        // Contrato de JS: la cortina se dispara al cambiar de diapositiva, con
+        // el índice real, lee sus colores, anima y respeta reduced-motion.
+        $js = file_get_contents(base_path('resources/js/app.js'));
+        $this->assertNotFalse($js, 'Debe existir resources/js/app.js');
+
+        foreach (['slideChange', 'realIndex', 'data-home-hero-curtain', 'reducedMotion.matches', 'animate(', "from 'swiper'"] as $snippet) {
+            $this->assertStringContainsString($snippet, $js, "app.js debe seguir conteniendo {$snippet}");
+        }
     }
 }

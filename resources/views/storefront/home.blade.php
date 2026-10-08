@@ -13,18 +13,29 @@
         // Carrusel del hero: las tres imágenes confirmadas de Cloudinary
         // (`tag-q/hero`), referenciadas por URL porque el repositorio no guarda
         // binarios. El texto alternativo describe la pieza y su fondo reales.
+        // T22: cada diapositiva lleva su propia ceja, titular y cuerpo, además
+        // del color con el que la cortina cubre el cambio hacia esa diapositiva.
         $heroSlides = [
             [
                 'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418323/tag-q/hero/tgcquxabd0kcnu1gpbas.jpg',
                 'alt' => 'Reloj plateado Kairos sobre fondo de autódromo',
+                'eyebrow' => 'TAG Q · DEPORTIVOS',
+                'title' => 'Precisión que se nota en cada vuelta',
+                'body' => 'Acero cepillado, esfera luminosa y una caja que aguanta el ritmo del día: el Kairos plateado va de la pista a la oficina sin cambiar de actitud.',
             ],
             [
                 'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418392/tag-q/hero/ykkmw54d5meuvdfxpr3m.jpg',
                 'alt' => 'Reloj dorado Q&Q sobre fondo azul oscuro',
+                'eyebrow' => 'TAG Q · CLÁSICOS',
+                'title' => 'El dorado nunca pasa de moda',
+                'body' => 'Acabado dorado, índices marcados y perfil fino que se desliza bajo la camisa. Un clásico que queda con cualquier look.',
             ],
             [
                 'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418462/tag-q/hero/ziptwdbhj0l6fwouddno.jpg',
                 'alt' => 'Reloj dorado Q&Q con reflejo',
+                'eyebrow' => 'TAG Q · PARA REGALAR',
+                'title' => 'Brillo que se regala solo',
+                'body' => 'Reflejos limpios, caja ligera y cierre seguro: la pieza que resuelve un cumpleaños, un aniversario o un detalle sin equivocarse.',
             ],
         ];
     @endphp
@@ -80,38 +91,64 @@
             <div data-home-hero-veil aria-hidden="true" class="pointer-events-none absolute inset-0 z-[2] bg-gray-950/60"></div>
 
             {{-- Texto y acciones del hero, superpuestos a las imágenes. El
-                 contenedor deja pasar los clics y solo el bloque de contenido
-                 los recibe, para que la paginación y las flechas sigan
-                 accesibles. El padding izquierdo e inferior aparta el texto de
-                 las flechas y de los puntos. --}}
+                 contenedor deja pasar los clics y solo el bloque activo los
+                 recibe, para que la paginación y las flechas sigan accesibles.
+                 El padding izquierdo e inferior aparta el texto de las flechas
+                 y de los puntos. T22: un bloque por diapositiva; al cargar
+                 (SSR) solo se ve el primero, los demás viajan con `hidden` y
+                 el JS los alterna cuando la cortina ya cubrió el cambio. --}}
             <div
                 data-home-hero-overlay
                 class="pointer-events-none absolute inset-0 z-[3] flex items-center pl-14 pr-6 pt-10 pb-16 sm:pl-20 sm:pr-10 sm:pt-14 sm:pb-16"
             >
-                <div class="pointer-events-auto w-full max-w-xl">
-                    <p data-home-hero-eyebrow class="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">
-                        Tag q · Relojes de pulso
-                    </p>
-                    <h1 class="mt-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
-                        Relojes de pulso para cada estilo
-                    </h1>
-                    <p class="mt-5 max-w-xl text-sm leading-relaxed text-gray-300 sm:text-base">
-                        Explora las piezas disponibles del catálogo, revisa sus características y precios
-                        en pesos colombianos, y elige el reloj que quieras llevar en la muñeca.
-                    </p>
+                @foreach($heroSlides as $index => $slide)
+                    <div
+                        data-home-hero-copy="{{ $index }}"
+                        @if($index !== 0) hidden @endif
+                        class="pointer-events-auto w-full max-w-xl"
+                    >
+                        <p data-home-hero-eyebrow class="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">
+                            {{ $slide['eyebrow'] }}
+                        </p>
+                        {{-- Un único <h1> en el hero (la primera diapositiva);
+                             las siguientes usan <h2> con las mismas clases. --}}
+                        @if($index === 0)
+                            <h1 data-home-hero-title class="mt-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
+                                {{ $slide['title'] }}
+                            </h1>
+                        @else
+                            <h2 data-home-hero-title class="mt-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
+                                {{ $slide['title'] }}
+                            </h2>
+                        @endif
+                        <p class="mt-5 max-w-xl text-sm leading-relaxed text-gray-300 sm:text-base">
+                            {{ $slide['body'] }}
+                        </p>
 
-                    <div data-home-hero-actions class="mt-8 flex flex-wrap items-center gap-3">
-                        <a
-                            href="{{ route('catalog.index') }}"
-                            class="inline-flex items-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                        >Ver catálogo</a>
-                        <a
-                            href="{{ route('cart.index') }}"
-                            class="inline-flex items-center rounded-full border border-gray-600 px-6 py-3 text-sm font-semibold text-white hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                        >Ir a mi bolsa</a>
+                        {{-- Las mismas dos acciones viajan con cada diapositiva. --}}
+                        <div data-home-hero-actions class="mt-8 flex flex-wrap items-center gap-3">
+                            <a
+                                href="{{ route('catalog.index') }}"
+                                class="inline-flex items-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            >Ver catálogo</a>
+                            <a
+                                href="{{ route('cart.index') }}"
+                                class="inline-flex items-center rounded-full border border-gray-600 px-6 py-3 text-sm font-semibold text-white hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            >Ir a mi bolsa</a>
+                        </div>
                     </div>
-                </div>
+                @endforeach
             </div>
+
+            {{-- T22 — cortina de transición. Es hermana de los textos y de los
+                 controles dentro de `.swiper`, y su color cambia por
+                 diapositiva (los tres hex de `data-home-hero-curtain-colors`).
+                 Capas del carrusel: fotos (1) < velo (2) < texto (3) <
+                 cortina (4) < flechas y puntos de Swiper (10). Así la cortina
+                 tapa el texto —nunca las flechas— y el cambio de copy ocurre
+                 mientras está cerrada. Arranca cerrada
+                 (`[transform:scaleX(0)]`) y no captura clics ni arrastre. --}}
+            <div data-home-hero-curtain aria-hidden="true" data-home-hero-curtain-colors="#0b3d3b,#5a1f2b,#8a5a12" class="pointer-events-none absolute inset-0 z-[4] [transform:scaleX(0)]"></div>
 
             {{-- Controles del carrusel: flechas y puntos, en blanco sobre las
                  imágenes oscuras (ver `resources/css/app.css`). --}}

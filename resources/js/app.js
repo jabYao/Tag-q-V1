@@ -69,6 +69,67 @@ function initHomeHeroSlider(section) {
         },
     });
 
+    /*
+     * T22 — cortina de transición y texto por diapositiva.
+     *
+     * Cada diapositiva trae su propio bloque de texto (`data-home-hero-copy`);
+     * el servidor pinta solo el primero y el resto llega con `hidden`. Al
+     * cambiar de slide, una cortina del color de la diapositiva destino cubre
+     * el hero (320 ms), el texto se cambia TAPADO por ella y después se
+     * descubre (520 ms). `targetIndex` guarda siempre el último slide pedido:
+     * si una transición cancela a la anterior, al terminar se muestra el texto
+     * correcto. Con `prefers-reduced-motion` (o sin Web Animations) se cambia
+     * el texto sin animar la cortina.
+     */
+    const curtain = section.querySelector('[data-home-hero-curtain]');
+    const copies = Array.from(section.querySelectorAll('[data-home-hero-copy]'));
+    const colors = (curtain?.dataset.homeHeroCurtainColors || '').split(',').map((value) => value.trim()).filter(Boolean);
+    let targetIndex = 0;
+
+    const showCopy = (index) => {
+        copies.forEach((copy) => {
+            copy.hidden = Number(copy.dataset.homeHeroCopy) !== index;
+        });
+    };
+
+    const runCurtain = () => {
+        if (!curtain) {
+            showCopy(targetIndex);
+            return;
+        }
+
+        curtain.style.backgroundColor = colors[targetIndex] || colors[0] || '#0b3d3b';
+
+        if (reducedMotion.matches || typeof curtain.animate !== 'function') {
+            showCopy(targetIndex);
+            return;
+        }
+
+        curtain.getAnimations().forEach((animation) => animation.cancel());
+        curtain.style.transformOrigin = 'left';
+        const cover = curtain.animate(
+            [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+            { duration: 320, easing: 'cubic-bezier(0.65, 0, 0.35, 1)', fill: 'forwards' },
+        );
+
+        cover.finished
+            .then(() => {
+                showCopy(targetIndex); // el texto cambia TAPADO por la cortina
+                curtain.style.transformOrigin = 'right';
+
+                return curtain.animate(
+                    [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }],
+                    { duration: 520, easing: 'cubic-bezier(0.33, 1, 0.68, 1)', fill: 'forwards' },
+                ).finished;
+            })
+            .catch(() => {}); // otra transición la canceló: la última manda
+    };
+
+    swiper.on('slideChange', () => {
+        targetIndex = swiper.realIndex;
+        runCurtain();
+    });
+
     const pause = () => swiper.autoplay && swiper.autoplay.stop();
 
     const resume = () => {

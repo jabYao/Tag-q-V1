@@ -81,3 +81,24 @@ Verificado como árbol aislado (checkout temporal del índice): **363/363 tests,
   - GREEN observado: `StorefrontHomeTest` **25/25, 201 assertions**.
   - Suite completa: **393/393 tests, 2,408 assertions, 0 fallos**; `npm run build` OK.
 - Verificación visual: segunda captura Dusk tras el fix — velo oscurecido, titular "Relojes de pulso para cada estilo", párrafo y los botones "Ver catálogo" / "Ir a mi bolsa" visibles sobre la foto, con flechas y puntos encima. Sonda y captura borradas después.
+
+### T22 — Texto propio por imagen + cortina de transición coloreada
+- Status: completed (commit de este work unit).
+- Pedido del dueño: cada imagen del carrusel lleva su propio texto, y una animación avanzada tipo cortina —cada cortina con un color a elección del agente— marca el cambio.
+- Copy (español, tono de marca) y colores elegidos:
+  1. `TAG Q · DEPORTIVOS` / **Precisión que se nota en cada vuelta** (h1) — cortina petróleo `#0b3d3b`.
+  2. `TAG Q · CLÁSICOS` / **El dorado nunca pasa de moda** (h2) — cortina burdeos `#5a1f2b`.
+  3. `TAG Q · PARA REGALAR` / **Brillo que se regala solo** (h2) — cortina bronce `#8a5a12`.
+- Diseño: los tres bloques de copy viven en el overlay (`[data-home-hero-copy="0|1|2"]`), el primero visible y los otros con `hidden` en SSR (un solo `h1` en el documento). Un `[data-home-hero-curtain]` con `z-[4]` (sobre el texto `z-[3]`, bajo los controles Swiper `z-10`) recibe el color según `data-home-hero-curtain-colors`.
+- Animación: en `app.js`, sobre los eventos de Swiper (`slideChange` + `swiper.realIndex`) la cortina cubre con Web Animations API (`scaleX 0 → 1`, 320ms), al terminar se intercambia el copy visible y se destapa (`1 → 0`, 520ms, origen derecho). Con `prefers-reduced-motion` no se anima: solo cambia el texto. Sin dependencias nuevas (GSAP no hace falta).
+
+- Evidencia (observada):
+  - RED: `StorefrontHomeTest` 27 tests, 24 passed, **3 failed** (los 2 tests nuevos de T22 + el titular viejo en el guard de T21).
+  - GREEN: `StorefrontHomeTest` **27/27, 227 assertions**; `StorefrontNavigationTest` **46/46, 573**.
+  - Suite completa: **395/395 tests, 2,434 assertions, 0 fallos**; `npm run build` OK (bundle 84.24 kB).
+  - Sonda Dusk temporal (borrada después), en el navegador real:
+    - SSR: copias `[{i:0,hidden:false},{i:1,hidden:true},{i:2,hidden:true}]`.
+    - 170 ms tras pulsar siguiente: cortina `background rgb(90, 31, 43)` (= `#5a1f2b`, burdeos de la foto 2) con `transform matrix(0.5595,0,0,1,0,0)` → scaleX ≈ 0,56 en plena animación, 1 animación viva.
+    - Tras el cambio: copia visible `{i:1,hidden:false}` ("El dorado nunca pasa de moda"), la 0 oculta, cortina cerrada en `scaleX(0)`.
+    - Capturas de las fotos 1 y 2 con su propio texto (ambas vistas y luego borradas).
+- Re-baseline de 3 aserciones que citaban el titular viejo (`Relojes de pulso para cada estilo`): todas pasan a exigir `Precisión que se nota en cada vuelta`. Ninguna aserción estructural se tocó.

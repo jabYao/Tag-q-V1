@@ -51,3 +51,18 @@
     position: absolute;
     inset: 0;
 }
+
+/*
+ * Cortina de transición del hero (T22).
+ *
+ * Arranca cerrada (`scaleX(0)`) y el JS le fija el color de la diapositiva
+ * destino antes de animarla con Web Animations. La regla vive aquí —y no solo
+ * en la utilidad arbitraria del Blade— para que la cortina nunca aparezca
+ * desplegada si la utilidad no llega a compilarse, y para dejar el `origin`
+ * y la pista de composición declarados junto al resto del hero.
+ */
+[data-home-hero-curtain] {
+    transform: scaleX(0);
+    transform-origin: left;
+    will-change: transform;
+}
