@@ -35,6 +35,25 @@ class StorefrontHomeTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Imágenes del carrusel del hero (Cloudinary `tag-q/hero`), en el orden
+     * exacto en que deben presentarse y con su texto alternativo descriptivo.
+     */
+    private const HERO_SLIDE_IMAGES = [
+        [
+            'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418323/tag-q/hero/tgcquxabd0kcnu1gpbas.jpg',
+            'alt' => 'Reloj plateado Kairos sobre fondo de autódromo',
+        ],
+        [
+            'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418392/tag-q/hero/ykkmw54d5meuvdfxpr3m.jpg',
+            'alt' => 'Reloj dorado Q&Q sobre fondo azul oscuro',
+        ],
+        [
+            'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418462/tag-q/hero/ziptwdbhj0l6fwouddno.jpg',
+            'alt' => 'Reloj dorado Q&Q con reflejo',
+        ],
+    ];
+
     private int $sequence = 0;
 
     private function category(string $name = 'Caballero', string $slug = 'caballero-home'): Category
@@ -92,6 +111,48 @@ class StorefrontHomeTest extends TestCase
         }
 
         return substr($html, $start, $end - $start);
+    }
+
+    /**
+     * Documento HTML del home, con los errores de libxml silenciados.
+     */
+    private function documentOf(string $html): \DOMDocument
+    {
+        $previous = libxml_use_internal_errors(true);
+        $document = new DOMDocument();
+        $document->loadHTML($html);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        return $document;
+    }
+
+    /**
+     * Hijos que son elementos reales, ignorando texto y comentarios.
+     *
+     * @return array<int, \DOMElement>
+     */
+    private function elementChildren(\DOMNode $node): array
+    {
+        $children = [];
+
+        foreach ($node->childNodes as $child) {
+            if ($child->nodeType === XML_ELEMENT_NODE) {
+                $children[] = $child;
+            }
+        }
+
+        return $children;
+    }
+
+    /**
+     * Clases declaradas en el atributo `class`, sin vacíos.
+     *
+     * @return array<int, string>
+     */
+    private function classesOf(\DOMElement $element): array
+    {
+        return array_values(array_filter(preg_split('/\s+/', trim($element->getAttribute('class')))));
     }
 
     /*
@@ -421,6 +482,81 @@ class StorefrontHomeTest extends TestCase
             ->assertDontSee('data-home-card-specs', false);
     }
 
+    public function test_el_home_muestra_el_carrusel_del_hero_con_las_tres_imagenes_de_cloudinary(): void
+    {
+        $this->product($this->category());
+
+        $response = $this->get('/')->assertOk();
+        $main = $this->mainContent($response->getContent());
+
+        // El hero deja de ser una composición decorativa en CSS y pasa a ser un carrusel.
+        $this->assertStringContainsString('data-home-hero-slider', $main);
+        $this->assertStringNotContainsString('data-home-hero-media', $main);
+
+        // Marcado del carrusel: contenedor de Swiper, controles y paginación.
+        $this->assertStringContainsString('data-home-hero-swiper', $main);
+        $this->assertStringContainsString('data-home-hero-pagination', $main);
+        $this->assertStringContainsString('data-home-hero-prev', $main);
+        $this->assertStringContainsString('data-home-hero-next', $main);
+
+        // El retardo de autoplay queda declarado en el marcado (el JS lo lee de ahí).
+        $this->assertStringContainsString('data-home-hero-autoplay="5000"', $main);
+
+        // Las tres diapositivas, en orden, con imagen y texto alternativo reales.
+        $previousPosition = -1;
+        foreach (self::HERO_SLIDE_IMAGES as $image) {
+            $position = strpos($main, $image['src']);
+
+            $this->assertNotFalse($position, "Falta la imagen del hero {$image['src']}");
+            $this->assertGreaterThan(
+                $previousPosition,
+                $position,
+                'Las imágenes del hero deben respetar el orden indicado',
+            );
+
+            $this->assertStringContainsString('alt="'.e($image['alt']).'"', $main);
+
+            $previousPosition = $position;
+        }
+
+        // Exactamente tres diapositivas: sin duplicados ni slides inventados.
+        $this->assertSame(3, substr_count($main, 'data-home-hero-slide="'), 'El hero debe tener tres diapositivas');
+
+        // El texto y las acciones del hero se conservan sobre las imágenes.
+        $this->assertStringContainsString('data-home-hero', $main);
+        $this->assertStringContainsString('data-home-hero-eyebrow', $main);
+        $this->assertStringContainsString('data-home-hero-actions', $main);
+        $this->assertStringContainsString('<h1', $main);
+        $this->assertStringContainsString('Relojes de pulso', $main);
+        $response->assertSee('href="'.route('catalog.index').'"', false)
+            ->assertSee('href="'.route('cart.index').'"', false);
+    }
+
+    public function test_el_carrusel_del_hero_no_depende_del_catalogo_y_expone_controles_accesibles(): void
+    {
+        // Caso de producción: sin productos ni categorías el hero no cambia.
+        $response = $this->get('/')->assertOk();
+        $main = $this->mainContent($response->getContent());
+
+        $heroStart = strpos($main, 'data-home-hero');
+        $heroEnd = strpos($main, '</section>', $heroStart);
+        $hero = substr($main, $heroStart, $heroEnd - $heroStart);
+
+        $this->assertStringContainsString('data-home-hero-slider', $hero);
+        $this->assertSame(3, substr_count($hero, 'data-home-hero-slide="'));
+        $this->assertStringNotContainsString('data-home-hero-slide="4"', $hero);
+
+        // Las únicas imágenes del hero son las tres confirmadas de Cloudinary.
+        preg_match_all('/<img[^>]+src="([^"]+)"/', $hero, $matches);
+
+        $this->assertSame(array_column(self::HERO_SLIDE_IMAGES, 'src'), $matches[1]);
+
+        // Flechas reales con nombre accesible (no solo decoración) y puntos.
+        $this->assertStringContainsString('aria-label="Imagen anterior"', $hero);
+        $this->assertStringContainsString('aria-label="Imagen siguiente"', $hero);
+        $this->assertStringContainsString('swiper-pagination', $hero);
+    }
+
     public function test_el_home_usa_solo_utilidades_estaticas_y_no_inventa_promesas_comerciales(): void
     {
         $this->product($this->category());
@@ -437,5 +573,138 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringNotContainsString('descuento', $main);
         $this->assertStringNotContainsString('garantía', $main);
         $this->assertStringNotContainsString('gratis', $main);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Hero a sangre, pegado a la navbar y con el alto restante del viewport (T5)
+    |--------------------------------------------------------------------------
+    |
+    | El hero sale del contenedor de la página sin tocar el shell compartido: el
+    | home redefine `main-class` como `w-full`, el hero queda como primer
+    | elemento de `<main>` (sin margen superior ni redondeo, por lo que toca la
+    | navbar) y el resto del contenido conserva su contenedor acotado. Su alto
+    | es `100dvh - cabecera`, calculado en CSS con la variable
+    | `--storefront-header-h` que publica `resources/js/app.js` desde la altura
+    | real de la cabecera (top bar de envíos + navbar).
+    */
+
+    public function test_el_home_saca_el_hero_del_contenedor_de_la_pagina(): void
+    {
+        $this->product($this->category());
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        preg_match('/<main\b[^>]*class="([^"]*)"/', $html, $matches);
+        $classes = array_values(array_filter(preg_split('/\s+/', trim($matches[1] ?? ''))));
+
+        $this->assertContains('w-full', $classes, 'El home debe ampliar su <main> a todo el ancho');
+        $this->assertNotContains('max-w-6xl', $classes, 'El home no debe conservar el contenedor centrado');
+        $this->assertNotContains('px-6', $classes, 'El home no debe conservar el padding lateral del contenedor');
+        $this->assertNotContains('py-8', $classes, 'El home no debe conservar el padding vertical del contenedor');
+    }
+
+    public function test_el_hero_es_el_primer_elemento_del_main_y_va_pegado_a_la_navbar(): void
+    {
+        $this->product($this->category());
+
+        $document = $this->documentOf($this->get('/')->assertOk()->getContent());
+        $main = $document->getElementsByTagName('main')->item(0);
+
+        $this->assertNotNull($main, 'El home debe renderizar dentro del <main> del shell compartido');
+
+        $children = $this->elementChildren($main);
+        $this->assertNotEmpty($children, 'El <main> del home debe tener contenido');
+
+        $hero = $children[0];
+
+        $this->assertTrue($hero->hasAttribute('data-home-hero'), 'El hero debe ser el primer elemento de <main>');
+        $this->assertTrue($hero->hasAttribute('data-home-hero-viewport'), 'El hero debe medir el viewport restante');
+        $this->assertTrue($hero->hasAttribute('data-home-hero-slider'), 'El hero sigue siendo el carrusel del home');
+
+        $classes = $this->classesOf($hero);
+
+        $this->assertNotContains('mb-12', $classes, 'El hero no debe dejar hueco debajo');
+        $this->assertNotContains('rounded-2xl', $classes, 'El hero debe llegar a los bordes sin redondeo');
+
+        foreach ($classes as $class) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/^(?:m|p)[trblxy]?-[\\d\[]/',
+                $class,
+                "El hero no debe llevar la utilidad de espaciado {$class}: no puede quedar hueco con la navbar",
+            );
+        }
+    }
+
+    public function test_el_contenido_del_home_sigue_acotado_en_un_contenedor_propio(): void
+    {
+        $this->product($this->category());
+
+        $document = $this->documentOf($this->get('/')->assertOk()->getContent());
+        $xpath = new \DOMXPath($document);
+
+        $main = $document->getElementsByTagName('main')->item(0);
+        $children = $this->elementChildren($main);
+
+        $this->assertCount(2, $children, 'El <main> del home debe contener el hero y el contenedor del resto');
+
+        $body = $children[1];
+
+        $this->assertTrue($body->hasAttribute('data-home-body'), 'El resto del home va en su propio contenedor');
+        $this->assertSame(1, $xpath->query('//*[@data-home-body]')->length, 'Debe existir un único contenedor');
+
+        // El contenedor reproduce el ancho y el ritmo vertical anteriores.
+        $classes = $this->classesOf($body);
+
+        foreach (['max-w-6xl', 'mx-auto', 'px-6', 'py-8'] as $class) {
+            $this->assertContains($class, $classes, "El contenedor del resto debe conservar {$class}");
+        }
+
+        // Dentro quedan las categorías, los productos y el cierre…
+        foreach (['data-home-categories', 'data-home-products', 'data-home-closing'] as $marker) {
+            $this->assertSame(
+                1,
+                $xpath->query('.//*[@'.$marker.']', $body)->length,
+                "El contenedor debe incluir {$marker}",
+            );
+        }
+
+        // …y el hero queda fuera de él, pegado a la navbar.
+        $this->assertSame(0, $xpath->query('.//*[@data-home-hero]', $body)->length);
+    }
+
+    public function test_el_contenedor_acotado_por_defecto_sigue_vigente_fuera_del_home(): void
+    {
+        // La excepción a sangre es solo del home: el catálogo conserva el
+        // contenedor por defecto del shell compartido.
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        preg_match('/<main\b[^>]*class="([^"]*)"/', $html, $matches);
+        $classes = array_values(array_filter(preg_split('/\s+/', trim($matches[1] ?? ''))));
+
+        foreach (['max-w-6xl', 'mx-auto', 'px-6', 'py-8'] as $class) {
+            $this->assertContains($class, $classes, "El catálogo debe conservar el contenedor del shell ({$class})");
+        }
+    }
+
+    public function test_el_alto_del_hero_se_calcula_con_la_cabecera_del_storefront(): void
+    {
+        $css = file_get_contents(base_path('resources/css/app.css'));
+        $js = file_get_contents(base_path('resources/js/app.js'));
+
+        $this->assertNotFalse($css, 'Debe existir resources/css/app.css');
+        $this->assertNotFalse($js, 'Debe existir resources/js/app.js');
+
+        // La hoja de estilos mide el viewport restante descontando la cabecera.
+        $this->assertStringContainsString('--storefront-header-h', $css);
+        $this->assertStringContainsString('100dvh', $css);
+
+        // El script publica esa medida en px, leyendo la navbar real.
+        $this->assertStringContainsString('data-storefront-nav', $js);
+        $this->assertMatchesRegularExpression(
+            '/setProperty\(\s*[\'\"]--storefront-header-h[\'\"]/',
+            $js,
+            'app.js debe publicar --storefront-header-h en el documento',
+        );
     }
 }

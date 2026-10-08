@@ -2,55 +2,123 @@
 
 @section('title', config('app.name', 'Tag q'))
 
+{{-- El hero sale del contenedor del shell: en el home el <main> ocupa todo el
+     ancho (`w-full`) y el contenido posterior recupera su propio contenedor
+     acotado (`data-home-body`). El resto de páginas sigue con el `max-w-6xl`
+     por defecto del layout. --}}
+@section('main-class', 'w-full')
+
 @section('content')
+    @php
+        // Carrusel del hero: las tres imágenes confirmadas de Cloudinary
+        // (`tag-q/hero`), referenciadas por URL porque el repositorio no guarda
+        // binarios. El texto alternativo describe la pieza y su fondo reales.
+        $heroSlides = [
+            [
+                'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418323/tag-q/hero/tgcquxabd0kcnu1gpbas.jpg',
+                'alt' => 'Reloj plateado Kairos sobre fondo de autódromo',
+            ],
+            [
+                'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418392/tag-q/hero/ykkmw54d5meuvdfxpr3m.jpg',
+                'alt' => 'Reloj dorado Q&Q sobre fondo azul oscuro',
+            ],
+            [
+                'src' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418462/tag-q/hero/ziptwdbhj0l6fwouddno.jpg',
+                'alt' => 'Reloj dorado Q&Q con reflejo',
+            ],
+        ];
+    @endphp
+
     {{-- Portada editorial del home: hero + categorías reales + productos
          recientes + cierre. Solo datos existentes del catálogo y utilidades
-         estáticas de Tailwind: sin animaciones, transiciones, JavaScript nuevo
-         ni imágenes externas. La composición del reloj es decorativa (CSS). --}}
-    <section data-home-hero class="mb-12 overflow-hidden rounded-2xl bg-gray-900 text-white">
-        <div class="grid gap-10 px-6 py-10 sm:px-10 sm:py-14 lg:grid-cols-2 lg:items-center lg:gap-12">
-            <div>
-                <p data-home-hero-eyebrow class="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">
-                    Tag q · Relojes de pulso
-                </p>
-                <h1 class="mt-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
-                    Relojes de pulso para cada estilo
-                </h1>
-                <p class="mt-5 max-w-xl text-sm leading-relaxed text-gray-300 sm:text-base">
-                    Explora las piezas disponibles del catálogo, revisa sus características y precios
-                    en pesos colombianos, y elige el reloj que quieras llevar en la muñeca.
-                </p>
-
-                <div data-home-hero-actions class="mt-8 flex flex-wrap items-center gap-3">
-                    <a
-                        href="{{ route('catalog.index') }}"
-                        class="inline-flex items-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                    >Ver catálogo</a>
-                    <a
-                        href="{{ route('cart.index') }}"
-                        class="inline-flex items-center rounded-full border border-gray-600 px-6 py-3 text-sm font-semibold text-white hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                    >Ir a mi bolsa</a>
-                </div>
+         estáticas de Tailwind. El hero es un carrusel de Swiper a todo el ancho
+         con las tres imágenes confirmadas de Cloudinary, y el texto y las
+         acciones van superpuestos sobre un velo oscuro. El carrusel se
+         inicializa en `resources/js/app.js` (fuera de este `<main>`) leyendo
+         `data-home-hero-slider` y `data-home-hero-autoplay`; sin él, el marcado
+         muestra igual la primera imagen con su texto encima. --}}
+    <section
+        data-home-hero
+        data-home-hero-viewport
+        data-home-hero-slider
+        data-home-hero-autoplay="5000"
+        class="relative overflow-hidden bg-gray-900 text-white"
+    >
+        <div class="swiper w-full" data-home-hero-swiper>
+            <div class="swiper-wrapper">
+                @foreach($heroSlides as $index => $slide)
+                    <div class="swiper-slide" data-home-hero-slide="{{ $index + 1 }}">
+                        {{-- Imagen de fondo a sangre: `object-cover` llena la
+                             diapositiva sin deformar la pieza. La primera se
+                             carga de inmediato (es la portada); el resto, en
+                             diferido. --}}
+                        <img
+                            src="{{ $slide['src'] }}"
+                            alt="{{ $slide['alt'] }}"
+                            width="1920"
+                            height="1072"
+                            @if($index === 0)
+                                loading="eager"
+                                fetchpriority="high"
+                            @else
+                                loading="lazy"
+                            @endif
+                            class="h-full w-full object-cover"
+                        >
+                    </div>
+                @endforeach
             </div>
 
-            {{-- Composición decorativa de un reloj hecha con utilidades estáticas:
-                 aporta contexto visual sin imágenes externas ni animación. --}}
-            <div data-home-hero-media aria-hidden="true" class="mx-auto aspect-square w-full max-w-[16rem] sm:max-w-xs">
-                <div class="flex h-full w-full items-center justify-center rounded-full border border-gray-700 bg-gray-800 p-4 sm:p-6">
-                    <div class="relative h-full w-full rounded-full border-2 border-gray-600 bg-gray-900">
-                        <span class="absolute left-1/2 top-3 h-3 w-0.5 -translate-x-1/2 bg-gray-500"></span>
-                        <span class="absolute bottom-3 left-1/2 h-3 w-0.5 -translate-x-1/2 bg-gray-500"></span>
-                        <span class="absolute left-3 top-1/2 h-0.5 w-3 -translate-y-1/2 bg-gray-500"></span>
-                        <span class="absolute right-3 top-1/2 h-0.5 w-3 -translate-y-1/2 bg-gray-500"></span>
-                        <span class="absolute left-1/2 top-1/2 h-1/3 w-0.5 -translate-x-1/2 -translate-y-full rounded bg-white"></span>
-                        <span class="absolute left-1/2 top-1/2 h-1/4 w-0.5 -translate-y-full rounded bg-gray-400"></span>
-                        <span class="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"></span>
+            {{-- Velo oscuro: mantiene legible el texto sobre cualquier imagen y
+                 no captura clics, así el arrastre táctil llega al carrusel. --}}
+            <div data-home-hero-veil aria-hidden="true" class="pointer-events-none absolute inset-0 bg-gray-950/60"></div>
+
+            {{-- Texto y acciones del hero, superpuestos a las imágenes. El
+                 contenedor deja pasar los clics y solo el bloque de contenido
+                 los recibe, para que la paginación y las flechas sigan
+                 accesibles. El padding izquierdo e inferior aparta el texto de
+                 las flechas y de los puntos. --}}
+            <div
+                data-home-hero-overlay
+                class="pointer-events-none absolute inset-0 flex items-center pl-14 pr-6 pt-10 pb-16 sm:pl-20 sm:pr-10 sm:pt-14 sm:pb-16"
+            >
+                <div class="pointer-events-auto w-full max-w-xl">
+                    <p data-home-hero-eyebrow class="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">
+                        Tag q · Relojes de pulso
+                    </p>
+                    <h1 class="mt-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
+                        Relojes de pulso para cada estilo
+                    </h1>
+                    <p class="mt-5 max-w-xl text-sm leading-relaxed text-gray-300 sm:text-base">
+                        Explora las piezas disponibles del catálogo, revisa sus características y precios
+                        en pesos colombianos, y elige el reloj que quieras llevar en la muñeca.
+                    </p>
+
+                    <div data-home-hero-actions class="mt-8 flex flex-wrap items-center gap-3">
+                        <a
+                            href="{{ route('catalog.index') }}"
+                            class="inline-flex items-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                        >Ver catálogo</a>
+                        <a
+                            href="{{ route('cart.index') }}"
+                            class="inline-flex items-center rounded-full border border-gray-600 px-6 py-3 text-sm font-semibold text-white hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                        >Ir a mi bolsa</a>
                     </div>
                 </div>
             </div>
+
+            {{-- Controles del carrusel: flechas y puntos, en blanco sobre las
+                 imágenes oscuras (ver `resources/css/app.css`). --}}
+            <button type="button" data-home-hero-prev aria-label="Imagen anterior" class="swiper-button-prev"></button>
+            <button type="button" data-home-hero-next aria-label="Imagen siguiente" class="swiper-button-next"></button>
+            <div data-home-hero-pagination class="swiper-pagination"></div>
         </div>
     </section>
 
+    {{-- Resto de la portada: vuelve al contenedor acotado del sitio para
+         conservar el mismo ritmo visual de siempre (ancho, padding lateral y
+         vertical, y separación entre secciones). No incluye el hero. --}}
+    <div data-home-body class="max-w-6xl mx-auto px-6 py-8">
     {{-- Categorías existentes: cada una enlaza al filtro real del catálogo
          (`categoria`, el parámetro que valida CatalogFilterRequest). --}}
     @if($categories->isNotEmpty())
@@ -176,4 +244,5 @@
             >Ir a mi bolsa</a>
         </div>
     </section>
+    </div>
 @endsection

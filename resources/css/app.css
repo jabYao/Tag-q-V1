@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+@import 'swiper/css';
+@import 'swiper/css/navigation';
+@import 'swiper/css/pagination';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -6,4 +9,45 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/*
+ * Carrusel del hero del home (`data-home-hero-slider`).
+ *
+ * El CSS de Swiper resuelve flechas y puntos con variables heredadas. Como las
+ * imágenes del hero son oscuras, aquí se pintan en blanco y se reduce el tamaño
+ * de las flechas para que no tapen el texto superpuesto. El resto del aspecto
+ * (velo, disposición del texto, alturas) vive en las utilidades del Blade.
+ */
+[data-home-hero-slider] {
+    --swiper-navigation-color: #ffffff;
+    --swiper-navigation-size: 32px;
+    --swiper-pagination-color: #ffffff;
+    --swiper-pagination-bullet-inactive-color: #ffffff;
+    --swiper-pagination-bullet-inactive-opacity: 0.45;
+}
+
+/*
+ * Alto del hero del home (`data-home-hero-viewport`).
+ *
+ * El hero ya no vive dentro del contenedor: ocupa todo el ancho y debe cubrir
+ * exactamente el espacio que queda bajo la cabecera (top bar de envíos +
+ * navbar), sin dejar hueco con ella. La altura real de la cabecera la publica
+ * `resources/js/app.js` en `--storefront-header-h` sobre <html>; si el script
+ * aún no corrió, el respaldo es `0px`. El suelo de `26rem` evita que un
+ * viewport corto (móvil apaisado, teclado abierto) recorte el texto y las
+ * acciones superpuestos.
+ *
+ * Reglas sin capa (`@layer`) a propósito: Swiper define `.swiper` con
+ * `position: relative` y, al ser CSS propio, gana sobre las utilidades de
+ * Tailwind, así que el relleno absoluto del carrusel debe venir de aquí y no
+ * de una clase `absolute` en el Blade.
+ */
+[data-home-hero-viewport] {
+    min-height: max(calc(100dvh - var(--storefront-header-h, 0px)), 26rem);
+}
+
+[data-home-hero-viewport] .swiper {
+    position: absolute;
+    inset: 0;
 }
