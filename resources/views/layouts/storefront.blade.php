@@ -132,13 +132,67 @@
          primarias a la izquierda, utilidades a la derecha—, coloca el SVG
          entregado inmediatamente antes del wordmark `Tag Q`, sube las
          utilidades a 24px (`h-6 w-6`) y agranda las etiquetas primarias a
-         `text-sm`: mismas rutas, misma autorización y ningún paquete nuevo. --}}
+         `text-sm`: mismas rutas, misma autorización y ningún paquete nuevo. T11
+         convierte el icono de búsqueda en un botón que abre un panel blanco justo
+         debajo de la navbar: diálogo modal que ocupa el 80% del alto restante del
+         viewport, con fondo que atenúa el contenido de debajo, scroll del cuerpo
+         bloqueado y restaurado, cierre con Escape/botón/fondo, foco gestionado y
+         listener de `resize` retirado al cerrar o destruir. El panel reutiliza el
+         único filtro de catálogo que ya existe (formulario GET con `name="q"`).
+         T13 amplía ese panel con un componente Livewire en línea
+         (`storefront.search-panel`): resultados y sugerencias en vivo derivados
+         solo de productos activos reales y de colecciones activas persistidas,
+         repartidos ~70%/~30% y apilados en móvil, con las pestañas Productos y
+         Colecciones y un estado vacío honesto cuando no hay colecciones. El
+         formulario GET `catalog.index?q=...` sigue siendo el respaldo/Enter.
+         Sin API propia, sin endpoint JSON, sin dependencias ni assets externos. --}}
     <nav
         data-storefront-nav
         x-data="{
             mobileOpen: false,
+            searchOpen: false,
+            searchPanelTop: 0,
+            searchPanelHeight: 0,
+            previousBodyOverflow: '',
+            init() {
+                const nav = this.$root;
+                this.handleSearchResize = () => {
+                    this.searchPanelTop = nav.getBoundingClientRect().bottom;
+                    this.searchPanelHeight = (window.innerHeight - nav.getBoundingClientRect().bottom) * 0.8;
+                };
+            },
+            openSearch() {
+                if (this.searchOpen) {
+                    return;
+                }
+                this.previousBodyOverflow = document.body.style.overflow;
+                document.body.style.overflow = 'hidden';
+                this.searchOpen = true;
+                this.handleSearchResize();
+                window.addEventListener('resize', this.handleSearchResize);
+                this.$nextTick(() => {
+                    if (this.$refs.searchInput) {
+                        this.$refs.searchInput.focus();
+                    }
+                });
+            },
+            closeSearch() {
+                if (! this.searchOpen) {
+                    return;
+                }
+                this.searchOpen = false;
+                document.body.style.overflow = this.previousBodyOverflow;
+                window.removeEventListener('resize', this.handleSearchResize);
+                if (this.$refs.searchTrigger) {
+                    this.$refs.searchTrigger.focus();
+                }
+            },
+            destroy() {
+                window.removeEventListener('resize', this.handleSearchResize);
+                document.body.style.overflow = this.previousBodyOverflow;
+            },
         }"
-        @keydown.escape.window="mobileOpen = false"
+        @keydown.escape.window="closeSearch(); mobileOpen = false"
         class="relative z-50 bg-white border-b px-5 py-4 sm:px-8 sm:py-5 lg:px-10"
         aria-label="Navegación principal"
     >
@@ -249,19 +303,26 @@
                  cambia. Cada icono mide 24px (`h-6 w-6`) para equilibrar el
                  tamaño de las categorías. --}}
             <div data-nav-utilities class="flex items-center justify-end gap-0.5 sm:gap-1">
-                {{-- Buscar: entrada al catálogo, donde vive el filtro `q`. --}}
-                <a
+                {{-- Buscar: abre el panel de búsqueda bajo la navbar, que
+                     reutiliza el filtro `q` del catálogo. Sigue siendo
+                     solo-icono con nombre accesible y expone su estado.
+                     Conserva su referencia para devolverle el foco al cerrar. --}}
+                <button
+                    type="button"
                     data-nav-utility="search"
-                    href="{{ route('catalog.index') }}"
+                    x-ref="searchTrigger"
                     aria-label="Buscar"
                     title="Buscar"
+                    aria-controls="storefront-search-panel"
+                    :aria-expanded="searchOpen"
+                    @click="openSearch()"
                     class="inline-flex items-center justify-center rounded p-2 text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
                 >
                     <svg data-nav-icon="search" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
                         <circle cx="11" cy="11" r="8" />
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
-                </a>
+                </button>
 
                 {{-- Cuenta: el invitado entra o se registra; el usuario
                      autenticado ve pedidos, su cierre de sesión y —solo si la
@@ -342,6 +403,53 @@
             <a data-nav-mobile-child="ninos" href="{{ route('catalog.index', ['categoria' => 'ninos']) }}" class="rounded px-3 py-2 pl-6 text-sm text-gray-500 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Niños</a>
         </div>
 
+        {{-- T11 — Fondo del panel de búsqueda: atenúa solo el área que queda
+             debajo de la navbar. Su `top` se calcula con el mismo valor que el
+             panel (`searchPanelTop`), así la navbar y el top bar permanecen
+             visibles; un clic aquí cierra el panel. --}}
+        <div
+            data-nav-search-backdrop
+            x-show="searchOpen"
+            x-cloak
+            :style="'top: ' + searchPanelTop + 'px'"
+            @click="closeSearch()"
+            aria-hidden="true"
+            class="fixed inset-x-0 bottom-0 z-40 bg-black/40"
+        ></div>
+
+        {{-- T11 — Panel blanco de búsqueda: diálogo modal justo debajo de la
+             navbar, con el 80% del alto restante del viewport
+             (`(window.innerHeight - nav.getBoundingClientRect().bottom) * 0.8`).
+             Se cierra con Escape, con su botón o con el fondo. T13 aloja aquí el
+             componente Livewire en vivo, que mantiene el `GET catalog.index` con
+             `name="q"` como respaldo/Enter y añade resultados y sugerencias. --}}
+        <div
+            id="storefront-search-panel"
+            data-nav-search-panel
+            x-show="searchOpen"
+            x-cloak
+            :style="'top: ' + searchPanelTop + 'px; height: ' + searchPanelHeight + 'px'"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Buscar"
+            class="fixed inset-x-0 z-50 overflow-y-auto bg-white border-b border-gray-200 px-5 py-6 shadow-xl sm:px-8 lg:px-10"
+        >
+            <button
+                type="button"
+                data-nav-search-close
+                aria-label="Cerrar búsqueda"
+                title="Cerrar búsqueda"
+                @click="closeSearch()"
+                class="absolute right-5 top-6 inline-flex items-center justify-center rounded p-2 text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 sm:right-8 lg:right-10"
+            >
+                <svg data-nav-icon="close" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
+            </button>
+
+            <livewire:storefront.search-panel />
+        </div>
     </nav>
     {{-- `main-class` conserva el ancho de cada página; `main-attributes` permite
          conservar los atributos de marcado que vivían en el <main> de la página

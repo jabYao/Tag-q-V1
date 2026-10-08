@@ -37,6 +37,14 @@ use Tests\TestCase;
  * wordmark `Tag Q`, sube las utilidades a 24px y agranda las etiquetas
  * primarias a `text-sm`. Sigue sin tocar rutas, autorización ni destinos.
  *
+ * T11 convierte el icono de búsqueda en un botón que abre un panel blanco justo
+ * debajo de la navbar: diálogo modal con el 80% del alto restante del viewport,
+ * fondo que atenúa el contenido de debajo, scroll del cuerpo bloqueado con
+ * restauración, cierre con Escape/botón/fondo, foco gestionado y listener de
+ * `resize` retirado al cerrar o destruir. Reutiliza el filtro GET del catálogo
+ * (`name="q"`); T13 añade dentro el componente Livewire de resultados y
+ * sugerencias en vivo, sin API propia ni endpoint JSON.
+ *
  * Fuera de alcance: cambios de rutas, autorización, backend, diseño nuevo
  * (home, animaciones, Swiper) y cualquier flujo real contra Wompi.
  */
@@ -1078,4 +1086,287 @@ class StorefrontNavigationTest extends TestCase
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | T11: panel de búsqueda accesible debajo de la navbar
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_el_icono_de_busqueda_abre_un_panel_con_rol_de_dialogo_bajo_la_navbar(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        // El disparador sigue siendo solo-icono con su nombre accesible, pero
+        // ahora es un botón de divulgación que abre el panel.
+        $trigger = $xpath->query('//*[@data-nav-utilities]//*[@data-nav-utility="search"]')->item(0);
+        $this->assertNotNull($trigger, 'El control de búsqueda existe');
+        $this->assertSame('button', strtolower($trigger->tagName), 'La búsqueda es un botón que abre el panel');
+        $this->assertSame('button', strtolower($trigger->getAttribute('type')), 'El disparador no envía formularios');
+        $this->assertSame('Buscar', $trigger->getAttribute('aria-label'), 'El disparador conserva su nombre accesible');
+        $this->assertSame('Buscar', $trigger->getAttribute('title'), 'El disparador conserva su title');
+        $this->assertSame('storefront-search-panel', $trigger->getAttribute('aria-controls'), 'El disparador apunta al panel');
+        $this->assertSame('searchOpen', $trigger->getAttribute(':aria-expanded'), 'El disparador expone su estado');
+        $this->assertStringContainsString('openSearch()', $trigger->getAttribute('@click'), 'El disparador abre el panel');
+
+        // Un único panel, dentro de la navbar y después de su contenido: queda
+        // justo debajo del encabezado, que permanece visible.
+        $this->assertSame(1, $xpath->query('//*[@data-nav-search-panel]')->length, 'El panel de búsqueda es único');
+        $this->assertSame(
+            1,
+            $xpath->query('//*[@data-storefront-nav]//*[@data-nav-search-panel]')->length,
+            'El panel vive dentro de la navbar'
+        );
+        $this->assertGreaterThan(
+            strpos($html, 'data-nav-brand'),
+            strpos($html, 'data-nav-search-panel'),
+            'El panel aparece después del contenido del encabezado: va debajo de la navbar'
+        );
+
+        $panel = $xpath->query('//*[@data-nav-search-panel]')->item(0);
+        $this->assertNotNull($panel, 'El panel expone su hook de marcado');
+        $this->assertSame('dialog', $panel->getAttribute('role'), 'El panel es un diálogo');
+        $this->assertSame('true', $panel->getAttribute('aria-modal'), 'El panel se declara modal');
+        $this->assertSame('storefront-search-panel', $panel->getAttribute('id'), 'El panel es el destino de aria-controls');
+        $this->assertSame('searchOpen', $panel->getAttribute('x-show'), 'Alpine controla la visibilidad del panel');
+        $this->assertTrue($panel->hasAttribute('x-cloak'), 'El panel no parpadea antes de inicializar Alpine');
+
+        $label = trim($panel->getAttribute('aria-label')) ?: trim($panel->getAttribute('aria-labelledby'));
+        $this->assertNotSame('', $label, 'El diálogo tiene nombre accesible');
+    }
+
+    public function test_el_panel_de_busqueda_es_blanco_y_mide_el_80_por_ciento_del_alto_restante(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $panel = $xpath->query('//*[@data-nav-search-panel]')->item(0);
+        $this->assertNotNull($panel, 'El panel de búsqueda existe');
+
+        $panelClasses = preg_split('/\s+/', trim((string) $panel->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('bg-white', $panelClasses, 'El panel de búsqueda es blanco');
+        $this->assertContains('fixed', $panelClasses, 'El panel se ancla al viewport');
+        $this->assertContains('z-50', $panelClasses, 'El panel queda por encima del contenido');
+
+        // Alto: 80% del espacio restante entre el fondo de la navbar y el final
+        // del viewport, con la fórmula pedida.
+        $this->assertStringContainsString('(window.innerHeight - ', $html, 'El alto se mide contra el viewport');
+        $this->assertStringContainsString('getBoundingClientRect().bottom', $html, 'El alto parte del fondo de la navbar');
+        $this->assertStringContainsString('* 0.8', $html, 'El panel toma el 80% del espacio restante');
+
+        $panelStyle = (string) $panel->getAttribute(':style');
+        $this->assertStringContainsString('searchPanelHeight', $panelStyle, 'El alto calculado alimenta el estilo del panel');
+        $this->assertStringContainsString('searchPanelTop', $panelStyle, 'El panel se pega al fondo de la navbar');
+
+        // El fondo atenúa solo el área restante: empieza donde termina la
+        // navbar, así la navbar y el top bar siguen visibles.
+        $backdrop = $xpath->query('//*[@data-nav-search-backdrop]')->item(0);
+        $this->assertNotNull($backdrop, 'Existe un fondo que atenúa el contenido restante');
+
+        $backdropClasses = preg_split('/\s+/', trim((string) $backdrop->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        foreach (['fixed', 'inset-x-0', 'bottom-0', 'bg-black/40', 'z-40'] as $class) {
+            $this->assertContains($class, $backdropClasses, "El fondo aplica {$class}");
+        }
+
+        $this->assertStringContainsString('searchPanelTop', (string) $backdrop->getAttribute(':style'), 'El fondo empieza al fondo de la navbar');
+        $this->assertSame('searchOpen', $backdrop->getAttribute('x-show'), 'El fondo solo existe con el panel abierto');
+        $this->assertSame('true', $backdrop->getAttribute('aria-hidden'), 'El fondo es decorativo');
+    }
+
+    public function test_el_panel_de_busqueda_reutiliza_el_filtro_get_del_catalogo_con_el_parametro_q(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $panel = $xpath->query('//*[@data-nav-search-panel]')->item(0);
+        $this->assertNotNull($panel, 'El panel de búsqueda existe');
+
+        $forms = $xpath->query('.//form', $panel);
+        $this->assertSame(1, $forms->length, 'El panel tiene exactamente un formulario');
+
+        $form = $forms->item(0);
+        $this->assertSame('GET', strtoupper($form->getAttribute('method')), 'El formulario usa GET');
+        $this->assertSame(route('catalog.index'), $form->getAttribute('action'), 'El formulario apunta al catálogo existente');
+        $this->assertSame('search', strtolower($form->getAttribute('role')), 'El formulario se anuncia como búsqueda');
+
+        $inputs = $xpath->query('.//input[@name="q"]', $form);
+        $this->assertSame(1, $inputs->length, 'El formulario envía el parámetro q');
+
+        $input = $inputs->item(0);
+        $this->assertSame('search', strtolower($input->getAttribute('type')), 'El campo es de tipo búsqueda');
+        $this->assertSame('searchInput', $input->getAttribute('x-ref'), 'El campo expone su referencia para el foco');
+
+        $label = $xpath->query('.//label[@for="storefront-search-q"]', $form)->item(0);
+        $this->assertNotNull($label, 'El campo tiene su etiqueta visible');
+        $this->assertSame('Buscar', trim($label->textContent), 'La etiqueta reutiliza la copia existente del catálogo');
+        $this->assertSame('storefront-search-q', $input->getAttribute('id'), 'La etiqueta apunta al campo del panel');
+
+        // T13: el panel monta el componente Livewire de búsqueda en vivo y
+        // conserva el GET sin token CSRF como respaldo/Enter.
+        $panelHtml = (string) $xpath->document->saveHTML($panel);
+        $this->assertStringContainsString('wire:model', $panelHtml, 'El panel enlaza el campo al componente Livewire');
+        $this->assertStringContainsString('data-search-panel-results', $panelHtml, 'El panel muestra resultados en vivo');
+        $this->assertStringContainsString('data-search-panel-suggestions', $panelHtml, 'El panel muestra sugerencias en vivo');
+        $this->assertStringNotContainsString('_token', $panelHtml, 'El formulario GET no lleva token CSRF');
+    }
+
+    public function test_el_panel_de_busqueda_bloquea_el_scroll_del_cuerpo_y_lo_restaura(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString(
+            "document.body.style.overflow = 'hidden'",
+            $html,
+            'Al abrir, se bloquea el scroll del cuerpo'
+        );
+        $this->assertStringContainsString(
+            'previousBodyOverflow = document.body.style.overflow',
+            $html,
+            'Se guarda el overflow previo antes de bloquearlo'
+        );
+        $this->assertGreaterThanOrEqual(
+            2,
+            substr_count($html, 'document.body.style.overflow = this.previousBodyOverflow'),
+            'El overflow previo se restaura al cerrar y al destruir el componente'
+        );
+    }
+
+    public function test_el_panel_de_busqueda_cierra_con_escape_boton_y_fondo(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        // Escape: el mismo manejador global que ya cerraba el menú móvil.
+        $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
+        $this->assertNotNull($nav, 'La navbar expone su hook');
+
+        $escape = (string) $nav->getAttribute('@keydown.escape.window');
+        $this->assertStringContainsString('closeSearch()', $escape, 'Escape cierra el panel de búsqueda');
+        $this->assertStringContainsString('mobileOpen = false', $escape, 'Escape sigue cerrando el menú móvil');
+
+        // Botón de cierre: solo-icono, con nombre accesible y dentro del panel.
+        $close = $xpath->query('//*[@data-nav-search-panel]//*[@data-nav-search-close]')->item(0);
+        $this->assertNotNull($close, 'El panel tiene su botón de cierre');
+        $this->assertSame('button', strtolower($close->tagName), 'El cierre es un botón');
+        $this->assertSame('button', strtolower($close->getAttribute('type')), 'El cierre no envía el formulario');
+        $this->assertSame('Cerrar búsqueda', $close->getAttribute('aria-label'), 'El cierre tiene nombre accesible');
+        $this->assertStringContainsString('closeSearch()', $close->getAttribute('@click'), 'El botón cierra el panel');
+        $this->assertSame(1, $xpath->query('.//*[@data-nav-icon]', $close)->length, 'El cierre es solo-icono');
+
+        // Fondo: clic fuera del panel también cierra.
+        $backdrop = $xpath->query('//*[@data-nav-search-backdrop]')->item(0);
+        $this->assertNotNull($backdrop, 'El fondo del panel existe');
+        $this->assertStringContainsString('closeSearch()', $backdrop->getAttribute('@click'), 'Clic en el fondo cierra el panel');
+        $this->assertTrue($backdrop->hasAttribute('x-cloak'), 'El fondo no parpadea antes de inicializar Alpine');
+    }
+
+    public function test_el_panel_de_busqueda_enfoca_el_campo_al_abrir_y_devuelve_el_foco_al_cerrar(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $trigger = $xpath->query('//*[@data-nav-utility="search"]')->item(0);
+        $this->assertNotNull($trigger, 'El disparador de búsqueda existe');
+        $this->assertSame('searchTrigger', $trigger->getAttribute('x-ref'), 'El disparador expone su referencia para restaurar el foco');
+
+        $this->assertStringContainsString('this.$refs.searchInput', $html, 'Al abrir se enfoca el campo de búsqueda');
+        $this->assertStringContainsString('this.$refs.searchTrigger', $html, 'Al cerrar se devuelve el foco al disparador');
+        $this->assertGreaterThanOrEqual(2, substr_count($html, '.focus()'), 'El foco se mueve al campo y de vuelta al disparador');
+    }
+
+    public function test_el_panel_de_busqueda_escucha_el_resize_al_abrir_y_lo_retira_al_cerrar(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString(
+            "window.addEventListener('resize', this.handleSearchResize)",
+            $html,
+            'Al abrir se recalcula el panel cuando cambia el viewport'
+        );
+        $this->assertGreaterThanOrEqual(
+            2,
+            substr_count($html, "window.removeEventListener('resize', this.handleSearchResize)"),
+            'El listener se retira al cerrar y al destruir el componente'
+        );
+        $this->assertStringContainsString('destroy()', $html, 'El componente limpia sus listeners al destruirse');
+    }
+
+    public function test_la_navbar_y_el_top_bar_quedan_visibles_por_encima_del_fondo(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        // La navbar crea su propio contexto de apilado por encima del fondo.
+        $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
+        $this->assertNotNull($nav, 'La navbar existe');
+
+        $navClasses = preg_split('/\s+/', trim((string) $nav->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('relative', $navClasses, 'La navbar se posiciona para quedar encima del fondo');
+        $this->assertContains('z-50', $navClasses, 'La navbar se apila por encima del fondo');
+
+        // El top bar y la navbar van antes que el fondo y el panel, y el fondo
+        // empieza debajo de ambos: nunca los cubre.
+        $positions = [
+            'topbar' => strpos($html, 'data-shipping-topbar'),
+            'nav' => strpos($html, 'data-storefront-nav'),
+            'backdrop' => strpos($html, 'data-nav-search-backdrop'),
+            'panel' => strpos($html, 'data-nav-search-panel'),
+        ];
+
+        foreach ($positions as $name => $position) {
+            $this->assertNotFalse($position, "El hook {$name} aparece en el documento");
+        }
+
+        $this->assertLessThan($positions['nav'], $positions['topbar'], 'El top bar se conserva arriba');
+        $this->assertLessThan($positions['backdrop'], $positions['nav'], 'La navbar va antes que el fondo del panel');
+        $this->assertLessThan($positions['panel'], $positions['backdrop'], 'El fondo se pinta antes que el panel');
+    }
+
+    public function test_el_panel_de_busqueda_se_repite_igual_en_todo_el_shell(): void
+    {
+        // Triangulación: el panel es compartido y debe comportarse igual en
+        // todas las páginas del shell, sin duplicarse ni romper rutas o iconos.
+        $product = $this->product();
+
+        foreach ([
+            route('catalog.index'),
+            route('catalog.show', $product),
+            route('cart.index'),
+            route('checkout.index'),
+        ] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+
+            $this->assertSame(1, substr_count($html, 'data-nav-search-panel'), "El panel aparece una sola vez en {$url}");
+            $this->assertSame(1, substr_count($html, 'data-nav-search-backdrop'), "El fondo aparece una sola vez en {$url}");
+            $this->assertSame(1, substr_count($html, 'data-nav-utility="search"'), "La búsqueda aparece una sola vez en {$url}");
+            $this->assertStringContainsString('action="'.route('catalog.index').'"', $html, "El panel apunta al catálogo en {$url}");
+            $this->assertStringContainsString('name="q"', $html, "El panel envía q en {$url}");
+        }
+
+        // T8–T10 se conservan: catálogo y carrito siguen enlazados y el
+        // buscador sigue siendo solo-icono con su nombre accesible.
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('href="'.route('catalog.index').'"', $html, 'El catálogo sigue enlazado');
+        $this->assertStringContainsString('href="'.route('cart.index').'"', $html, 'El carrito sigue enlazado');
+        $this->assertStringContainsString('aria-label="Buscar"', $html, 'El buscador conserva su nombre accesible');
+        $this->assertStringContainsString('data-nav-icon="search"', $html, 'El buscador conserva su icono en línea');
+
+        $xpath = $this->xpathDe($html);
+
+        $this->assertSame(
+            3,
+            $xpath->query('//*[@data-nav-utilities]//*[@data-nav-utility]')->length,
+            'Siguen existiendo los tres controles utilitarios'
+        );
+    }
 }
