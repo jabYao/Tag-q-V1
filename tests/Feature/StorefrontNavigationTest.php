@@ -757,12 +757,12 @@ class StorefrontNavigationTest extends TestCase
         $this->assertSame('', $mark->getAttribute('alt'), 'La imagen es decorativa');
         $this->assertSame('true', $mark->getAttribute('aria-hidden'), 'La imagen queda fuera del árbol accesible');
 
-        // El SVG entregado trae relleno pálido: se oscurece con filtros de
-        // Tailwind para que sea legible sobre el encabezado blanco, sin editar
-        // el archivo original.
+        // El SVG ya trae relleno negro intenso (#000000) con sombra inferior
+        // propia (feDropShadow), así que la navbar lo renderiza sin filtros de
+        // Tailwind: `brightness-0` y `opacity-70` apagarían la sombra.
         $markClasses = preg_split('/\s+/', trim((string) $mark->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
-        $this->assertContains('brightness-0', $markClasses, 'El SVG se oscurece con un filtro de Tailwind');
-        $this->assertContains('opacity-70', $markClasses, 'El SVG se atenúa con un filtro de Tailwind');
+        $this->assertNotContains('brightness-0', $markClasses, 'El SVG ya es negro: no se oscurece con filtros de Tailwind');
+        $this->assertNotContains('opacity-70', $markClasses, 'El SVG ya es negro: no se atenúa con filtros de Tailwind');
 
         // Altura responsive del logo pedida por el usuario: 28px en móvil
         // (`h-7`) y 56px desde el breakpoint `sm` (`sm:h-14`, Tailwind
@@ -796,8 +796,9 @@ class StorefrontNavigationTest extends TestCase
         $svg = (string) file_get_contents($path);
 
         $this->assertStringContainsString('<svg', $svg, 'El asset es un SVG');
-        $this->assertStringContainsString('viewBox="508 226 252 345"', $svg, 'El asset conserva el viewBox del SVG entregado');
-        $this->assertStringContainsString('#ededed', $svg, 'El asset conserva el relleno pálido original, sin editar');
+        $this->assertStringContainsString('viewBox="508 226 252 357"', $svg, 'El asset conserva el viewBox del SVG editado (alto extendido para la sombra)');
+        $this->assertStringContainsString('#000000', $svg, 'El asset trae el relleno negro intenso pedido');
+        $this->assertStringContainsString('<feDropShadow', $svg, 'El asset trae la sombra suave de la parte baja');
 
         // Copia byte a byte del archivo entregado en la raíz del proyecto. La
         // comparación solo aplica cuando ese original está presente.

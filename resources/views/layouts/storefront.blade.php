@@ -286,10 +286,11 @@
                  grupo queda centrado en el viewport porque las dos columnas
                  laterales comparten el mismo `1fr`. La imagen es decorativa
                  (`alt=""` y `aria-hidden="true"`) porque el wordmark contiguo
-                 ya nombra la marca. El SVG trae relleno pálido (#ededed), así
-                 que se oscurece con filtros de Tailwind (`brightness-0` y
-                 `opacity-70`) para leerse sobre el encabezado blanco, sin
-                 editar el archivo entregado. --}}
+                 ya nombra la marca. El SVG entregado ya trae relleno negro
+                 intenso (#000000) con una sombra suave en la parte baja
+                 (filtro `feDropShadow` interno), así que se renderiza sin
+                 filtros de Tailwind: cualquier filtro extra apagaría la
+                 sombra. --}}
             <a
                 data-nav-brand
                 href="{{ route('home') }}"
@@ -299,7 +300,7 @@
                     src="{{ asset('images/tag-q-logo.svg') }}"
                     alt=""
                     aria-hidden="true"
-                    class="h-7 w-auto shrink-0 brightness-0 opacity-70 sm:h-14"
+                    class="h-7 w-auto shrink-0 sm:h-14"
                 /><span data-nav-brand-wordmark>Tag Q</span></a>
 
             {{-- Columna derecha: utilidades solo-icono (buscar, cuenta, bolsa),
