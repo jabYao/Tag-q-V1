@@ -272,6 +272,55 @@ class StorefrontHomeTest extends TestCase
         }
     }
 
+    /**
+     * Las tarjetas de categoría con imagen muestran la foto completa
+     * (`object-contain`, nunca recortada) y el nombre superpuesto arriba
+     * en mayúsculas (clase CSS `uppercase`).
+     */
+    public function test_el_home_muestra_la_imagen_completa_y_el_nombre_encima_en_mayusculas(): void
+    {
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $document = $this->documentOf($html);
+
+        $images = [];
+        foreach ($document->getElementsByTagName('img') as $img) {
+            if (str_contains($img->getAttribute('data-category-image'), 'caballero')
+                || str_contains($img->getAttribute('data-category-image'), 'dama')) {
+                $images[] = $img;
+            }
+        }
+
+        $this->assertCount(2, $images, 'Debe haber una imagen por categoría con imagen asignada');
+
+        foreach ($images as $img) {
+            $this->assertStringContainsString(
+                'object-contain',
+                $img->getAttribute('class'),
+                'La imagen de categoría debe mostrarse completa, sin recorte'
+            );
+
+            $label = null;
+            foreach ($img->parentNode->childNodes as $child) {
+                if ($child instanceof \DOMElement
+                    && $child->hasAttribute('data-category-label')) {
+                    $label = $child;
+                    break;
+                }
+            }
+
+            $this->assertNotNull($label, 'El nombre de la categoría debe superponerse sobre la imagen');
+            $this->assertStringContainsString(
+                'uppercase',
+                $label->getAttribute('class'),
+                'El nombre de la categoría debe mostrarse en mayúsculas'
+            );
+            $this->assertNotSame('', trim($label->textContent), 'El rótulo no puede quedar vacío');
+        }
+    }
+
     public function test_el_home_no_muestra_imagenes_de_categorias_sin_imagen_asignada(): void
     {
         $this->category('Otra', 'otra');

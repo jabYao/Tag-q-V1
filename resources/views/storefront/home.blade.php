@@ -195,19 +195,22 @@
                     @if(isset($categoryImages[$category->slug]))
                         <a
                             href="{{ route('catalog.index', ['categoria' => $category->slug]) }}"
-                            class="group overflow-hidden rounded-xl border border-gray-200 bg-white hover:border-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                            class="group relative block overflow-hidden rounded-xl border border-gray-200 bg-gray-50 hover:border-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
                         >
+                            {{-- Imagen completa de la categoría (sin recorte). --}}
                             <img
                                 data-category-image="{{ $category->slug }}"
                                 src="{{ $categoryImages[$category->slug] }}"
                                 alt="{{ $categoryAlts[$category->slug] ?? $category->name }}"
                                 loading="lazy"
-                                class="h-48 w-full object-cover transition duration-300 group-hover:scale-105"
+                                class="h-72 w-full object-contain transition duration-300 group-hover:scale-105"
                             >
-                            <span class="flex items-center justify-between px-5 py-4">
-                                <span class="text-sm font-semibold text-gray-900">{{ $category->name }}</span>
-                                <span aria-hidden="true" class="text-gray-400">&rarr;</span>
-                            </span>
+
+                            {{-- Rótulo superpuesto arriba, en mayúsculas. --}}
+                            <span
+                                data-category-label="{{ $category->slug }}"
+                                class="absolute inset-x-0 top-0 bg-gray-900/70 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.2em] text-white"
+                            >{{ $category->name }}</span>
                         </a>
                     @else
                         <a
