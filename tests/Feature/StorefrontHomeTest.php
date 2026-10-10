@@ -273,9 +273,9 @@ class StorefrontHomeTest extends TestCase
     }
 
     /**
-     * Las tarjetas de categoría con imagen muestran la foto completa
-     * (`object-contain`, nunca recortada) y el nombre superpuesto arriba
-     * en mayúsculas (clase CSS `uppercase`).
+     * Las tarjetas de categoría con imagen son más altas que anchas
+     * (`aspect-[3/4]`), la foto cubre todo el div (`object-cover`) y el
+     * nombre se superpone abajo, en mayúsculas y con fondo semitransparente.
      */
     public function test_el_home_muestra_la_imagen_completa_y_el_nombre_encima_en_mayusculas(): void
     {
@@ -297,13 +297,21 @@ class StorefrontHomeTest extends TestCase
 
         foreach ($images as $img) {
             $this->assertStringContainsString(
-                'object-contain',
+                'object-cover',
                 $img->getAttribute('class'),
-                'La imagen de categoría debe mostrarse completa, sin recorte'
+                'La imagen de categoría debe cubrir todo el div'
+            );
+
+            $card = $img->parentNode;
+            $cardClass = $card instanceof \DOMElement ? $card->getAttribute('class') : '';
+            $this->assertStringContainsString(
+                'aspect-[3/4]',
+                $cardClass,
+                'La tarjeta de categoría debe ser más alta que ancha'
             );
 
             $label = null;
-            foreach ($img->parentNode->childNodes as $child) {
+            foreach ($card->childNodes as $child) {
                 if ($child instanceof \DOMElement
                     && $child->hasAttribute('data-category-label')) {
                     $label = $child;
@@ -316,6 +324,16 @@ class StorefrontHomeTest extends TestCase
                 'uppercase',
                 $label->getAttribute('class'),
                 'El nombre de la categoría debe mostrarse en mayúsculas'
+            );
+            $this->assertStringContainsString(
+                'bottom-0',
+                $label->getAttribute('class'),
+                'El rótulo debe ubicarse en la parte de abajo de la imagen'
+            );
+            $this->assertMatchesRegularExpression(
+                '/bg-black\/[0-9]+/',
+                $label->getAttribute('class'),
+                'El rótulo debe llevar un fondo semitransparente'
             );
             $this->assertNotSame('', trim($label->textContent), 'El rótulo no puede quedar vacío');
         }

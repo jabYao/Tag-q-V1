@@ -195,21 +195,21 @@
                     @if(isset($categoryImages[$category->slug]))
                         <a
                             href="{{ route('catalog.index', ['categoria' => $category->slug]) }}"
-                            class="group relative block overflow-hidden rounded-xl border border-gray-200 bg-gray-50 hover:border-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                            class="group relative block aspect-[3/4] overflow-hidden rounded-xl border border-gray-200 bg-gray-50 hover:border-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
                         >
-                            {{-- Imagen completa de la categoría (sin recorte). --}}
+                            {{-- Imagen de la categoría: cubre todo el div. --}}
                             <img
                                 data-category-image="{{ $category->slug }}"
                                 src="{{ $categoryImages[$category->slug] }}"
                                 alt="{{ $categoryAlts[$category->slug] ?? $category->name }}"
                                 loading="lazy"
-                                class="h-72 w-full object-contain transition duration-300 group-hover:scale-105"
+                                class="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
                             >
 
-                            {{-- Rótulo superpuesto arriba, en mayúsculas. --}}
+                            {{-- Rótulo abajo, en mayúsculas y con fondo semitransparente. --}}
                             <span
                                 data-category-label="{{ $category->slug }}"
-                                class="absolute inset-x-0 top-0 bg-gray-900/70 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.2em] text-white"
+                                class="absolute inset-x-0 bottom-0 bg-black/50 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.2em] text-white backdrop-blur-sm"
                             >{{ $category->name }}</span>
                         </a>
                     @else
