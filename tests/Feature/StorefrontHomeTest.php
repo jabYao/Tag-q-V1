@@ -54,6 +54,16 @@ class StorefrontHomeTest extends TestCase
         ],
     ];
 
+    /**
+     * Imágenes de categoría del home (Cloudinary `tag-q/banner`), mapeadas por
+     * slug real de categoría. Cada tarjeta de categoría las muestra.
+     */
+    private const CATEGORY_IMAGES = [
+        'caballero' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1791664126/0001bb7_ssspin.io_1791649862_fbp6xj.jpg',
+        'dama' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1791664126/suizajoyeriaarg_ssspin.io_1791649955_qxtyev.jpg',
+        'ninos' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1791664129/1pc_Boys_Girls_Fashion_Cartoon_Football_Dinosaur_Kids_Watch_Round_LED_Digital_Wristband_Clock_Affordable_Back_To_School_Watch_Suitable_For_Students_Fashion_School_Supplies_Electronic_Watch_Suitable_For_Daily_Life_School_Party_Travel_Friend_kq7mec.jpg',
+    ];
+
     private int $sequence = 0;
 
     private function category(string $name = 'Caballero', string $slug = 'caballero-home'): Category
@@ -247,6 +257,30 @@ class StorefrontHomeTest extends TestCase
     {
         $this->get('/')->assertOk()
             ->assertDontSee('Categorías');
+    }
+
+    public function test_el_home_muestra_la_imagen_de_cloudinary_de_cada_categoria(): void
+    {
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $this->category('Niños', 'ninos');
+
+        $response = $this->get('/')->assertOk();
+
+        foreach (self::CATEGORY_IMAGES as $slug => $imageUrl) {
+            $response->assertSee($imageUrl, false);
+        }
+    }
+
+    public function test_el_home_no_muestra_imagenes_de_categorias_sin_imagen_asignada(): void
+    {
+        $this->category('Otra', 'otra');
+
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee(self::CATEGORY_IMAGES['caballero'], false)
+            ->assertDontSee(self::CATEGORY_IMAGES['dama'], false)
+            ->assertDontSee(self::CATEGORY_IMAGES['ninos'], false);
     }
 
     /*
@@ -636,7 +670,7 @@ class StorefrontHomeTest extends TestCase
         }
     }
 
-    public function test_el_contenido_del_home_sigue_acotado_en_un_contenedor_propio(): void
+    public function test_el_contenido_del_home_va_a_ancho_completo_en_un_contenedor_propio(): void
     {
         $this->product($this->category());
 
@@ -653,12 +687,16 @@ class StorefrontHomeTest extends TestCase
         $this->assertTrue($body->hasAttribute('data-home-body'), 'El resto del home va en su propio contenedor');
         $this->assertSame(1, $xpath->query('//*[@data-home-body]')->length, 'Debe existir un único contenedor');
 
-        // El contenedor reproduce el ancho y el ritmo vertical anteriores.
+        // El contenedor va a ancho completo como la navbar (pedido del dueño):
+        // sin tope `max-w-6xl` ni centrado, solo el mismo padding lateral.
         $classes = $this->classesOf($body);
 
-        foreach (['max-w-6xl', 'mx-auto', 'px-6', 'py-8'] as $class) {
+        foreach (['px-5', 'sm:px-8', 'lg:px-10', 'py-8'] as $class) {
             $this->assertContains($class, $classes, "El contenedor del resto debe conservar {$class}");
         }
+
+        $this->assertNotContains('max-w-6xl', $classes, 'El resto del home ya no se acota con max-w-6xl');
+        $this->assertNotContains('mx-auto', $classes, 'El resto del home ya no se centra con mx-auto');
 
         // Dentro quedan las categorías, los productos y el cierre…
         foreach (['data-home-categories', 'data-home-products', 'data-home-closing'] as $marker) {
@@ -706,6 +744,21 @@ class StorefrontHomeTest extends TestCase
             $js,
             'app.js debe publicar --storefront-header-h en el documento',
         );
+
+        // La medida se toma contra el DOCUMENTO y no contra el viewport: el nav
+        // está en flujo normal, así que `getBoundingClientRect().bottom` encoge
+        // al scrollear. Sin sumar `window.scrollY`, un resize con la página
+        // bajada publicaba una cabecera más chica, se restaba de menos en el
+        // `calc` y el hero se salía del viewport.
+        $this->assertMatchesRegularExpression(
+            '/getBoundingClientRect\(\)\.bottom\s*\+\s*window\.scrollY/',
+            $js,
+            'app.js debe medir la cabecera contra el documento sumando window.scrollY',
+        );
+
+        // Se vuelve a medir si la cabecera cambia de alto después del primer
+        // pintado, sin esperar a un resize de la ventana.
+        $this->assertStringContainsString('ResizeObserver', $js, 'app.js debe re-medir la cabecera con ResizeObserver');
     }
 
     /**

@@ -3,9 +3,10 @@
 @section('title', config('app.name', 'Tag q'))
 
 {{-- El hero sale del contenedor del shell: en el home el <main> ocupa todo el
-     ancho (`w-full`) y el contenido posterior recupera su propio contenedor
-     acotado (`data-home-body`). El resto de páginas sigue con el `max-w-6xl`
-     por defecto del layout. --}}
+     ancho (`w-full`) y el contenido posterior vive en su propio contenedor
+     también a sangre (`data-home-body`), con el mismo padding lateral que la
+     navbar. El resto de páginas sigue con el `max-w-6xl` por defecto del
+     layout. --}}
 @section('main-class', 'w-full')
 
 @section('content')
@@ -158,12 +159,27 @@
         </div>
     </section>
 
-    {{-- Resto de la portada: vuelve al contenedor acotado del sitio para
-         conservar el mismo ritmo visual de siempre (ancho, padding lateral y
-         vertical, y separación entre secciones). No incluye el hero. --}}
-    <div data-home-body class="max-w-6xl mx-auto px-6 py-8">
+    {{-- Resto de la portada: pedido del dueño, va a ancho completo como la
+         navbar (sin `max-w-6xl` ni `mx-auto`), conservando el mismo padding
+         lateral (`px-5 sm:px-8 lg:px-10`) y el ritmo vertical (`py-8`) de
+         siempre. No incluye el hero. --}}
+    <div data-home-body class="px-5 py-8 sm:px-8 lg:px-10">
     {{-- Categorías existentes: cada una enlaza al filtro real del catálogo
-         (`categoria`, el parámetro que valida CatalogFilterRequest). --}}
+         (`categoria`, el parámetro que valida CatalogFilterRequest).
+         Las categorías con imagen asignada muestran su foto de Cloudinary
+         (`tag-q/banner`); las demás conservan la tarjeta simple. --}}
+    @php
+        $categoryImages = [
+            'caballero' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1791664126/0001bb7_ssspin.io_1791649862_fbp6xj.jpg',
+            'dama' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1791664126/suizajoyeriaarg_ssspin.io_1791649955_qxtyev.jpg',
+            'ninos' => 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1791664129/1pc_Boys_Girls_Fashion_Cartoon_Football_Dinosaur_Kids_Watch_Round_LED_Digital_Wristband_Clock_Affordable_Back_To_School_Watch_Suitable_For_Students_Fashion_School_Supplies_Electronic_Watch_Suitable_For_Daily_Life_School_Party_Travel_Friend_kq7mec.jpg',
+        ];
+        $categoryAlts = [
+            'caballero' => 'Categoría Caballero',
+            'dama' => 'Categoría Dama',
+            'ninos' => 'Categoría Niños',
+        ];
+    @endphp
     @if($categories->isNotEmpty())
         <section data-home-categories aria-label="Categorías" class="mb-12">
             <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -176,13 +192,32 @@
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 @foreach($categories as $category)
-                    <a
-                        href="{{ route('catalog.index', ['categoria' => $category->slug]) }}"
-                        class="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-5 py-4 hover:border-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
-                    >
-                        <span class="text-sm font-semibold text-gray-900">{{ $category->name }}</span>
-                        <span aria-hidden="true" class="text-gray-400">&rarr;</span>
-                    </a>
+                    @if(isset($categoryImages[$category->slug]))
+                        <a
+                            href="{{ route('catalog.index', ['categoria' => $category->slug]) }}"
+                            class="group overflow-hidden rounded-xl border border-gray-200 bg-white hover:border-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                        >
+                            <img
+                                data-category-image="{{ $category->slug }}"
+                                src="{{ $categoryImages[$category->slug] }}"
+                                alt="{{ $categoryAlts[$category->slug] ?? $category->name }}"
+                                loading="lazy"
+                                class="h-48 w-full object-cover transition duration-300 group-hover:scale-105"
+                            >
+                            <span class="flex items-center justify-between px-5 py-4">
+                                <span class="text-sm font-semibold text-gray-900">{{ $category->name }}</span>
+                                <span aria-hidden="true" class="text-gray-400">&rarr;</span>
+                            </span>
+                        </a>
+                    @else
+                        <a
+                            href="{{ route('catalog.index', ['categoria' => $category->slug]) }}"
+                            class="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-5 py-4 hover:border-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                        >
+                            <span class="text-sm font-semibold text-gray-900">{{ $category->name }}</span>
+                            <span aria-hidden="true" class="text-gray-400">&rarr;</span>
+                        </a>
+                    @endif
                 @endforeach
             </div>
         </section>
