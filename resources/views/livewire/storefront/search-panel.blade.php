@@ -32,6 +32,7 @@
     - `data-search-product`           cada tarjeta de producto.
     - `data-search-collection`        cada fila de colección.
 --}}
+@use('App\Support\CloudinaryUrl')
 <div>
     <form
         data-nav-search-form
@@ -68,7 +69,7 @@
             <button
                 type="submit"
                 data-search-submit
-                class="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-gray-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
+                class="inline-flex shrink-0 items-center justify-center gap-2 bg-gray-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
             >
                 <svg data-nav-icon="search-submit" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 sm:hidden">
                     <circle cx="11" cy="11" r="8" />
@@ -163,7 +164,7 @@
                                 <a href="{{ route('catalog.show', $product) }}" class="flex flex-1 flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2">
                                     <div class="relative aspect-square w-full overflow-hidden bg-gray-100">
                                         @if($imagen)
-                                            <img src="{{ $imagen }}" alt="{{ $product->name }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105">
+                                            <img src="{{ CloudinaryUrl::webp($imagen) }}" alt="{{ $product->name }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105">
                                         @else
                                             <div class="flex h-full w-full items-center justify-center text-sm text-gray-400">Sin imagen</div>
                                         @endif

@@ -37,6 +37,7 @@ class DatabaseSeeder extends Seeder
         foreach ($products as $p) {
             Product::create([
                 'category_id' => $cab->id,
+                'subcategoria' => 'casual',
                 'name' => $p['name'],
                 'slug' => Str::slug($p['name']), 
                 'descripcion' => $p['descripcion'],

@@ -19,6 +19,13 @@
             @endforeach
         </select>
     </label>
+    <label class="block">Subcategoría
+        <select name="subcategoria" class="w-full border rounded px-3 py-2" required>
+            @foreach(config('tagq.subcategories', []) as $slug => $label)
+                <option value="{{ $slug }}" @selected(old('subcategoria', $p?->subcategoria) === $slug)>{{ $label }}</option>
+            @endforeach
+        </select>
+    </label>
     <label class="block">Nombre
         <input name="name" value="{{ old('name', $p?->name) }}" class="w-full border rounded px-3 py-2" required>
     </label>

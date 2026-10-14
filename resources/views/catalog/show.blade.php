@@ -1,3 +1,4 @@
+@use('App\Support\CloudinaryUrl')
 @extends('layouts.storefront')
 
 @section('title', $product->name.' — '.config('app.name', 'Tag q'))
@@ -26,14 +27,14 @@
         <article class="mt-6 bg-white rounded shadow overflow-hidden">
             <div data-product-gallery class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 bg-gray-100">
                 @forelse($imagenes as $imagen)
-                    <img src="{{ $imagen }}" alt="{{ $product->name }}" class="w-full h-64 object-cover rounded">
+                    <img src="{{ CloudinaryUrl::webp($imagen) }}" alt="{{ $product->name }}" class="w-full h-64 object-cover rounded">
                 @empty
                     <div class="w-full h-64 bg-gray-100 flex items-center justify-center text-gray-400 text-sm">Sin imagen</div>
                 @endforelse
             </div>
 
             <div class="p-6 flex flex-col gap-3">
-                <span class="text-xs uppercase tracking-wide text-gray-500">{{ $product->category?->name ?? 'Sin categoría' }}</span>
+                <span class="text-xs uppercase tracking-wide text-gray-500">{{ $product->category?->name ?? 'Sin categoría' }}@if($product->subcategoriaLabel()) · {{ $product->subcategoriaLabel() }}@endif</span>
                 <h1 class="text-2xl font-bold">{{ $product->name }}</h1>
                 <p class="text-xl font-bold">$ {{ number_format($product->precio, 0, ',', '.') }} COP</p>
 

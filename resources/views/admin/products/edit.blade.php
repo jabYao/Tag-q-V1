@@ -1,3 +1,4 @@
+@use('App\Support\CloudinaryUrl')
 @extends('layouts.app')
 @section('title', 'Editar producto')
 
@@ -14,7 +15,7 @@
             <div class="grid grid-cols-3 gap-3">
             @foreach($product->imagenes as $url)
                 <label class="border rounded p-2 text-center">
-                    <img src="{{ $url }}" class="w-full h-24 object-cover rounded mb-1">
+                    <img src="{{ CloudinaryUrl::webp($url) }}" class="w-full h-24 object-cover rounded mb-1">
                     <input type="checkbox" name="imagenes_existentes[]" value="{{ $url }}" checked class="mr-1"> Conservar
                     <span class="text-xs text-gray-400 block truncate">{{ $url }}</span>
                 </label>

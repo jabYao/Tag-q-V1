@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\CartService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -611,6 +612,15 @@ class StorefrontNavigationTest extends TestCase
             $this->assertStringContainsString('data-nav-primary-item="'.$item.'"', $html, "El primario {$item} existe");
         }
 
+        // La altura se publica antes del primer render del hero para evitar un salto.
+        $this->assertStringContainsString('data-storefront-header-height-bootstrap', $html);
+        $this->assertStringContainsString("getBoundingClientRect().bottom + window.scrollY", $html);
+        $css = file_get_contents(base_path('resources/css/app.css'));
+        $this->assertStringContainsString('storefront-nav-content-entry', $css);
+        $this->assertStringContainsString('[data-storefront-nav] [data-nav-primary]', $css);
+        $this->assertStringContainsString('[data-storefront-nav] [data-nav-utilities]', $css);
+        $this->assertStringContainsString('prefers-reduced-motion: reduce', $css);
+
         // T8: las etiquetas visibles de las categorías van en mayúsculas.
         $response->assertSee('DAMAS')->assertSee('CABALLEROS')->assertSee('TIENDA')
             ->assertDontSee('>Damas<')
@@ -847,6 +857,12 @@ class StorefrontNavigationTest extends TestCase
             $this->assertContains('uppercase', $classes, "El primario {$item} conserva las mayúsculas");
         }
 
+        $css = file_get_contents(base_path('resources/css/app.css'));
+        $this->assertStringContainsString('[data-nav-primary-item]::after', $css);
+        $this->assertStringContainsString('width: 0', $css);
+        $this->assertStringContainsString('[data-nav-primary-item]:hover::after', $css);
+        $this->assertStringContainsString('width: 100%', $css);
+
         // El menú móvil repite los mismos primarios, con el mismo tamaño.
         foreach (['damas', 'caballeros', 'tienda'] as $item) {
             $node = $xpath->query('//*[@data-nav-mobile-item="'.$item.'"]')->item(0);
@@ -960,14 +976,15 @@ class StorefrontNavigationTest extends TestCase
         );
     }
 
-    public function test_la_tienda_expone_el_submenu_con_ver_todo_y_ninos(): void
+    public function test_la_tienda_expone_el_submenu_con_ver_todo_ninos_y_subcategorias(): void
     {
         $response = $this->get(route('catalog.index'))->assertOk();
         $html = $response->getContent();
 
-        // Un único submenú de Tienda y exactamente los dos destinos confirmados.
+        // Un único submenú de Tienda y exactamente los cinco destinos confirmados
+        // (Ver todo, Niños y las tres subcategorías fijas).
         $this->assertSame(1, substr_count($html, 'data-nav-submenu="tienda"'), 'Tienda expone un submenú');
-        $this->assertSame(2, substr_count($html, 'data-nav-submenu-item'), 'El submenú tiene exactamente dos destinos');
+        $this->assertSame(5, substr_count($html, 'data-nav-submenu-item'), 'El submenú tiene exactamente cinco destinos');
         $this->assertStringContainsString('data-nav-submenu-item="ver-todo"', $html);
         $this->assertStringContainsString('data-nav-submenu-item="ninos"', $html);
 
@@ -978,7 +995,17 @@ class StorefrontNavigationTest extends TestCase
             'Niños enlaza el filtro real categoria=ninos'
         );
 
-        $response->assertSee('Ver todo')->assertSee('Niños');
+        foreach (['elegante' => 'Elegante', 'casual' => 'Casual', 'deportivo' => 'Deportivo'] as $slug => $label) {
+            $this->assertStringContainsString('data-nav-submenu-item="'.$slug.'"', $html, "El submenú lista {$label}");
+            $this->assertStringContainsString(
+                'href="'.route('catalog.index', ['subcategoria' => $slug]).'"',
+                $html,
+                "{$label} enlaza el filtro real subcategoria={$slug}"
+            );
+        }
+
+        $response->assertSee('Ver todo')->assertSee('Niños')
+            ->assertSee('Elegante')->assertSee('Casual')->assertSee('Deportivo');
     }
 
     public function test_los_controles_utilitarios_usan_iconos_inline_con_etiqueta_y_destino(): void
@@ -1000,6 +1027,83 @@ class StorefrontNavigationTest extends TestCase
 
         $this->assertStringContainsString('href="'.route('catalog.index').'"', $html, 'Buscar lleva al catálogo');
         $this->assertStringContainsString('href="'.route('cart.index').'"', $html, 'Bolsa lleva al carrito');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Punto de presencia de la bolsa
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_la_bolsa_no_muestra_el_punto_con_el_carrito_vacio(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $indicator = $this->indicadorDeBolsa($html);
+
+        // Decorativo: no aporta nombre accesible ni texto.
+        $this->assertStringContainsString('aria-hidden="true"', $indicator, 'El punto es decorativo');
+        $this->assertStringContainsString('x-show="cartHasItems"', $indicator, 'El punto queda controlado por Alpine');
+        $this->assertStringContainsString('display: none', $indicator, 'Sin líneas activas el punto queda oculto ya en la carga inicial');
+
+        // El nombre accesible de la bolsa se conserva intacto.
+        $bag = $this->xpathDe($html)->query('//*[@data-nav-utility="bag"]')->item(0);
+        $this->assertNotNull($bag, 'La bolsa sigue existiendo');
+        $this->assertSame('Bolsa', $bag->getAttribute('aria-label'), 'La bolsa conserva su aria-label');
+        $this->assertSame('Bolsa', $bag->getAttribute('title'), 'La bolsa conserva su title');
+    }
+
+    public function test_la_bolsa_muestra_el_punto_con_el_carrito_de_invitado(): void
+    {
+        $product = $this->product();
+        app(CartService::class)->addToSession($product->id, 1);
+
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString(
+            'display: none',
+            $this->indicadorDeBolsa($html),
+            'Con una línea en sesión el punto se ve ya en la carga inicial'
+        );
+    }
+
+    public function test_la_bolsa_muestra_el_punto_con_el_carrito_en_bd_del_cliente(): void
+    {
+        $product = $this->product();
+        $cliente = User::factory()->create(['role' => 'cliente']);
+        app(CartService::class)->addToDatabase($cliente, $product->id, 1);
+
+        $html = $this->actingAs($cliente)->get(route('catalog.index'))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString(
+            'display: none',
+            $this->indicadorDeBolsa($html),
+            'Con una línea en BD el punto se ve ya en la carga inicial'
+        );
+    }
+
+    public function test_la_navbar_reacciona_a_los_eventos_de_carrito_sin_recargar(): void
+    {
+        // Actualización reactiva: el layout escucha los eventos ya existentes y
+        // ajusta el punto sin recargar ni consultar una API propia.
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('@cart-added.window="onCartIndicatorAdded()"', $html);
+        $this->assertStringContainsString('@cart-updated.window="onCartIndicatorUpdated($event)"', $html);
+    }
+
+    /**
+     * Substring de la etiqueta de apertura del punto de la bolsa.
+     */
+    private function indicadorDeBolsa(string $html): string
+    {
+        $start = strpos($html, 'data-nav-cart-indicator');
+        $this->assertNotFalse($start, 'La bolsa expone su punto de presencia');
+
+        $end = strpos($html, '>', $start);
+        $this->assertNotFalse($end, 'La etiqueta del punto se cierra');
+
+        return substr($html, $start, $end - $start + 1);
     }
 
     public function test_la_cuenta_del_invitado_ofrece_ingresar_o_registrarse(): void
@@ -1062,7 +1166,7 @@ class StorefrontNavigationTest extends TestCase
             $this->assertStringContainsString('data-nav-mobile-item="'.$item.'"', $html);
         }
 
-        // Los niños siguen siendo alcanzables desde móvil.
+        // Los niños y las subcategorías siguen siendo alcanzables desde móvil.
         $this->assertStringContainsString('data-nav-mobile-child="ninos"', $html);
         $this->assertStringContainsString('data-nav-mobile-child="ver-todo"', $html);
         $this->assertStringContainsString(
@@ -1070,6 +1174,15 @@ class StorefrontNavigationTest extends TestCase
             $html,
             'El panel móvil conserva el destino real de Niños'
         );
+
+        foreach (['elegante', 'casual', 'deportivo'] as $slug) {
+            $this->assertStringContainsString('data-nav-mobile-child="'.$slug.'"', $html, "El panel móvil lista {$slug}");
+            $this->assertStringContainsString(
+                'href="'.route('catalog.index', ['subcategoria' => $slug]).'"',
+                $html,
+                "El panel móvil conserva el filtro real subcategoria={$slug}"
+            );
+        }
 
         // T8: el panel móvil conserva las categorías, ahora en mayúsculas.
         $xpath = $this->xpathDe($html);
@@ -1151,6 +1264,19 @@ class StorefrontNavigationTest extends TestCase
         $this->assertContains('bg-white', $panelClasses, 'El panel de búsqueda es blanco');
         $this->assertContains('fixed', $panelClasses, 'El panel se ancla al viewport');
         $this->assertContains('z-50', $panelClasses, 'El panel queda por encima del contenido');
+        $this->assertSame('transition ease-out duration-300 motion-reduce:transition-none', $panel->getAttribute('x-transition:enter'), 'La búsqueda entra con una transición suave');
+        $this->assertSame('-translate-y-4 opacity-0 motion-reduce:-translate-y-0', $panel->getAttribute('x-transition:enter-start'), 'La búsqueda entra desde arriba');
+        $this->assertSame('translate-y-0 opacity-100', $panel->getAttribute('x-transition:enter-end'), 'La búsqueda termina en su posición');
+        $css = file_get_contents(base_path('resources/css/app.css'));
+        $this->assertStringContainsString('storefront-search-results-entry', $css, 'Los resultados tienen una entrada propia');
+        $this->assertStringContainsString('[data-search-panel-results]', $css, 'El panel completo de resultados se anima');
+
+        $mega = $xpath->query('//*[@data-nav-mega-panel]')->item(0);
+        $this->assertNotNull($mega, 'El submenú de Tienda expone su panel');
+        $this->assertContains('z-[60]', preg_split('/\s+/', trim((string) $mega->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY), 'El submenú queda por delante del panel de búsqueda');
+        $this->assertSame('transition ease-out duration-200 motion-reduce:transition-none', $mega->getAttribute('x-transition:enter'), 'El submenú entra con una transición suave');
+        $this->assertSame('-translate-y-3 opacity-0 motion-reduce:-translate-y-0', $mega->getAttribute('x-transition:enter-start'), 'El submenú entra desde arriba');
+        $this->assertSame('translate-y-0 opacity-100', $mega->getAttribute('x-transition:enter-end'), 'El submenú termina en su posición');
 
         // Alto: 80% del espacio restante entre el fondo de la navbar y el final
         // del viewport, con la fórmula pedida.

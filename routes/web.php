@@ -22,6 +22,18 @@ Route::get('/catalogo', [CatalogController::class, 'index'])->name('catalog.inde
 // Detalle público de producto por slug (binding implícito: /catalogo/{slug})
 Route::get('/catalogo/{product:slug}', [CatalogController::class, 'show'])->name('catalog.show');
 
+// Páginas legales públicas. El contenido todavía no está aprobado: cada ruta
+// sirve la misma vista Blade provisional (`Route::view`, sin controlador ni
+// paquete nuevos) que conserva su título y avisa que el texto está pendiente.
+// Son destinos reales y navegables desde el footer del storefront.
+Route::view('/politica-de-privacidad', 'legal.placeholder', ['title' => 'Política de privacidad', 'key' => 'privacy'])->name('legal.privacy');
+Route::view('/terminos-y-condiciones', 'legal.placeholder', ['title' => 'Términos y condiciones', 'key' => 'terms'])->name('legal.terms');
+Route::view('/politica-de-cookies', 'legal.placeholder', ['title' => 'Política de cookies', 'key' => 'cookies'])->name('legal.cookies');
+Route::view('/cambios-y-devoluciones', 'legal.placeholder', ['title' => 'Cambios y devoluciones', 'key' => 'returns'])->name('legal.returns');
+Route::view('/envios-y-entregas', 'legal.placeholder', ['title' => 'Envíos y entregas', 'key' => 'shipping'])->name('legal.shipping');
+Route::view('/medios-de-pago', 'legal.placeholder', ['title' => 'Medios de pago', 'key' => 'payments'])->name('legal.payments');
+Route::view('/contacto', 'legal.placeholder', ['title' => 'Contacto', 'key' => 'contact'])->name('legal.contact');
+
 // Carrito público — invitado en sesión, cliente autenticado en carts/cart_items.
 Route::get('/carrito', fn () => view('cart.index'))->name('cart.index');
 

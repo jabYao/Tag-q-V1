@@ -80,8 +80,8 @@ class PublicProductDetailTest extends TestCase
             ->assertSee('Zafiro')
             ->assertSee('22mm')
             ->assertSee('Automático')
-            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/heritage-1.jpg', false)
-            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/heritage-2.jpg', false);
+            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage-1.jpg', false)
+            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage-2.jpg', false);
     }
 
     public function test_detalle_de_producto_agotado_sigue_visible_con_etiqueta(): void

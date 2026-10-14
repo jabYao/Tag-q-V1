@@ -1,3 +1,18 @@
+/*
+ * Outfit (títulos principales del storefront).
+ *
+ * La tipografía general (Inter) la autoaloja `laravel-vite-plugin/fonts`
+ * desde Bunny Fonts (`vite.config.js`), sin un frontend aparte ni dependencias
+ * nuevas. Como la petición solo cubre tipografía, aquí se declara Outfit con
+ * la misma fuente (Bunny) y el mismo formato de URL que usa el complemento
+ * (`css2?family=…&display=swap&subset=latin`), limitado al peso 300 porque es
+ * el único que usa el sitio.
+ *
+ * Va antes de `@import 'tailwindcss'` para que la hoja siga siendo CSS válido
+ * (@import debe preceder a cualquier regla) y Vite, además, sube todo `@import`
+ * al inicio del bundle en `finalizeCss` (`hoistAtRules`).
+ */
+@import url('https://fonts.bunny.net/css2?family=Outfit:wght@300&family=Bebas+Neue&display=swap&subset=latin');
 @import 'tailwindcss';
 @import 'swiper/css';
 @import 'swiper/css/navigation';
@@ -7,8 +22,146 @@
 @source '../../storage/framework/views/*.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    /*
+     * Tipografía general del storefront (cuerpo, botones, etiquetas): Inter
+     * 400/500/600/700, autoalojada en `vite.config.js`. Es el valor por defecto
+     * del proyecto (Tailwind mapea `--default-font-family` a `--font-sans`).
+     */
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /*
+     * Tipografía de los títulos principales del home (`font-outfit`).
+     * Declarada como token del tema para que Tailwind genere la utilidad y
+     * cualquier vista pueda reutilizarla sin CSS suelto.
+     */
+    --font-outfit: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+
+    /* Tipografía de títulos de secciones posteriores al hero. */
+    --font-bebas: 'Bebas Neue', ui-sans-serif, system-ui, sans-serif;
+
+    /*
+     * Tipografía del wordmark de la marca (`font-jost`), en el navbar y en el
+     * footer. Jost 500 medium se autoaloja con `laravel-vite-plugin/fonts`
+     * desde Bunny Fonts (`vite.config.js`), igual que Inter. El token del tema
+     * es lo que hace que Tailwind genere la utilidad reutilizable `font-jost`.
+     */
+    --font-jost: 'Jost', ui-sans-serif, system-ui, sans-serif;
+}
+
+/*
+ * Subrayado progresivo de la navegación primaria: la línea crece de izquierda
+ * a derecha en lugar de aparecer completa de golpe.
+ */
+[data-nav-primary-item] {
+    position: relative;
+    text-decoration: none;
+}
+
+[data-nav-primary-item]::after {
+    position: absolute;
+    right: 0;
+    bottom: 0.25rem;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background-color: currentColor;
+    content: '';
+    transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-nav-primary-item]:hover::after,
+[data-nav-primary-item]:focus-visible::after {
+    width: 100%;
+}
+
+@keyframes storefront-nav-content-entry {
+    from {
+        opacity: 0;
+        transform: translateY(-7px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    [data-storefront-nav] [data-nav-primary],
+    [data-storefront-nav] [data-nav-brand],
+    [data-storefront-nav] [data-nav-utilities],
+    [data-storefront-nav] [data-nav-mobile-toggle] {
+        animation: storefront-nav-content-entry 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    [data-storefront-nav] [data-nav-primary] {
+        animation-delay: 80ms;
+    }
+
+    [data-storefront-nav] [data-nav-brand] {
+        animation-delay: 160ms;
+    }
+
+    [data-storefront-nav] [data-nav-utilities] {
+        animation-delay: 240ms;
+    }
+
+    [data-storefront-nav] [data-nav-utilities] > * {
+        animation: storefront-nav-content-entry 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    [data-storefront-nav] [data-nav-utilities] > :nth-child(1) {
+        animation-delay: 280ms;
+    }
+
+    [data-storefront-nav] [data-nav-utilities] > :nth-child(2) {
+        animation-delay: 340ms;
+    }
+
+    [data-storefront-nav] [data-nav-utilities] > :nth-child(3) {
+        animation-delay: 400ms;
+    }
+}
+
+@keyframes storefront-search-results-entry {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+[data-search-panel-suggestions],
+[data-search-panel-results] {
+    animation: storefront-search-results-entry 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-search-panel-results] {
+    animation-delay: 90ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-nav-primary-item]::after {
+        transition: none;
+    }
+
+    [data-search-panel-suggestions],
+    [data-search-panel-results] {
+        animation: none;
+    }
+
+    [data-storefront-nav] [data-nav-primary],
+    [data-storefront-nav] [data-nav-brand],
+    [data-storefront-nav] [data-nav-utilities],
+    [data-storefront-nav] [data-nav-utilities] > *,
+    [data-storefront-nav] [data-nav-mobile-toggle] {
+        animation: none;
+    }
 }
 
 /*
@@ -53,16 +206,62 @@
 }
 
 /*
- * Cortina de transición del hero (T22).
+ * ---------------------------------------------------------------------------
+ * Animaciones del home posterior al hero (baseline CSS y hover).
  *
- * Arranca cerrada (`scaleX(0)`) y el JS le fija el color de la diapositiva
- * destino antes de animarla con Web Animations. La regla vive aquí —y no solo
- * en la utilidad arbitraria del Blade— para que la cortina nunca aparezca
- * desplegada si la utilidad no llega a compilarse, y para dejar el `origin`
- * y la pista de composición declarados junto al resto del hero.
+ * La coreografía de entrada la ejecuta GSAP desde `resources/js/app.js` sobre
+ * los ganchos `data-home-stagger`, `data-home-reveal` y `data-home-reveal-media`
+ * (con `autoAlpha`/`scale` y `clearProps` al terminar). Aquí vive solo lo que
+ * debe funcionar sin JavaScript: el estado base es SIEMPRE visible —nada se
+ * oculta por CSS— y los realces de hover quedan acotados.
+ *
+ * `data-home-hover` marca tarjetas, fichas y botones que se elevan un poco al
+ * pasar el puntero. El zoom leve de la imagen interior se limita a punteros
+ * reales (`hover: hover`) y a quien no pidió movimiento reducido, para que el
+ * táctil no herede un estado "pegado" y el sitio no se mueva de más.
+ * ---------------------------------------------------------------------------
  */
-[data-home-hero-curtain] {
-    transform: scaleX(0);
-    transform-origin: left;
-    will-change: transform;
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    [data-home-hover] {
+        transition:
+            transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+            box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1),
+            border-color 320ms ease,
+            background-color 320ms ease;
+    }
+
+    [data-home-hover]:hover {
+        transform: translateY(-4px);
+    }
+
+    [data-home-hover] img {
+        transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    [data-home-hover]:hover img {
+        transform: scale(1.06);
+    }
+}
+
+/*
+ * Movimiento reducido: la portada queda quieta. Los reveals ni siquiera llegan
+ * a ejecutarse (el JS sale antes de tocar nada), y aquí se apagan además los
+ * realces de hover y los desplazamientos que pudieran quedar vivos. El hero
+ * editorial hace lo mismo: con movimiento reducido el JS cambia el copy al
+ * instante y esta regla garantiza que ni la imagen ni el copy conserven
+ * transformaciones.
+ */
+@media (prefers-reduced-motion: reduce) {
+    [data-home-reveal],
+    [data-home-reveal-media],
+    [data-home-reveal-media] img,
+    [data-home-hover],
+    [data-home-hover] img,
+    [data-home-hero-photo],
+    [data-home-hero-title],
+    [data-home-hero-body],
+    [data-home-hero-actions] {
+        transform: none !important;
+        transition: none !important;
+    }
 }

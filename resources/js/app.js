@@ -1,5 +1,7 @@
 import Swiper from 'swiper';
 import { Autoplay, Navigation, Pagination } from 'swiper/modules';
+import { gsap } from 'gsap';
+import ScrollTrigger from 'gsap/ScrollTrigger';
 
 // Alpine lo aporta Livewire 4: `@livewireScripts` embebe su propia instancia,
 // la publica en `window.Alpine` y la arranca en `DOMContentLoaded`. Arrancar
@@ -26,14 +28,48 @@ function publishStorefrontHeaderHeight() {
         return;
     }
 
-    document.documentElement.style.setProperty(
-        '--storefront-header-h',
-        `${nav.getBoundingClientRect().bottom}px`,
-    );
+    // Medida tomada desde el inicio del documento, NO desde el viewport: el
+    // nav vive en flujo normal, así que `getBoundingClientRect().bottom`
+    // encoge a medida que la página baja (y puede volverse negativo). Usarlo
+    // directamente hacía que un redimensionar con la página scrolleada
+    // sobrestimara la cabecera y el hero se pasara del viewport. Sumarle
+    // `window.scrollY` devuelve siempre la altura acumulada real de la
+    // cabecera, sea cual sea el scroll.
+    const height = nav.getBoundingClientRect().bottom + window.scrollY;
+
+    document.documentElement.style.setProperty('--storefront-header-h', `${height}px`);
 }
 
 publishStorefrontHeaderHeight();
 window.addEventListener('resize', publishStorefrontHeaderHeight);
+
+// Auto-corrección: si la cabecera cambia de alto después del primer pintado
+// (cambio de breakpoint, reflow), el ResizeObserver vuelve a publicar la
+// medida y el hero vuelve a encajar en el viewport sin esperar un resize.
+if (typeof ResizeObserver === 'function') {
+    const nav = document.querySelector('[data-storefront-nav]');
+
+    if (nav) {
+        new ResizeObserver(publishStorefrontHeaderHeight).observe(nav);
+    }
+}
+
+/**
+ * Animación editorial del hero (`data-home-hero-slider`), aprobada por el
+ * dueño: la imagen activa entra con un zoom suave (1.04 → 1) y un desvanecido
+ * leve, y el copy activo entra por capas —titular, cuerpo y acciones— con un
+ * escalonado corto (0 ms, 100 ms y 180 ms). Sin cortina de color: el copy
+ * inactivo se retira antes de entrar el nuevo, así nunca se solapan. Se ejecuta
+ * en la carga inicial y en cada cambio de slide, con GSAP (dependencia ya
+ * presente), sin añadir ninguna otra.
+ */
+const HERO_MEDIA_ZOOM_START = 1.04;
+const HERO_MEDIA_ZOOM_END = 1;
+const HERO_COPY_STAGGER = [0, 0.1, 0.18];
+const HERO_MEDIA_ENTRY_FROM = { scale: HERO_MEDIA_ZOOM_START, autoAlpha: 0.72 };
+const HERO_MEDIA_ENTRY_TO = { scale: HERO_MEDIA_ZOOM_END, autoAlpha: 1, duration: 1.1, ease: 'power2.out' };
+const HERO_COPY_ENTRY_FROM = { y: 20, autoAlpha: 0 };
+const HERO_COPY_ENTRY_TO = { y: 0, autoAlpha: 1, duration: 0.6, ease: 'power3.out' };
 
 /**
  * Carrusel del hero del home (`data-home-hero-slider`).
@@ -70,65 +106,104 @@ function initHomeHeroSlider(section) {
     });
 
     /*
-     * T22 — cortina de transición y texto por diapositiva.
+     * T22/T23 — texto por diapositiva y entrada editorial, sin cortina.
      *
      * Cada diapositiva trae su propio bloque de texto (`data-home-hero-copy`);
      * el servidor pinta solo el primero y el resto llega con `hidden`. Al
-     * cambiar de slide, una cortina del color de la diapositiva destino cubre
-     * el hero (320 ms), el texto se cambia TAPADO por ella y después se
-     * descubre (520 ms). `targetIndex` guarda siempre el último slide pedido:
-     * si una transición cancela a la anterior, al terminar se muestra el texto
-     * correcto. Con `prefers-reduced-motion` (o sin Web Animations) se cambia
-     * el texto sin animar la cortina.
+     * cambiar de slide se retira el copy inactivo —sin solaparse con el nuevo—
+     * y se muestra el de la diapositiva activa, usando el índice real de
+     * Swiper. La cortina de color y su animación por Web Animations se
+     * eliminaron por pedido del dueño: el carrusel, sus controles, el autoplay
+     * y el respeto a `prefers-reduced-motion` siguen intactos.
      */
-    const curtain = section.querySelector('[data-home-hero-curtain]');
     const copies = Array.from(section.querySelectorAll('[data-home-hero-copy]'));
-    const colors = (curtain?.dataset.homeHeroCurtainColors || '').split(',').map((value) => value.trim()).filter(Boolean);
-    let targetIndex = 0;
+
+    /** Capas que entran escalonadas dentro de un bloque de copy. */
+    const copyLayers = (copy) => [
+        copy.querySelector('[data-home-hero-title]'),
+        copy.querySelector('[data-home-hero-body]'),
+        copy.querySelector('[data-home-hero-actions]'),
+    ].filter((layer) => layer !== null);
+
+    /** Imagen de la diapositiva activa: es la que recibe el zoom. */
+    const activeMedia = () => {
+        const slide = swiper.slides[swiper.activeIndex];
+
+        return slide ? slide.querySelector('[data-home-hero-photo]') : null;
+    };
+
+    /** Devuelve las capas a su estado base, sin restos inline de GSAP. */
+    const settle = (targets) => {
+        if (targets.length === 0) {
+            return;
+        }
+
+        gsap.killTweensOf(targets);
+        gsap.set(targets, { clearProps: 'transform,opacity,visibility' });
+    };
+
+    const copyFor = (index) => copies.find((copy) => Number(copy.dataset.homeHeroCopy) === index) ?? null;
 
     const showCopy = (index) => {
         copies.forEach((copy) => {
-            copy.hidden = Number(copy.dataset.homeHeroCopy) !== index;
+            const active = Number(copy.dataset.homeHeroCopy) === index;
+
+            if (!active) {
+                settle(copyLayers(copy));
+            }
+
+            copy.hidden = !active;
         });
     };
 
-    const runCurtain = () => {
-        if (!curtain) {
-            showCopy(targetIndex);
+    /**
+     * Entrada editorial de la diapositiva activa: zoom de la imagen y copy
+     * escalonado. Con movimiento reducido no anima nada y deja el copy a la
+     * vista de inmediato.
+     */
+    const enterActive = (index) => {
+        const media = activeMedia();
+        const copy = copyFor(index);
+        const layers = copy ? copyLayers(copy) : [];
+
+        settle(media ? [media] : []);
+        settle(layers);
+
+        if (reducedMotion.matches) {
             return;
         }
 
-        curtain.style.backgroundColor = colors[targetIndex] || colors[0] || '#0b3d3b';
+        const timeline = gsap.timeline();
 
-        if (reducedMotion.matches || typeof curtain.animate !== 'function') {
-            showCopy(targetIndex);
-            return;
+        if (media) {
+            timeline.fromTo(
+                media,
+                HERO_MEDIA_ENTRY_FROM,
+                { ...HERO_MEDIA_ENTRY_TO, clearProps: 'transform,opacity,visibility' },
+                0,
+            );
         }
 
-        curtain.getAnimations().forEach((animation) => animation.cancel());
-        curtain.style.transformOrigin = 'left';
-        const cover = curtain.animate(
-            [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
-            { duration: 320, easing: 'cubic-bezier(0.65, 0, 0.35, 1)', fill: 'forwards' },
-        );
-
-        cover.finished
-            .then(() => {
-                showCopy(targetIndex); // el texto cambia TAPADO por la cortina
-                curtain.style.transformOrigin = 'right';
-
-                return curtain.animate(
-                    [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }],
-                    { duration: 520, easing: 'cubic-bezier(0.33, 1, 0.68, 1)', fill: 'forwards' },
-                ).finished;
-            })
-            .catch(() => {}); // otra transición la canceló: la última manda
+        layers.forEach((layer, order) => {
+            timeline.fromTo(
+                layer,
+                HERO_COPY_ENTRY_FROM,
+                { ...HERO_COPY_ENTRY_TO, clearProps: 'transform,opacity,visibility' },
+                HERO_COPY_STAGGER[order] ?? order * 0.1,
+            );
+        });
     };
 
     swiper.on('slideChange', () => {
-        targetIndex = swiper.realIndex;
-        runCurtain();
+        const index = swiper.realIndex;
+
+        showCopy(index);
+        enterActive(index);
     });
+
+    // La carga inicial también entra: el hero arranca con la primera diapositiva.
+    showCopy(swiper.realIndex);
+    enterActive(swiper.realIndex);
 
     const pause = () => swiper.autoplay && swiper.autoplay.stop();
 
@@ -149,7 +224,174 @@ function initHomeHeroSlider(section) {
     section.addEventListener('focusin', pause);
     section.addEventListener('focusout', resume);
 
-    reducedMotion.addEventListener('change', (event) => (event.matches ? pause() : resume()));
+    reducedMotion.addEventListener('change', (event) => {
+        if (!event.matches) {
+            resume();
+            return;
+        }
+
+        // El visitante pidió movimiento reducido: se pausa el autoplay y la
+        // entrada editorial se resuelve al instante, sin zoom ni escalonado.
+        pause();
+        showCopy(swiper.realIndex);
+        enterActive(swiper.realIndex);
+    });
 }
 
 document.querySelectorAll('[data-home-hero-slider]').forEach((section) => initHomeHeroSlider(section));
+
+/**
+ * Animaciones del home posterior al hero (GSAP + ScrollTrigger).
+ *
+ * El hero queda fuera a propósito: conserva su carrusel Swiper propio y nada
+ * de esta coreografía lo toca (el contenedor raíz es `data-home-body`, hermano
+ * posterior del hero). El resto de la portada
+ * —títulos, tarjetas de categoría, tarjetas de producto, cierre y galería
+ * bento— entra con un `stagger` al hacer scroll, y las imágenes hacen un zoom
+ * leve dentro de su marco.
+ *
+ * El contenido SIEMPRE viene visible desde el servidor: este script solo aplica
+ * el estado inicial con GSAP, así que sin JavaScript la portada se lee y se
+ * navega igual. Con `prefers-reduced-motion: reduce` la función sale antes de
+ * ocultar nada y no se ejecuta ninguna animación.
+ *
+ * Ganchos declarativos que conecta:
+ *   - `data-home-body`          contenedor raíz (excluye el hero).
+ *   - `data-home-stagger`       contenedor cuyos hijos `data-home-reveal`
+ *                              entran escalonados.
+ *   - `data-home-reveal`        elemento que se revela al entrar en viewport.
+ *   - `data-home-reveal-media`  marco cuya imagen interior hace zoom de entrada.
+ *
+ * GSAP escribe `transform` inline mientras anima; como las tarjetas e imágenes
+ * también reaccionan al hover por CSS, aquí se apaga su `transition` durante el
+ * tween y se limpia al terminar (`clearProps`), para que la entrada y el hover
+ * convivan sin pelearse por la misma propiedad.
+ */
+
+/**
+ * ¿El visitante pidió movimiento reducido? Fuente única de la decisión.
+ */
+function prefersReducedMotion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** Estado inicial compartido: aparece deslizándose un poco desde abajo. */
+const HOME_REVEAL_FROM = { autoAlpha: 0, y: 28 };
+const HOME_REVEAL_TO = { autoAlpha: 1, y: 0, duration: 0.7, ease: 'power3.out' };
+
+/** Zoom de entrada del marco de imagen: de un poco más grande a su tamaño real. */
+const HOME_MEDIA_FROM = { scale: 1.14 };
+const HOME_MEDIA_TO = { scale: 1, duration: 1.2, ease: 'power2.out' };
+
+/**
+ * Marco de imagen de un elemento: puede ser el propio elemento
+ * (`data-home-reveal-media` en la misma etiqueta) o uno interior.
+ */
+function homeMediaFrame(element) {
+    return element.matches('[data-home-reveal-media]')
+        ? element
+        : element.querySelector('[data-home-reveal-media]');
+}
+
+/**
+ * Revela un elemento dentro de una línea de tiempo. Neutraliza antes su
+ * `transition` de CSS y la devuelve al terminar (`clearProps`).
+ */
+function addHomeReveal(timeline, element, position) {
+    gsap.set(element, { transition: 'none' });
+
+    timeline.fromTo(
+        element,
+        HOME_REVEAL_FROM,
+        { ...HOME_REVEAL_TO, clearProps: 'transform,transition' },
+        position,
+    );
+}
+
+/**
+ * Hace el zoom de entrada de la primera imagen del marco indicado, si existe.
+ */
+function addHomeMediaZoom(timeline, frame, position) {
+    const image = frame ? frame.querySelector('img') : null;
+
+    if (!image) {
+        return;
+    }
+
+    gsap.set(image, { transition: 'none' });
+
+    timeline.fromTo(
+        image,
+        HOME_MEDIA_FROM,
+        { ...HOME_MEDIA_TO, clearProps: 'transform,transition' },
+        position,
+    );
+}
+
+/**
+ * Entrada escalonada de un contenedor `data-home-stagger`.
+ */
+function initHomeStagger(container) {
+    const items = Array.from(container.children).filter((child) => child.matches('[data-home-reveal]'));
+
+    if (items.length === 0) {
+        return;
+    }
+
+    const timeline = gsap.timeline({
+        scrollTrigger: { trigger: container, start: 'top 82%', once: true },
+    });
+
+    items.forEach((item, index) => {
+        const position = index * 0.09;
+
+        addHomeReveal(timeline, item, position);
+        addHomeMediaZoom(timeline, homeMediaFrame(item), position);
+    });
+}
+
+/**
+ * Entrada suelta para los títulos y bloques que no viven en un stagger.
+ */
+function initHomeReveal(element) {
+    const timeline = gsap.timeline({
+        scrollTrigger: { trigger: element, start: 'top 88%', once: true },
+    });
+
+    addHomeReveal(timeline, element, 0);
+    addHomeMediaZoom(timeline, homeMediaFrame(element), 0);
+}
+
+/**
+ * Arranca la coreografía del home posterior al hero. Sin contenedor propio, o
+ * con movimiento reducido, no hace nada: el contenido queda tal como lo pintó
+ * el servidor.
+ */
+function initHomeAnimations() {
+    const root = document.querySelector('[data-home-body]');
+
+    if (!root || prefersReducedMotion()) {
+        return;
+    }
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    root.querySelectorAll('[data-home-stagger]').forEach((container) => initHomeStagger(container));
+
+    root.querySelectorAll('[data-home-reveal]').forEach((element) => {
+        const parent = element.parentElement;
+
+        // Los hijos directos de un stagger ya entran en su línea de tiempo.
+        if (parent && parent.matches('[data-home-stagger]')) {
+            return;
+        }
+
+        initHomeReveal(element);
+    });
+
+    // Las imágenes del storefront llegan en diferido y cambian la altura de la
+    // página: al terminar la carga se recalculan los puntos de disparo.
+    window.addEventListener('load', () => ScrollTrigger.refresh(), { once: true });
+}
+
+initHomeAnimations();

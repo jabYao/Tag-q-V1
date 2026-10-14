@@ -165,6 +165,111 @@ class StorefrontHomeTest extends TestCase
         return array_values(array_filter(preg_split('/\s+/', trim($element->getAttribute('class')))));
     }
 
+    /**
+     * URL de entrega que debe verse en el `src` renderizado de una imagen de
+     * Cloudinary: la transformación `f_webp,q_auto` se inserta justo después
+     * de `/image/upload/`. Se deriva aquí, de forma independiente al helper de
+     * la aplicación, para verificar el resultado real y no la implementación.
+     */
+    private function webpSrc(string $sourceUrl): string
+    {
+        return str_replace('/image/upload/', '/image/upload/f_webp,q_auto/', $sourceUrl);
+    }
+
+    /**
+     * HTML completo de la tarjeta del home del producto indicado, localizada
+     * por su `data-product-name`. Acota las aserciones al marcado propio de la
+     * tarjeta sin confundirlo con el resto de la página (categorías, cierre).
+     */
+    private function cardHtml(string $html, string $productName): string
+    {
+        $document = $this->documentOf($html);
+        $xpath = new \DOMXPath($document);
+        $card = $xpath->query(
+            '//*[@data-home-card][@data-product-name="'.$productName.'"]'
+        )->item(0);
+
+        $this->assertNotNull($card, "La tarjeta del producto {$productName} debe existir");
+
+        return (string) $document->saveHTML($card);
+    }
+
+    /**
+     * Texto de la insignia de estado (`data-home-card-stock`) de la tarjeta
+     * indicada, o `null` si esa tarjeta no muestra insignia.
+     */
+    private function cardBadge(string $html, string $productName): ?string
+    {
+        $document = $this->documentOf($html);
+        $xpath = new \DOMXPath($document);
+        $badge = $xpath->query(
+            '//*[@data-home-card][@data-product-name="'.$productName.'"]//*[@data-home-card-stock]'
+        )->item(0);
+
+        return $badge === null ? null : trim($badge->textContent);
+    }
+
+    /**
+     * Fichas `<a data-home-gallery-item>` de la galería bento, en orden.
+     *
+     * @return array<int, \DOMElement>
+     */
+    private function galleryItems(string $html): array
+    {
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        $items = [];
+        foreach ($xpath->query('//*[@data-home-gallery-item]') as $item) {
+            $items[] = $item;
+        }
+
+        return $items;
+    }
+
+    /**
+     * Hrefs de las fichas de la galería bento, en orden de aparición.
+     *
+     * @return array<int, string>
+     */
+    private function galleryHrefs(string $html): array
+    {
+        return array_map(
+            fn (\DOMElement $item): string => $item->getAttribute('href'),
+            $this->galleryItems($html),
+        );
+    }
+
+    /**
+     * Hrefs de producto de la galería: las categorías enlazan con `categoria=`.
+     *
+     * @return array<int, string>
+     */
+    private function galleryProductHrefs(string $html): array
+    {
+        return array_values(array_filter(
+            $this->galleryHrefs($html),
+            fn (string $href): bool => ! str_contains($href, 'categoria='),
+        ));
+    }
+
+    /**
+     * URLs de imagen renderizadas en la galería bento, en orden.
+     *
+     * @return array<int, string>
+     */
+    private function gallerySources(string $html): array
+    {
+        $sources = [];
+        foreach ($this->galleryItems($html) as $item) {
+            $image = $item->getElementsByTagName('img')->item(0);
+            if ($image instanceof \DOMElement) {
+                $sources[] = $image->getAttribute('src');
+            }
+        }
+
+        return $sources;
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Raíz `/`, shell compartido y enlace de marca
@@ -268,7 +373,7 @@ class StorefrontHomeTest extends TestCase
         $response = $this->get('/')->assertOk();
 
         foreach (self::CATEGORY_IMAGES as $slug => $imageUrl) {
-            $response->assertSee($imageUrl, false);
+            $response->assertSee($this->webpSrc($imageUrl), false);
         }
     }
 
@@ -419,17 +524,259 @@ class StorefrontHomeTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
+    | Galería bento: dos categorías al azar + tres productos del catálogo
+    |--------------------------------------------------------------------------
+    |
+    | La galería bento muestra hasta cinco fichas: dos categorías con imagen,
+    | elegidas al azar, y tres fotos de producto tomadas de TODO el catálogo
+    | activo (no solo los cuatro recientes del grid), sin repetir URLs, sin
+    | productos inactivos y excluyendo a Kairos Obama. Con pocos datos se
+    | muestran menos fichas; nunca se inventan.
+    */
+
+    public function test_la_galeria_bento_muestra_dos_categorias_y_tres_productos(): void
+    {
+        // Tres categorías con imagen: la galería elige dos distintas al azar.
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $this->category('Niños', 'ninos');
+        $category = $this->category('Accesorios', 'accesorios');
+
+        // Cinco productos activos con imagen: solo tres entran en la galería.
+        $products = [];
+        foreach (range(1, 5) as $position) {
+            $products[] = $this->product($category, [
+                'name' => "Galeria {$position}",
+                'slug' => "galeria-{$position}",
+                'imagenes' => ["https://cdn.example.com/galeria-{$position}.jpg"],
+            ]);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $this->assertCount(5, $this->galleryItems($html), 'La galería muestra cinco fichas: dos categorías y tres productos');
+
+        $hrefs = $this->galleryHrefs($html);
+        $categoryHrefs = array_values(array_filter(
+            $hrefs,
+            fn (string $href): bool => str_contains($href, 'categoria='),
+        ));
+        $productHrefs = $this->galleryProductHrefs($html);
+
+        $this->assertCount(2, $categoryHrefs, 'Dos fichas enlazan al filtro real del catálogo');
+        $this->assertCount(2, array_unique($categoryHrefs), 'Las dos categorías de la galería son distintas');
+        $this->assertCount(3, $productHrefs, 'Tres fichas enlazan al detalle de un producto');
+        $this->assertCount(3, array_unique($productHrefs), 'Los tres productos de la galería son distintos');
+
+        // Las categorías salen de las que existen con imagen asignada.
+        foreach ($categoryHrefs as $href) {
+            $this->assertContains($href, [
+                route('catalog.index', ['categoria' => 'caballero']),
+                route('catalog.index', ['categoria' => 'dama']),
+                route('catalog.index', ['categoria' => 'ninos']),
+            ], 'Cada categoría de la galería usa el slug real del filtro del catálogo');
+        }
+
+        // Cada ficha de producto enlaza a un producto activo con imagen real.
+        $expected = array_map(fn (Product $product): string => route('catalog.show', $product), $products);
+        foreach ($productHrefs as $href) {
+            $this->assertContains($href, $expected, 'Cada ficha de producto enlaza a un producto con imagen del catálogo');
+        }
+    }
+
+    public function test_la_galeria_bento_toma_productos_de_todo_el_catalogo_activo_no_solo_los_recientes(): void
+    {
+        // Dos categorías con imagen para las fichas de categoría.
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $category = $this->category('Accesorios', 'accesorios');
+
+        // Productos con imagen pero antiguos: el grid reciente no los muestra.
+        $older = [];
+        foreach (range(1, 3) as $position) {
+            $older[] = $this->product($category, [
+                'name' => "Catalogo Antiguo {$position}",
+                'slug' => "catalogo-antiguo-{$position}",
+                'imagenes' => ["https://cdn.example.com/antiguo-{$position}.jpg"],
+            ]);
+        }
+
+        // Cuatro productos recientes SIN imagen: llenan el grid pero no aportan
+        // ninguna foto a la galería.
+        foreach (range(1, 4) as $position) {
+            $this->product($category, [
+                'name' => "Reciente Sin Foto {$position}",
+                'slug' => "reciente-sin-foto-{$position}",
+                'imagenes' => null,
+            ]);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        // Las tres fichas de producto salen del catálogo completo: exactamente
+        // los productos antiguos con imagen, aunque no estén en el grid.
+        $expected = array_map(fn (Product $product): string => route('catalog.show', $product), $older);
+        $observed = $this->galleryProductHrefs($html);
+
+        sort($expected);
+        sort($observed);
+
+        $this->assertSame($expected, $observed, 'La galería saca las fotos de todo el catálogo activo, no solo de los recientes');
+        $this->assertCount(5, $this->galleryItems($html), 'Dos categorías más los tres productos con imagen del catálogo');
+    }
+
+    public function test_la_galeria_bento_excluye_inactivos_y_a_kairos_obama(): void
+    {
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $category = $this->category('Accesorios', 'accesorios');
+
+        // Únicos candidatos válidos: tres productos activos con imagen.
+        $allowed = [];
+        foreach (range(1, 3) as $position) {
+            $allowed[] = $this->product($category, [
+                'name' => "Galeria Activa {$position}",
+                'slug' => "galeria-activa-{$position}",
+                'imagenes' => ["https://cdn.example.com/activa-{$position}.jpg"],
+            ]);
+        }
+
+        // Inactivos con imagen: nunca entran, aun siendo recientes.
+        foreach (range(1, 3) as $position) {
+            $this->product($category, [
+                'name' => "Galeria Inactiva {$position}",
+                'slug' => "galeria-inactiva-{$position}",
+                'imagenes' => ["https://cdn.example.com/inactiva-{$position}.jpg"],
+                'is_active' => false,
+            ]);
+        }
+
+        // Kairos Obama: regla de negocio vigente, queda fuera de la galería.
+        $this->product($category, [
+            'name' => 'Kairos Obama',
+            'slug' => 'kairos-obama',
+            'imagenes' => ['https://cdn.example.com/kairos-obama.jpg'],
+        ]);
+
+        // Se repite el render para descartar que el filtro dependa del azar.
+        $observed = [];
+        for ($render = 0; $render < 5; $render++) {
+            $html = $this->get('/')->assertOk()->getContent();
+
+            $this->assertCount(5, $this->galleryItems($html));
+
+            $observed = array_merge($observed, $this->galleryProductHrefs($html));
+        }
+
+        $observed = array_values(array_unique($observed));
+        $allowedHrefs = array_map(fn (Product $product): string => route('catalog.show', $product), $allowed);
+
+        sort($observed);
+        sort($allowedHrefs);
+
+        $this->assertSame($allowedHrefs, $observed, 'La galería solo muestra productos activos que no sean Kairos Obama');
+    }
+
+    public function test_la_galeria_bento_no_repite_la_foto_de_categoria_ni_entre_productos(): void
+    {
+        // Solo dos categorías con imagen: ambas entran siempre.
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $category = $this->category('Accesorios', 'accesorios');
+
+        // Producto que reutiliza la foto de una categoría: se descarta.
+        $duplicated = $this->product($category, [
+            'name' => 'Foto Repetida',
+            'slug' => 'foto-repetida',
+            'imagenes' => [self::CATEGORY_IMAGES['caballero']],
+        ]);
+
+        foreach (range(1, 3) as $position) {
+            $this->product($category, [
+                'name' => "Galeria Unica {$position}",
+                'slug' => "galeria-unica-{$position}",
+                'imagenes' => ["https://cdn.example.com/unica-{$position}.jpg"],
+            ]);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $sources = $this->gallerySources($html);
+
+        $this->assertCount(5, $sources, 'Dos categorías y tres productos con fotos distintas');
+        $this->assertSame(array_values(array_unique($sources)), $sources, 'Ninguna ficha repite la URL de su imagen');
+
+        // La foto de la categoría aparece una sola vez: la ficha de categoría.
+        $this->assertSame(
+            1,
+            count(array_keys($sources, $this->webpSrc(self::CATEGORY_IMAGES['caballero']), true)),
+            'La foto de categoría no se repite como producto',
+        );
+        $this->assertNotContains(route('catalog.show', $duplicated), $this->galleryProductHrefs($html));
+    }
+
+    public function test_la_galeria_bento_muestra_menos_fichas_si_no_hay_datos_suficientes(): void
+    {
+        // Catálogo vacío: no se renderiza la galería.
+        $this->get('/')->assertOk()->assertDontSee('data-home-gallery', false);
+
+        // Una sola categoría con imagen: una única ficha.
+        $this->category('Caballero', 'caballero');
+        $this->assertCount(1, $this->galleryItems($this->get('/')->assertOk()->getContent()));
+
+        // Un único producto activo con imagen se suma: dos fichas.
+        $category = $this->category('Accesorios', 'accesorios');
+        $this->product($category, [
+            'name' => 'Unico Con Foto',
+            'slug' => 'unico-con-foto',
+            'imagenes' => ['https://cdn.example.com/unico.jpg'],
+        ]);
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $this->assertCount(2, $this->galleryItems($html), 'Con pocos datos se muestran menos fichas');
+        $this->assertCount(1, $this->galleryProductHrefs($html));
+    }
+
+    public function test_la_galeria_bento_varia_los_productos_en_cada_render(): void
+    {
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $category = $this->category('Accesorios', 'accesorios');
+
+        foreach (range(1, 8) as $position) {
+            $this->product($category, [
+                'name' => "Galeria Variable {$position}",
+                'slug' => "galeria-variable-{$position}",
+                'imagenes' => ["https://cdn.example.com/variable-{$position}.jpg"],
+            ]);
+        }
+
+        $observed = [];
+        for ($render = 0; $render < 8; $render++) {
+            $observed = array_merge($observed, $this->galleryProductHrefs(
+                $this->get('/')->assertOk()->getContent()
+            ));
+        }
+
+        $this->assertGreaterThan(
+            3,
+            count(array_unique($observed)),
+            'La galería debe variar los tres productos en cada render',
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Convenciones de tarjeta: imagen con fallback, COP y disponibilidad
     |--------------------------------------------------------------------------
     */
 
-    public function test_las_tarjetas_del_home_conservan_imagen_cop_y_disponibilidad(): void
+    public function test_las_tarjetas_del_home_conservan_imagen_cop_y_muestran_la_insignia_de_estado(): void
     {
         $category = $this->category();
 
         $this->product($category, [
-            'name' => 'Pulso Disponible',
-            'slug' => 'pulso-disponible',
+            'name' => 'Pulso Nuevo',
+            'slug' => 'pulso-nuevo',
             'precio' => 1290000,
             'stock' => 3,
             'imagenes' => ['https://cdn.example.com/pulso.jpg'],
@@ -441,13 +788,57 @@ class StorefrontHomeTest extends TestCase
             'stock' => 0,
         ]);
 
-        $this->get('/')->assertOk()
-            ->assertSee('https://cdn.example.com/pulso.jpg', false)
+        $response = $this->get('/')->assertOk();
+
+        // Imagen real (o fallback) y precio COP se conservan.
+        $response->assertSee('https://cdn.example.com/pulso.jpg', false)
             ->assertSee('$ 1.290.000 COP')
-            ->assertSee('Disponible: 3')
             ->assertSee('$ 89.000 COP')
-            ->assertSee('Agotado')
             ->assertSee('Sin imagen');
+
+        // El recuento de disponibilidad ya no se muestra: lo reemplaza la
+        // insignia de estado de la tarjeta.
+        $response->assertDontSee('Disponible: 3')
+            ->assertDontSee('Disponible:');
+
+        $this->assertSame('Nuevo', $this->cardBadge($response->getContent(), 'Pulso Nuevo'));
+        $this->assertSame('Agotado', $this->cardBadge($response->getContent(), 'Pulso Agotado'));
+    }
+
+    public function test_las_tarjetas_del_home_ofrecen_la_accion_compacta_de_bolsa(): void
+    {
+        $category = $this->category();
+
+        $this->product($category, [
+            'name' => 'Pulso Compacto',
+            'slug' => 'pulso-compacto',
+            'stock' => 4,
+        ]);
+        $this->product($category, [
+            'name' => 'Pulso Sin Stock',
+            'slug' => 'pulso-sin-stock',
+            'stock' => 0,
+        ]);
+
+        $response = $this->get('/')->assertOk();
+
+        // Producto disponible: acción compacta con nombre accesible y sin selector.
+        $available = $this->cardHtml($response->getContent(), 'Pulso Compacto');
+        $this->assertStringContainsString('data-variant="compact"', $available);
+        $this->assertStringContainsString('data-add-to-cart="true"', $available);
+        $this->assertStringContainsString('aria-label="Agregar Pulso Compacto al carrito"', $available);
+        $this->assertStringContainsString('data-add-to-cart-compact-plus', $available);
+        $this->assertStringContainsString('bg-white', $available);
+        $this->assertStringNotContainsString('data-nav-icon="bag"', $available);
+        $this->assertStringNotContainsString('wire:model="quantity"', $available);
+        $this->assertStringNotContainsString('type="number"', $available);
+
+        // Agotado: el mismo control queda deshabilitado y lo anuncia.
+        $soldOut = $this->cardHtml($response->getContent(), 'Pulso Sin Stock');
+        $this->assertStringContainsString('data-variant="compact"', $soldOut);
+        $this->assertStringContainsString('data-add-to-cart="false"', $soldOut);
+        $this->assertStringContainsString('aria-label="Pulso Sin Stock no disponible"', $soldOut);
+        $this->assertStringContainsString('disabled', $soldOut);
     }
 
     /*
@@ -487,8 +878,9 @@ class StorefrontHomeTest extends TestCase
     |
     | El home debe leerse como una portada de tienda de relojes de pulso:
     | hero de introducción, categorías, productos recientes y un cierre con
-    | accesos a los flujos existentes. Solo utilidades estáticas de Tailwind:
-    | sin animaciones, transiciones, JavaScript nuevo ni imágenes externas.
+    | accesos a los flujos existentes. Sin scripts en el marcado ni promesas
+    | comerciales inventadas: los datos salen del catálogo real y la
+    | presentación se resuelve con utilidades de Tailwind y el CSS del tema.
     */
 
     public function test_el_home_presenta_un_hero_editorial_y_secciones_distintas(): void
@@ -534,15 +926,23 @@ class StorefrontHomeTest extends TestCase
             ->assertSee('data-home-card-specs', false)
             ->assertSee('data-home-card-action', false);
 
-        // Solo datos reales del producto: nombre, categoría, atributos, precio COP y stock.
-        $response->assertSee('Pulso Editorial')
-            ->assertSee('Caballero')
-            ->assertSee('Marca Existente')
-            ->assertSee('Acero inoxidable')
-            ->assertSee('Automático')
-            ->assertSee('https://cdn.example.com/pulso-editorial.jpg', false)
-            ->assertSee('$ 1.290.000 COP')
-            ->assertSee('Disponible: 2');
+        $card = $this->cardHtml($response->getContent(), 'Pulso Editorial');
+
+        // Solo datos reales del producto: nombre, atributos, precio COP e insignia.
+        $this->assertStringContainsString('Pulso Editorial', $card);
+        $this->assertStringContainsString('Marca Existente', $card);
+        $this->assertStringContainsString('Automático', $card);
+        $this->assertStringContainsString('https://cdn.example.com/pulso-editorial.jpg', $card);
+        $this->assertStringContainsString('$ 1.290.000 COP', $card);
+
+        // La tarjeta del home ya no muestra el material del pulso ni la categoría.
+        $this->assertStringNotContainsString('Acero inoxidable', $card);
+        $this->assertStringNotContainsString('Caballero', $card);
+
+        // La insignia de estado reemplaza al recuento de disponibilidad y no usa bordes redondeados.
+        $this->assertSame('Nuevo', $this->cardBadge($response->getContent(), 'Pulso Editorial'));
+        $this->assertDoesNotMatchRegularExpression('/data-home-card-stock[^>]*rounded-full/', $card);
+        $response->assertDontSee('Disponible: 2');
     }
 
     public function test_el_home_sin_productos_conserva_las_secciones_sin_tarjetas_inventadas(): void
@@ -606,9 +1006,10 @@ class StorefrontHomeTest extends TestCase
         // Las tres diapositivas, en orden, con imagen y texto alternativo reales.
         $previousPosition = -1;
         foreach (self::HERO_SLIDE_IMAGES as $image) {
-            $position = strpos($main, $image['src']);
+            $expectedSrc = $this->webpSrc($image['src']);
+            $position = strpos($main, $expectedSrc);
 
-            $this->assertNotFalse($position, "Falta la imagen del hero {$image['src']}");
+            $this->assertNotFalse($position, "Falta la imagen del hero {$expectedSrc}");
             $this->assertGreaterThan(
                 $previousPosition,
                 $position,
@@ -625,8 +1026,15 @@ class StorefrontHomeTest extends TestCase
 
         // El texto y las acciones del hero se conservan sobre las imágenes.
         $this->assertStringContainsString('data-home-hero', $main);
-        $this->assertStringContainsString('data-home-hero-eyebrow', $main);
+        $this->assertStringNotContainsString('data-home-hero-eyebrow', $main);
+        $this->assertStringNotContainsString('TAG Q · DEPORTIVOS', $main);
         $this->assertStringContainsString('data-home-hero-actions', $main);
+        $this->assertSame(3, substr_count($main, 'text-[60px]'), 'Todos los titulares del hero usan 60px');
+        $this->assertGreaterThanOrEqual(3, substr_count($main, 'font-bebas'), 'Los títulos posteriores al hero usan Bebas Neue');
+        $this->assertStringNotContainsString('Explora el catálogo por tipo de pieza.', $main);
+        $this->assertStringNotContainsString('Las últimas piezas activas del catálogo.', $main);
+        $this->assertStringNotContainsString('Un vistazo a las piezas del catálogo.', $main);
+        $this->assertStringNotContainsString('Revisa la disponibilidad actual, compara precios', $main);
         $this->assertStringContainsString('<h1', $main);
         $this->assertStringContainsString('Precisión que se nota en cada vuelta', $main);
         $response->assertSee('href="'.route('catalog.index').'"', false)
@@ -650,7 +1058,12 @@ class StorefrontHomeTest extends TestCase
         // Las únicas imágenes del hero son las tres confirmadas de Cloudinary.
         preg_match_all('/<img[^>]+src="([^"]+)"/', $hero, $matches);
 
-        $this->assertSame(array_column(self::HERO_SLIDE_IMAGES, 'src'), $matches[1]);
+        $expectedSources = array_map(
+            fn (string $sourceUrl): string => $this->webpSrc($sourceUrl),
+            array_column(self::HERO_SLIDE_IMAGES, 'src'),
+        );
+
+        $this->assertSame($expectedSources, $matches[1]);
 
         // Flechas reales con nombre accesible (no solo decoración) y puntos.
         $this->assertStringContainsString('aria-label="Imagen anterior"', $hero);
@@ -658,22 +1071,230 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringContainsString('swiper-pagination', $hero);
     }
 
-    public function test_el_home_usa_solo_utilidades_estaticas_y_no_inventa_promesas_comerciales(): void
+    public function test_el_home_no_inyecta_scripts_ni_inventa_promesas_comerciales(): void
     {
         $this->product($this->category());
 
         $response = $this->get('/')->assertOk();
         $main = mb_strtolower($this->mainContent($response->getContent()));
 
-        $this->assertStringNotContainsString('animate-', $main);
-        $this->assertStringNotContainsString('transition', $main);
-        $this->assertStringNotContainsString('duration-', $main);
         $this->assertStringNotContainsString('<script', $main);
 
         // Sin afirmaciones comerciales fabricadas (descuentos, garantías, envíos).
         $this->assertStringNotContainsString('descuento', $main);
         $this->assertStringNotContainsString('garantía', $main);
         $this->assertStringNotContainsString('gratis', $main);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Animaciones modernas del home posterior al hero (GSAP + reduced-motion)
+    |--------------------------------------------------------------------------
+    |
+    | La portada posterior al hero entra con GSAP desde `resources/js/app.js`
+    | sobre ganchos declarativos (`data-home-stagger`, `data-home-reveal`,
+    | `data-home-reveal-media`, `data-home-hover`). El hero queda fuera: conserva
+    | su carrusel Swiper y su cortina propias. El marcado del servidor no oculta
+    | nada (sin `hidden` ni `opacity-0` en los ganchos), así que sin JavaScript
+    | la portada se lee igual; con `prefers-reduced-motion: reduce` el JS no
+    | arranca ninguna animación y el CSS deja la página quieta.
+    */
+
+    /**
+     * Sección del hero del home (primer `<section>` de `<main>`), acotada a su
+     * cierre, para comprobar que las animaciones nuevas no la tocan.
+     */
+    private function heroHtml(string $html): string
+    {
+        $main = $this->mainContent($html);
+        $start = strpos($main, 'data-home-hero');
+        $end = $start === false ? false : strpos($main, '</section>', $start);
+
+        if ($start === false || $end === false) {
+            $this->fail('El home debe renderizar la sección del hero');
+        }
+
+        return substr($main, $start, $end - $start);
+    }
+
+    public function test_el_home_expone_ganchos_de_animacion_solo_despues_del_hero(): void
+    {
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $category = $this->category('Accesorios', 'accesorios');
+
+        foreach (range(1, 3) as $position) {
+            $this->product($category, [
+                'name' => "Animado {$position}",
+                'slug' => "animado-{$position}",
+                'imagenes' => ["https://cdn.example.com/animado-{$position}.jpg"],
+            ]);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        // El hero conserva su carrusel y NO recibe ningún gancho nuevo: su
+        // coreografía (Swiper + cortina) se queda como está.
+        $hero = $this->heroHtml($html);
+        $this->assertStringContainsString('data-home-hero-slider', $hero);
+        foreach (['data-home-stagger', 'data-home-reveal', 'data-home-hover'] as $hook) {
+            $this->assertStringNotContainsString($hook, $hero, "El hero no debe recibir {$hook}");
+        }
+
+        // Contenedores con entrada escalonada: categorías, productos, cierre y
+        // galería bento.
+        $this->assertGreaterThanOrEqual(
+            4,
+            $xpath->query('//*[@data-home-stagger]')->length,
+            'Cada bloque posterior al hero debe entrar escalonado',
+        );
+
+        // Cada tarjeta de producto se revela, se eleva al hover y declara el
+        // marco de imagen que hace el zoom de entrada.
+        $cards = $xpath->query('//*[@data-home-card]');
+        $this->assertSame(3, $cards->length, 'Las tres tarjetas de producto están en el home');
+
+        foreach ($cards as $card) {
+            $this->assertTrue($card->hasAttribute('data-home-reveal'), 'La tarjeta se revela al scroll');
+            $this->assertTrue($card->hasAttribute('data-home-hover'), 'La tarjeta tiene hover acotado');
+            $this->assertSame(
+                1,
+                $xpath->query('.//*[@data-home-reveal-media]', $card)->length,
+                'La tarjeta declara el marco de imagen que hace zoom',
+            );
+        }
+
+        // Tarjetas de categoría con foto: los mismos ganchos en su enlace.
+        $categoryImages = $xpath->query('//*[@data-category-image]');
+        $this->assertSame(2, $categoryImages->length, 'Caballero y Dama tienen imagen asignada');
+
+        foreach ($categoryImages as $image) {
+            $card = $image->parentNode;
+            $this->assertInstanceOf(\DOMElement::class, $card);
+            $this->assertTrue($card->hasAttribute('data-home-reveal'));
+            $this->assertTrue($card->hasAttribute('data-home-reveal-media'));
+            $this->assertTrue($card->hasAttribute('data-home-hover'));
+        }
+
+        // Fichas de la galería bento: revelado, zoom y hover.
+        $galleryItems = $xpath->query('//*[@data-home-gallery-item]');
+        $this->assertGreaterThan(0, $galleryItems->length, 'La galería bento se renderiza con datos');
+
+        foreach ($galleryItems as $item) {
+            $this->assertTrue($item->hasAttribute('data-home-reveal'));
+            $this->assertTrue($item->hasAttribute('data-home-reveal-media'));
+            $this->assertTrue($item->hasAttribute('data-home-hover'));
+        }
+
+        // El cierre revela su titular y su bloque de acciones.
+        $closing = $xpath->query('//*[@data-home-closing]')->item(0);
+        $this->assertNotNull($closing, 'El cierre editorial existe');
+        $this->assertSame(
+            2,
+            $xpath->query('.//*[@data-home-reveal]', $closing)->length,
+            'El cierre revela titular y acciones',
+        );
+
+        // Los títulos posteriores al hero entran con reveal.
+        foreach (['data-home-categories', 'data-home-products', 'data-home-gallery'] as $section) {
+            $node = $xpath->query('//*[@'.$section.']')->item(0);
+            $this->assertNotNull($node, "El home renderiza {$section}");
+            $this->assertGreaterThan(
+                0,
+                $xpath->query('.//*[@data-home-reveal]', $node)->length,
+                "{$section} declara elementos que se revelan al scroll",
+            );
+        }
+    }
+
+    /**
+     * Los ganchos de animación no llegan ocultos desde el servidor: sin
+     * JavaScript la portada se lee y funciona completa. Nada de `hidden` ni de
+     * `opacity-0` en el marcado de los reveals.
+     */
+    public function test_los_ganchos_de_animacion_no_ocultan_contenido_sin_javascript(): void
+    {
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $category = $this->category('Accesorios', 'accesorios');
+
+        foreach (range(1, 3) as $position) {
+            $this->product($category, [
+                'name' => "Visible {$position}",
+                'slug' => "visible-{$position}",
+                'imagenes' => ["https://cdn.example.com/visible-{$position}.jpg"],
+            ]);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        $hooks = $xpath->query('//*[@data-home-reveal or @data-home-reveal-media or @data-home-hover]');
+        $this->assertGreaterThan(0, $hooks->length, 'El home declara ganchos de animación');
+
+        foreach ($hooks as $node) {
+            $this->assertFalse(
+                $node->hasAttribute('hidden'),
+                'Ningún gancho de animación llega oculto desde el servidor',
+            );
+            $this->assertNotContains(
+                'opacity-0',
+                $this->classesOf($node),
+                'Ningún gancho de animación llega invisible por CSS',
+            );
+        }
+
+        // El contenido posterior al hero sigue en el HTML, no solo en el JS.
+        foreach (['Categorías', 'Productos recientes', 'Explora toda la colección', 'La colección en imágenes'] as $copy) {
+            $this->assertStringContainsString($copy, $html, "El home sirve \"{$copy}\" desde el servidor");
+        }
+    }
+
+    /**
+     * Contrato técnico: una sola coreografía con GSAP + ScrollTrigger, salida
+     * temprana con movimiento reducido y baseline CSS que no oculta nada.
+     */
+    public function test_las_animaciones_del_home_usan_gsap_y_respetan_el_movimiento_reducido(): void
+    {
+        $js = file_get_contents(base_path('resources/js/app.js'));
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertNotFalse($js, 'Debe existir resources/js/app.js');
+        $this->assertNotFalse($css, 'Debe existir resources/css/app.css');
+
+        // GSAP + ScrollTrigger: `gsap` ya es dependencia de package.json.
+        foreach ([
+            "from 'gsap'",
+            "from 'gsap/ScrollTrigger'",
+            'ScrollTrigger',
+            'data-home-body',
+            'data-home-stagger',
+            'data-home-reveal-media',
+            'autoAlpha',
+        ] as $snippet) {
+            $this->assertStringContainsString($snippet, $js, "app.js debe declarar {$snippet}");
+        }
+
+        // Movimiento reducido: detección explícita y salida temprana ANTES de
+        // aplicar cualquier estado inicial que oculte contenido.
+        $this->assertStringContainsString('prefers-reduced-motion: reduce', $js);
+        $this->assertMatchesRegularExpression(
+            '/if\s*\(\s*!root\s*\|\|\s*prefersReducedMotion\(\)\s*\)\s*\{\s*return;/s',
+            $js,
+            'La init debe salir sin animar cuando no hay contenedor o hay movimiento reducido',
+        );
+
+        // El carrusel del hero sigue intacto: Swiper y su cortina, no GSAP.
+        $this->assertStringContainsString('data-home-hero-slider', $js);
+        $this->assertStringContainsString('slideChange', $js);
+
+        // CSS: baseline visible (nada se oculta) y anulación con movimiento
+        // reducido de los desplazamientos y transiciones del home.
+        $this->assertStringContainsString('@media (prefers-reduced-motion: reduce)', $css);
+        $this->assertStringContainsString('@media (hover: hover) and (prefers-reduced-motion: no-preference)', $css);
+        $this->assertStringContainsString('data-home-hover', $css);
+        $this->assertStringContainsString('data-home-reveal', $css);
     }
 
     /*
@@ -864,13 +1485,14 @@ class StorefrontHomeTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | Texto por diapositiva y cortina de transición (T22)
+    | Texto por diapositiva (T22, sin cortina)
     |--------------------------------------------------------------------------
     |
-    | Cada imagen del carrusel lleva su propio bloque de texto (ceja, titular y
-    | cuerpo) y una cortina avanza a color por diapositiva para tapar el cambio.
-    | Sin JS solo se ve el texto de la primera diapositiva: los otros dos viajan
-    | con `hidden` para que el servidor no muestre textos superpuestos.
+    | Cada imagen del carrusel lleva su propio bloque de texto (titular y
+    | cuerpo). Sin JS solo se ve el texto de la primera diapositiva: los otros
+    | dos viajan con `hidden` para que el servidor no muestre textos
+    | superpuestos. La antigua cortina de color y su animación se eliminaron
+    | por pedido del dueño; el copy cambia directamente al cambiar de slide.
     */
 
     public function test_cada_imagen_del_hero_tiene_su_texto_y_solo_el_primero_visible(): void
@@ -911,35 +1533,205 @@ class StorefrontHomeTest extends TestCase
         $this->assertSame(3, $xpath->query('//*[@data-home-hero-actions]')->length, 'Cada diapositiva repite las acciones');
     }
 
-    public function test_el_hero_expone_la_cortina_de_transicion_con_su_color_por_diapositiva(): void
+    public function test_el_hero_no_renderiza_la_cortina_de_transicion_ni_su_cambio_de_color(): void
     {
         $html = $this->get('/')->assertOk()->getContent();
         $xpath = new \DOMXPath($this->documentOf($html));
 
-        $curtain = $xpath->query('//*[@data-home-hero-curtain]')->item(0);
-        $this->assertNotNull($curtain, 'La cortina de transición del hero existe');
+        // Regresión: la cortina y su lista de colores por diapositiva ya no
+        // existen en el marcado.
+        $this->assertNull($xpath->query('//*[@data-home-hero-curtain]')->item(0), 'El hero ya no renderiza la cortina');
+        $this->assertNull($xpath->query('//*[@data-home-hero-curtain-colors]')->item(0), 'El hero ya no declara colores de cortina');
+        $this->assertStringNotContainsString('data-home-hero-curtain', $html, 'El HTML no contiene restos de la cortina');
 
-        $classes = preg_split('/\s+/', trim((string) $curtain->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
-        $this->assertContains('pointer-events-none', $classes, 'La cortina no captura clics ni arrastre');
-        $this->assertContains('z-[4]', $classes, 'La cortina tapa el texto y queda bajo los controles de Swiper (z-index 10)');
+        // El carrusel y su copy por diapositiva siguen intactos.
+        $this->assertStringContainsString('data-home-hero-slider', $html, 'El hero sigue siendo el carrusel');
+        $this->assertStringContainsString('data-home-hero-swiper', $html, 'El contenedor Swiper sigue');
+        $this->assertStringContainsString('data-home-hero-prev', $html, 'La flecha anterior sigue');
+        $this->assertStringContainsString('data-home-hero-next', $html, 'La flecha siguiente sigue');
+        $this->assertStringContainsString('data-home-hero-pagination', $html, 'La paginación sigue');
+        $this->assertStringContainsString('data-home-hero-autoplay="5000"', $html, 'El autoplay sigue declarado');
+        $this->assertSame(3, $xpath->query('//*[@data-home-hero-copy]')->length, 'El copy por diapositiva sigue');
 
-        // Un color por diapositiva, declarado en el marcado.
-        $colors = $curtain->getAttribute('data-home-hero-curtain-colors');
-        $this->assertSame('#0b3d3b,#5a1f2b,#8a5a12', $colors);
-        $this->assertCount(3, array_filter(array_map('trim', explode(',', $colors))), 'Tres colores, uno por diapositiva');
-
-        // Relación de capas: la cortina (4) cubre el texto (3), que cubre el velo (2).
+        // Relación de capas vigente: velo (2) < texto (3) < controles de
+        // Swiper (10), sin la capa que ocupaba la cortina.
         $overlay = $xpath->query('//*[@data-home-hero-overlay]')->item(0);
+        $this->assertNotNull($overlay, 'El bloque de texto del hero existe');
         $overlayClasses = preg_split('/\s+/', trim((string) $overlay->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
-        $this->assertContains('z-[3]', $overlayClasses, 'El texto sigue bajo la cortina');
+        $this->assertContains('z-[3]', $overlayClasses, 'El texto sigue sobre el velo y bajo los controles');
 
-        // Contrato de JS: la cortina se dispara al cambiar de diapositiva, con
-        // el índice real, lee sus colores, anima y respeta reduced-motion.
+        // Contrato de JS: sigue actualizando el copy en `slideChange` con el
+        // índice real y respetando reduced-motion, pero ya no ejecuta Web
+        // Animations ni lee la cortina.
         $js = file_get_contents(base_path('resources/js/app.js'));
         $this->assertNotFalse($js, 'Debe existir resources/js/app.js');
 
-        foreach (['slideChange', 'realIndex', 'data-home-hero-curtain', 'reducedMotion.matches', 'animate(', "from 'swiper'"] as $snippet) {
+        foreach (['slideChange', 'realIndex', 'reducedMotion.matches', "from 'swiper'"] as $snippet) {
             $this->assertStringContainsString($snippet, $js, "app.js debe seguir conteniendo {$snippet}");
+        }
+
+        foreach (['data-home-hero-curtain', 'data-home-hero-curtain-colors', 'runCurtain', 'animate('] as $snippet) {
+            $this->assertStringNotContainsString($snippet, $js, "app.js ya no debe contener {$snippet}");
+        }
+
+        $css = file_get_contents(base_path('resources/css/app.css'));
+        $this->assertNotFalse($css, 'Debe existir resources/css/app.css');
+        $this->assertStringNotContainsString('data-home-hero-curtain', $css, 'El CSS ya no define la cortina');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Animación editorial del hero (T23)
+    |--------------------------------------------------------------------------
+    |
+    | El dueño aprobó añadir una entrada sutil al hero existente: la imagen
+    | activa hace un zoom suave (1.04 → 1) con un desvanecido leve y el copy
+    | activo entra por capas —titular, cuerpo y acciones— con un escalonado
+    | corto (≈100 ms y ≈180 ms). El carrusel Swiper, sus flechas y sus puntos
+    | no cambian; la cortina de color sigue fuera y con
+    | `prefers-reduced-motion: reduce` el copy cambia de inmediato, sin zoom ni
+    | escalonado.
+    */
+
+    public function test_el_hero_expone_los_ganchos_de_la_animacion_editorial(): void
+    {
+        $html = $this->get('/')->assertOk()->getContent();
+        $hero = $this->heroHtml($html);
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        // Cuatro capas por diapositiva: imagen, titular, cuerpo y acciones.
+        foreach (['photo', 'title', 'body', 'actions'] as $hook) {
+            $this->assertSame(
+                3,
+                $xpath->query('//*[@data-home-hero-'.$hook.']')->length,
+                "Cada diapositiva del hero declara data-home-hero-{$hook}",
+            );
+        }
+
+        // El zoom vive en la propia foto de la diapositiva.
+        foreach ($xpath->query('//*[@data-home-hero-photo]') as $photo) {
+            $this->assertSame('img', $photo->nodeName, 'El gancho de zoom vive en la imagen del slide');
+        }
+
+        // Cada bloque de copy agrupa titular, cuerpo y acciones.
+        $copies = $xpath->query('//*[@data-home-hero-copy]');
+        $this->assertSame(3, $copies->length, 'El copy por diapositiva sigue existiendo');
+
+        foreach ($copies as $copy) {
+            $this->assertSame(1, $xpath->query('.//*[@data-home-hero-title]', $copy)->length, 'Cada copy tiene su titular');
+            $this->assertNotNull($xpath->query('.//p[@data-home-hero-body]', $copy)->item(0), 'El cuerpo del copy es un párrafo');
+            $this->assertSame(1, $xpath->query('.//*[@data-home-hero-actions]', $copy)->length, 'Cada copy repite las acciones');
+        }
+
+        // La animación es editorial: sin cortina de color ni capas nuevas.
+        $this->assertStringNotContainsString('data-home-hero-curtain', $hero, 'El hero no reintroduce la cortina');
+    }
+
+    public function test_la_animacion_editorial_del_hero_usa_gsap_con_zoom_y_escalonado(): void
+    {
+        $js = file_get_contents(base_path('resources/js/app.js'));
+        $this->assertNotFalse($js, 'Debe existir resources/js/app.js');
+
+        // Ganchos del hero conectados a la coreografía.
+        foreach ([
+            'data-home-hero-slider',
+            'data-home-hero-photo',
+            'data-home-hero-copy',
+            'data-home-hero-title',
+            'data-home-hero-body',
+            'data-home-hero-actions',
+        ] as $hook) {
+            $this->assertStringContainsString($hook, $js, "app.js debe conectar {$hook}");
+        }
+
+        // Zoom de la imagen activa: 1.04 → 1.
+        $this->assertMatchesRegularExpression(
+            '/HERO_MEDIA_ZOOM_START\s*=\s*1\.04/',
+            $js,
+            'El zoom de entrada arranca en 1.04',
+        );
+        $this->assertMatchesRegularExpression(
+            '/HERO_MEDIA_ZOOM_END\s*=\s*1(?![\d.])/',
+            $js,
+            'El zoom de entrada termina en su tamaño real',
+        );
+
+        // Escalonado del copy: titular, cuerpo y acciones a 0, 100 y 180 ms.
+        $this->assertMatchesRegularExpression(
+            '/HERO_COPY_STAGGER\s*=\s*\[\s*0\s*,\s*0\.1\s*,\s*0\.18\s*\]/',
+            $js,
+            'El copy entra escalonado a 0 ms, 100 ms y 180 ms',
+        );
+
+        // GSAP es la herramienta; el copy se decide por el índice real de Swiper.
+        $this->assertStringContainsString('gsap.timeline(', $js, 'La entrada del hero usa GSAP');
+        $this->assertStringContainsString("swiper.on('slideChange'", $js, 'La entrada se dispara en cada cambio de slide');
+        $this->assertStringContainsString('swiper.realIndex', $js, 'El copy usa el índice real de Swiper');
+
+        // El copy inactivo se retira antes de entrar el nuevo: sin solaparse.
+        $this->assertStringContainsString('copy.hidden = !active;', $js, 'Solo el copy activo queda visible');
+    }
+
+    public function test_la_animacion_del_hero_respeta_el_movimiento_reducido(): void
+    {
+        $js = file_get_contents(base_path('resources/js/app.js'));
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertNotFalse($js, 'Debe existir resources/js/app.js');
+        $this->assertNotFalse($css, 'Debe existir resources/css/app.css');
+
+        // Sin movimiento: el JS cambia el copy sin zoom ni escalonado.
+        $this->assertMatchesRegularExpression(
+            '/if\s*\(\s*reducedMotion\.matches\s*\)\s*\{/s',
+            $js,
+            'La entrada del hero se salta la animación con movimiento reducido',
+        );
+        $this->assertStringContainsString(
+            "reducedMotion.addEventListener('change'",
+            $js,
+            'La preferencia se reevalúa si cambia con la página abierta',
+        );
+
+        // El CSS deja el hero quieto con movimiento reducido.
+        $this->assertMatchesRegularExpression(
+            '/@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*data-home-hero-photo/s',
+            $css,
+            'El CSS anula las transformaciones del hero con movimiento reducido',
+        );
+        $this->assertMatchesRegularExpression(
+            '/@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*data-home-hero-title/s',
+            $css,
+            'El copy del hero también queda quieto con movimiento reducido',
+        );
+    }
+
+    public function test_la_animacion_del_hero_conserva_el_carrusel_swiper(): void
+    {
+        $html = $this->get('/')->assertOk()->getContent();
+        $hero = $this->heroHtml($html);
+        $js = file_get_contents(base_path('resources/js/app.js'));
+
+        // Marcado: contenedor de Swiper, flechas accesibles, puntos y autoplay.
+        foreach ([
+            'data-home-hero-swiper',
+            'data-home-hero-prev',
+            'data-home-hero-next',
+            'data-home-hero-pagination',
+            'aria-label="Imagen anterior"',
+            'aria-label="Imagen siguiente"',
+            'data-home-hero-autoplay="5000"',
+        ] as $marker) {
+            $this->assertStringContainsString($marker, $hero, "El hero conserva {$marker}");
+        }
+
+        // JS: sigue instanciando Swiper con navegación, paginación y autoplay.
+        foreach (['new Swiper(', 'Navigation', 'Pagination', 'Autoplay', 'slideChange'] as $snippet) {
+            $this->assertStringContainsString($snippet, $js, "app.js conserva {$snippet}");
+        }
+
+        // Y sigue sin rastro de la cortina ni de Web Animations.
+        foreach (['data-home-hero-curtain', 'runCurtain', 'animate('] as $snippet) {
+            $this->assertStringNotContainsString($snippet, $js, "app.js ya no contiene {$snippet}");
         }
     }
 }

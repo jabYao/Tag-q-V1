@@ -31,4 +31,20 @@ return [
         ['name' => 'Niños', 'slug' => 'ninos'],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Subcategorías fijas del catálogo
+    |--------------------------------------------------------------------------
+    |
+    | Taxonomía cerrada: la clave es el slug canónico que se guarda en
+    | `products.subcategoria` y el valor es la etiqueta para la UI. Es la
+    | fuente única para validación, formulario admin y filtros del catálogo.
+    */
+
+    'subcategories' => [
+        'elegante' => 'Elegante',
+        'casual' => 'Casual',
+        'deportivo' => 'Deportivo',
+    ],
+
 ];

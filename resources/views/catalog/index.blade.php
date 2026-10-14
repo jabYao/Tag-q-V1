@@ -1,3 +1,4 @@
+@use('App\Support\CloudinaryUrl')
 @extends('layouts.storefront')
 
 @section('title', config('app.name', 'Tag q').' — Catálogo')
@@ -28,6 +29,16 @@
                         <option value="">Todas</option>
                         @foreach($categories as $category)
                             <option value="{{ $category->slug }}" @selected(($filters['categoria'] ?? null) === $category->slug)>{{ $category->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="filter-subcategoria" class="block text-sm font-medium text-gray-700">Subcategoría</label>
+                    <select id="filter-subcategoria" name="subcategoria" class="mt-1 block w-full rounded border-gray-300 shadow-sm">
+                        <option value="">Todas</option>
+                        @foreach($options['subcategoria'] as $slug => $label)
+                            <option value="{{ $slug }}" @selected(($filters['subcategoria'] ?? null) === $slug)>{{ $label }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -121,7 +132,7 @@
             </div>
 
             <div class="mt-4 flex items-center gap-3">
-                <button type="submit" class="inline-flex items-center rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">
+                <button type="submit" class="inline-flex items-center bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">
                     Aplicar filtros
                 </button>
                 <a href="{{ route('catalog.index') }}" class="text-sm text-blue-700 hover:underline">Limpiar</a>
@@ -137,13 +148,13 @@
                     <article data-catalog-item data-product-name="{{ $product->name }}" class="bg-white rounded shadow overflow-hidden flex flex-col">
                         <a href="{{ route('catalog.show', $product) }}" class="flex flex-col flex-1">
                             @if($imagen)
-                                <img src="{{ $imagen }}" alt="{{ $product->name }}" class="w-full h-56 object-cover">
+                                <img src="{{ CloudinaryUrl::webp($imagen) }}" alt="{{ $product->name }}" class="w-full h-56 object-cover">
                             @else
                                 <div class="w-full h-56 bg-gray-100 flex items-center justify-center text-gray-400 text-sm">Sin imagen</div>
                             @endif
 
                             <div class="p-4 flex flex-col gap-2 flex-1">
-                                <span class="text-xs uppercase tracking-wide text-gray-500">{{ $product->category?->name ?? 'Sin categoría' }}</span>
+                                <span class="text-xs uppercase tracking-wide text-gray-500">{{ $product->category?->name ?? 'Sin categoría' }}@if($product->subcategoriaLabel()) · {{ $product->subcategoriaLabel() }}@endif</span>
                                 <h2 class="font-semibold">{{ $product->name }}</h2>
                                 <p class="font-bold">$ {{ number_format($product->precio, 0, ',', '.') }} COP</p>
 

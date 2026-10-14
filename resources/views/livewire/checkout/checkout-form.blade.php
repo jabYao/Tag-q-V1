@@ -106,7 +106,7 @@
                     data-wompi-pay
                     x-on:click="open()"
                     x-bind:disabled="! ready"
-                    class="inline-flex items-center justify-center rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                    class="inline-flex items-center justify-center bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
                 >
                     Pagar con Wompi
                 </button>
@@ -218,7 +218,7 @@
 
                 <button
                     type="submit"
-                    class="inline-flex items-center justify-center rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                    class="inline-flex items-center justify-center bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
                 >
                     Confirmar pedido
                 </button>

@@ -50,6 +50,7 @@ class AdminProductTest extends TestCase
             'precio' => 1290000,
             'stock' => 5,
             'descripcion' => 'Reloj test',
+            'subcategoria' => 'casual',
             'is_active' => 1,
         ], $overrides);
     }
@@ -209,6 +210,7 @@ class AdminProductTest extends TestCase
                 'marca' => 'NuevaMarca',
                 'material_pulso' => 'Acero',
                 'movimiento' => 'Cuarzo',
+                'subcategoria' => 'casual',
             ])
             ->assertRedirect(route('admin.products.index'));
 
@@ -237,6 +239,7 @@ class AdminProductTest extends TestCase
                 'precio' => 900000,
                 'stock' => 3,
                 'descripcion' => 'Editado por admin',
+                'subcategoria' => 'casual',
             ])
             ->assertRedirect(route('admin.products.index'));
 
@@ -257,6 +260,7 @@ class AdminProductTest extends TestCase
                 'name' => 'Chronos Empleado',
                 'slug' => 'emp-deact',
                 'descripcion' => 'Editado por empleado',
+                'subcategoria' => 'casual',
             ])
             ->assertRedirect(route('admin.products.index'));
 
@@ -282,6 +286,7 @@ class AdminProductTest extends TestCase
                 'precio' => 999,
                 'stock' => 999,
                 'is_active' => 0,
+                'subcategoria' => 'casual',
             ])
             ->assertSessionHasErrors(['precio', 'stock', 'is_active'])
             ->assertRedirect(route('admin.products.edit', $product));
@@ -308,6 +313,87 @@ class AdminProductTest extends TestCase
             ->assertOk()
             ->assertSee('Nuevo producto')
             ->assertSee('Eliminar');
+    }
+
+    public function test_subcategoria_es_obligatoria_al_crear(): void
+    {
+        $data = $this->validData();
+        unset($data['subcategoria']);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.products.create'))
+            ->post(route('admin.products.store'), $data)
+            ->assertSessionHasErrors('subcategoria')
+            ->assertRedirect(route('admin.products.create'));
+
+        $this->assertDatabaseMissing('products', ['slug' => 'chronos-test']);
+    }
+
+    public function test_subcategoria_invalida_es_rechazada(): void
+    {
+        $this->actingAs($this->admin)
+            ->from(route('admin.products.create'))
+            ->post(route('admin.products.store'), $this->validData(['subcategoria' => 'lujo']))
+            ->assertSessionHasErrors('subcategoria');
+
+        $this->assertDatabaseMissing('products', ['slug' => 'chronos-test']);
+    }
+
+    public function test_admin_persiste_la_subcategoria_al_crear_y_actualizar(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.products.store'), $this->validData(['subcategoria' => 'elegante']))
+            ->assertRedirect(route('admin.products.index'));
+
+        $product = Product::where('slug', 'chronos-test')->first();
+        $this->assertNotNull($product);
+        $this->assertSame('elegante', $product->subcategoria);
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.products.update', $product), $this->validData(['subcategoria' => 'deportivo']))
+            ->assertRedirect(route('admin.products.index'));
+
+        $this->assertSame('deportivo', $product->refresh()->subcategoria);
+    }
+
+    public function test_empleado_debe_enviar_subcategoria_valida_al_actualizar(): void
+    {
+        $product = Product::create($this->validData(['slug' => 'emp-sub']));
+
+        $payload = [
+            'category_id' => $this->category->id,
+            'name' => 'Sub Empleado',
+            'slug' => 'emp-sub',
+            'descripcion' => 'Editado por empleado',
+        ];
+
+        // Sin subcategoría: la actualización es rechazada.
+        $this->actingAs($this->empleado)
+            ->from(route('admin.products.edit', $product))
+            ->put(route('admin.products.update', $product), $payload)
+            ->assertSessionHasErrors('subcategoria');
+
+        // Con una subcategoría válida: persiste sin tocar los campos sensibles.
+        $this->actingAs($this->empleado)
+            ->put(route('admin.products.update', $product), array_merge($payload, ['subcategoria' => 'casual']))
+            ->assertRedirect(route('admin.products.index'));
+
+        $this->assertSame('casual', $product->refresh()->subcategoria);
+    }
+
+    public function test_el_formulario_de_producto_ofrece_las_tres_subcategorias(): void
+    {
+        $html = $this->actingAs($this->admin)
+            ->get(route('admin.products.create'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('name="subcategoria"', $html);
+
+        foreach (['elegante' => 'Elegante', 'casual' => 'Casual', 'deportivo' => 'Deportivo'] as $slug => $label) {
+            $this->assertStringContainsString('value="'.$slug.'"', $html);
+            $this->assertStringContainsString($label, $html);
+        }
     }
 
     protected function tearDown(): void
