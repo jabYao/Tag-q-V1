@@ -589,6 +589,23 @@ class StorefrontNavigationTest extends TestCase
         return new \DOMXPath($document);
     }
 
+    /**
+     * Etiqueta de apertura que contiene un hook de marcado.
+     *
+     * Los atajos de Alpine (`@click`, `@keydown.escape.window`) llevan `@`,
+     * que no existe en HTML 4: algunas versiones de libxml los descartan al
+     * parsear, así que su wiring se comprueba sobre el HTML crudo. Solo es
+     * seguro para etiquetas sin `>` dentro de sus atributos.
+     */
+    private function aperturaConHook(string $html, string $hook): string
+    {
+        $pattern = '/<[a-z][^>]*'.preg_quote($hook, '/').'[^>]*>/i';
+
+        preg_match($pattern, $html, $matches);
+
+        return $matches[0] ?? '';
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Menú principal (Damas · Caballeros · Tienda) y utilidades
@@ -1223,7 +1240,11 @@ class StorefrontNavigationTest extends TestCase
         $this->assertSame('Buscar', $trigger->getAttribute('title'), 'El disparador conserva su title');
         $this->assertSame('storefront-search-panel', $trigger->getAttribute('aria-controls'), 'El disparador apunta al panel');
         $this->assertSame('searchOpen', $trigger->getAttribute(':aria-expanded'), 'El disparador expone su estado');
-        $this->assertStringContainsString('openSearch()', $trigger->getAttribute('@click'), 'El disparador abre el panel');
+        $this->assertStringContainsString(
+            '@click="openSearch()"',
+            $this->aperturaConHook($html, 'data-nav-utility="search"'),
+            'El disparador abre el panel'
+        );
 
         // Un único panel, dentro de la navbar y después de su contenido: queda
         // justo debajo del encabezado, que permanece visible.
@@ -1299,7 +1320,11 @@ class StorefrontNavigationTest extends TestCase
         // arranca con el área viva inactiva, así el panel abre content-sized.
         $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
         $this->assertNotNull($nav, 'La navbar existe');
-        $this->assertTrue($nav->hasAttribute('@storefront-search-area.window'), 'La navbar escucha el estado del área viva (T20)');
+        $this->assertMatchesRegularExpression(
+            '/@storefront-search-area\.window="[^"]*searchAreaActive[^"]*"/',
+            $html,
+            'La navbar escucha el estado del área viva (T20)'
+        );
         $this->assertStringContainsString('searchAreaActive: false', (string) $nav->getAttribute('x-data'), 'El estado inicial del área viva es inactivo (T20)');
 
         // El fondo atenúa solo el área restante: empieza donde termina la
@@ -1389,7 +1414,8 @@ class StorefrontNavigationTest extends TestCase
         $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
         $this->assertNotNull($nav, 'La navbar expone su hook');
 
-        $escape = (string) $nav->getAttribute('@keydown.escape.window');
+        preg_match('/@keydown\.escape\.window="([^"]*closeSearch\(\)[^"]*)"/', $html, $escapeMatch);
+        $escape = $escapeMatch[1] ?? '';
         $this->assertStringContainsString('closeSearch()', $escape, 'Escape cierra el panel de búsqueda');
         $this->assertStringContainsString('mobileOpen = false', $escape, 'Escape sigue cerrando el menú móvil');
 
@@ -1399,13 +1425,21 @@ class StorefrontNavigationTest extends TestCase
         $this->assertSame('button', strtolower($close->tagName), 'El cierre es un botón');
         $this->assertSame('button', strtolower($close->getAttribute('type')), 'El cierre no envía el formulario');
         $this->assertSame('Cerrar búsqueda', $close->getAttribute('aria-label'), 'El cierre tiene nombre accesible');
-        $this->assertStringContainsString('closeSearch()', $close->getAttribute('@click'), 'El botón cierra el panel');
+        $this->assertStringContainsString(
+            'closeSearch()',
+            $this->aperturaConHook($html, 'data-nav-search-close'),
+            'El botón cierra el panel'
+        );
         $this->assertSame(1, $xpath->query('.//*[@data-nav-icon]', $close)->length, 'El cierre es solo-icono');
 
         // Fondo: clic fuera del panel también cierra.
         $backdrop = $xpath->query('//*[@data-nav-search-backdrop]')->item(0);
         $this->assertNotNull($backdrop, 'El fondo del panel existe');
-        $this->assertStringContainsString('closeSearch()', $backdrop->getAttribute('@click'), 'Clic en el fondo cierra el panel');
+        $this->assertStringContainsString(
+            'closeSearch()',
+            $this->aperturaConHook($html, 'data-nav-search-backdrop'),
+            'Clic en el fondo cierra el panel'
+        );
         $this->assertTrue($backdrop->hasAttribute('x-cloak'), 'El fondo no parpadea antes de inicializar Alpine');
     }
 
