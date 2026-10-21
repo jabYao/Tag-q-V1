@@ -13,7 +13,7 @@ class ProductionSeederTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_crea_las_tres_categorias_y_el_admin_desde_config(): void
+    public function test_crea_las_cuatro_categorias_y_el_admin_desde_config(): void
     {
         config([
             'tagq.admin.name' => 'Jefe',
@@ -23,10 +23,11 @@ class ProductionSeederTest extends TestCase
 
         $this->seed(ProductionSeeder::class);
 
-        $this->assertSame(3, Category::count());
+        $this->assertSame(4, Category::count());
         $this->assertNotNull(Category::where('slug', 'dama')->first());
         $this->assertNotNull(Category::where('slug', 'caballero')->first());
         $this->assertNotNull(Category::where('slug', 'ninos')->first());
+        $this->assertNotNull(Category::where('slug', 'unisex')->first());
 
         $admin = User::where('email', 'jefe@tagq.co')->first();
         $this->assertNotNull($admin);
@@ -45,7 +46,7 @@ class ProductionSeederTest extends TestCase
         $this->seed(ProductionSeeder::class);
         $this->seed(ProductionSeeder::class);
 
-        $this->assertSame(3, Category::count());
+        $this->assertSame(4, Category::count());
         $this->assertSame(1, User::where('email', 'jefe@tagq.co')->count());
     }
 
@@ -58,17 +59,19 @@ class ProductionSeederTest extends TestCase
 
         $this->seed(ProductionSeeder::class);
 
-        $this->assertSame(3, Category::count());
+        $this->assertSame(4, Category::count());
         $this->assertSame(0, User::count());
     }
 
-    public function test_config_expone_las_tres_subcategorias_fijas(): void
+    public function test_config_expone_las_cinco_subcategorias_fijas(): void
     {
         // Fuente única de verdad para validación, formularios y filtros.
         $this->assertSame([
-            'elegante' => 'Elegante',
             'casual' => 'Casual',
+            'formal' => 'Formal',
             'deportivo' => 'Deportivo',
+            'buceo' => 'Buceo',
+            'cronografo' => 'Cronógrafo',
         ], config('tagq.subcategories'));
     }
 

@@ -29,6 +29,7 @@ return [
         ['name' => 'Dama', 'slug' => 'dama'],
         ['name' => 'Caballero', 'slug' => 'caballero'],
         ['name' => 'Niños', 'slug' => 'ninos'],
+        ['name' => 'Unisex', 'slug' => 'unisex'],
     ],
 
     /*
@@ -42,9 +43,11 @@ return [
     */
 
     'subcategories' => [
-        'elegante' => 'Elegante',
         'casual' => 'Casual',
+        'formal' => 'Formal',
         'deportivo' => 'Deportivo',
+        'buceo' => 'Buceo',
+        'cronografo' => 'Cronógrafo',
     ],
 
     /*

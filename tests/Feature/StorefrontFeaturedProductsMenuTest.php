@@ -229,11 +229,11 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
         $this->assertLessThan($caballeros, $damas, 'Damas sigue antes de Caballeros');
 
         $this->assertSame(1, substr_count($html, 'data-nav-submenu="tienda"'));
-        $this->assertSame(5, substr_count($html, 'data-nav-submenu-item'));
+        $this->assertSame(7, substr_count($html, 'data-nav-submenu-item'));
         $this->assertStringContainsString('data-nav-submenu-item="ver-todo"', $html);
         $this->assertStringContainsString('data-nav-submenu-item="ninos"', $html);
 
-        foreach (['elegante', 'casual', 'deportivo'] as $slug) {
+        foreach (array_keys(config('tagq.subcategories')) as $slug) {
             $this->assertStringContainsString('data-nav-submenu-item="'.$slug.'"', $html);
             $this->assertStringContainsString(
                 'href="'.route('catalog.index', ['subcategoria' => $slug]).'"',

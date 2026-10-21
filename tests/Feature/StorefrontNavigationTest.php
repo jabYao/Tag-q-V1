@@ -999,10 +999,10 @@ class StorefrontNavigationTest extends TestCase
         $response = $this->get(route('catalog.index'))->assertOk();
         $html = $response->getContent();
 
-        // Un único submenú de Tienda y exactamente los cinco destinos confirmados
-        // (Ver todo, Niños y las tres subcategorías fijas).
+        // Un único submenú de Tienda y los destinos confirmados:
+        // Ver todo, Niños y las cinco subcategorías fijas.
         $this->assertSame(1, substr_count($html, 'data-nav-submenu="tienda"'), 'Tienda expone un submenú');
-        $this->assertSame(5, substr_count($html, 'data-nav-submenu-item'), 'El submenú tiene exactamente cinco destinos');
+        $this->assertSame(7, substr_count($html, 'data-nav-submenu-item'), 'El submenú tiene exactamente siete destinos');
         $this->assertStringContainsString('data-nav-submenu-item="ver-todo"', $html);
         $this->assertStringContainsString('data-nav-submenu-item="ninos"', $html);
 
@@ -1013,7 +1013,7 @@ class StorefrontNavigationTest extends TestCase
             'Niños enlaza el filtro real categoria=ninos'
         );
 
-        foreach (['elegante' => 'Elegante', 'casual' => 'Casual', 'deportivo' => 'Deportivo'] as $slug => $label) {
+        foreach (config('tagq.subcategories') as $slug => $label) {
             $this->assertStringContainsString('data-nav-submenu-item="'.$slug.'"', $html, "El submenú lista {$label}");
             $this->assertStringContainsString(
                 'href="'.route('catalog.index', ['subcategoria' => $slug]).'"',
@@ -1022,8 +1022,11 @@ class StorefrontNavigationTest extends TestCase
             );
         }
 
-        $response->assertSee('Ver todo')->assertSee('Niños')
-            ->assertSee('Elegante')->assertSee('Casual')->assertSee('Deportivo');
+        $response->assertSee('Ver todo')->assertSee('Niños');
+
+        foreach (config('tagq.subcategories') as $label) {
+            $response->assertSee($label);
+        }
     }
 
     public function test_los_controles_utilitarios_usan_iconos_inline_con_etiqueta_y_destino(): void
@@ -1193,7 +1196,7 @@ class StorefrontNavigationTest extends TestCase
             'El panel móvil conserva el destino real de Niños'
         );
 
-        foreach (['elegante', 'casual', 'deportivo'] as $slug) {
+        foreach (array_keys(config('tagq.subcategories')) as $slug) {
             $this->assertStringContainsString('data-nav-mobile-child="'.$slug.'"', $html, "El panel móvil lista {$slug}");
             $this->assertStringContainsString(
                 'href="'.route('catalog.index', ['subcategoria' => $slug]).'"',
