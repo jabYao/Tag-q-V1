@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CollectionController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderController;
@@ -92,6 +93,10 @@ Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     // Colecciones curadas — exclusivo del admin (el empleado no publica colecciones).
     Route::resource('collections', CollectionController::class)->except(['show']);
+
+    // Marcas — exclusivo del admin. El empleado puede asignarlas al editar
+    // productos, pero no crear, desactivar ni eliminar marcas.
+    Route::resource('brands', BrandController::class)->except(['show']);
 
     Route::patch('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
     Route::resource('users', UserController::class)->except(['show', 'destroy']);

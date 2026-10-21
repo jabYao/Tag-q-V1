@@ -23,6 +23,7 @@
     $isProducts = str_starts_with($routeName, 'admin.products.')
         || str_starts_with($routeName, 'admin.productos.');
     $isCollections = str_starts_with($routeName, 'admin.collections.');
+    $isBrands = str_starts_with($routeName, 'admin.brands.');
     $isUsers = str_starts_with($routeName, 'admin.users.');
 @endphp
 
@@ -79,6 +80,13 @@
                         @if($isCollections) aria-current="page" @endif
                     >
                         <span>Colecciones</span>
+                    </a>
+                    <a
+                        class="admin-nav__link @if($isBrands) is-active @endif"
+                        href="{{ route('admin.brands.index') }}"
+                        @if($isBrands) aria-current="page" @endif
+                    >
+                        <span>Marcas</span>
                     </a>
                     <a
                         class="admin-nav__link @if($isUsers) is-active @endif"
