@@ -173,6 +173,31 @@ class PublicProductDetailTest extends TestCase
             ->assertDontSee('Distancia entre puntas de asas (mm)');
     }
 
+    public function test_detalle_no_pierde_specs_informativos_con_etiquetas_repetidas(): void
+    {
+        $this->product([
+            'name' => 'Doble Acabado',
+            'slug' => 'doble-acabado',
+            'specs' => [
+                'acabado_caja' => 'Pulido',
+                'acabado_esfera' => 'Mate',
+                'color_esfera' => 'Azul',
+                'color_correa' => 'Café',
+            ],
+        ]);
+
+        $this->get('/catalogo/doble-acabado')
+            ->assertOk()
+            ->assertSee('Acabado de caja')
+            ->assertSee('Pulido')
+            ->assertSee('Acabado de esfera')
+            ->assertSee('Mate')
+            ->assertSee('Color de esfera')
+            ->assertSee('Azul')
+            ->assertSee('Color de correa')
+            ->assertSee('Café');
+    }
+
     public function test_detalle_no_muestra_specs_informativos_ausentes(): void
     {
         $this->product([

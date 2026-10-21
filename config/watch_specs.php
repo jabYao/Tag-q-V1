@@ -133,7 +133,7 @@ return [
             'label' => 'Caja',
             'fields' => [
                 'acabado_caja' => [
-                    'label' => 'Acabado',
+                    'label' => 'Acabado de caja',
                     'type' => 'text',
                     'placeholder' => 'Pulido, cepillado, mixto',
                 ],
@@ -190,11 +190,11 @@ return [
             'label' => 'Esfera',
             'fields' => [
                 'color_esfera' => [
-                    'label' => 'Color',
+                    'label' => 'Color de esfera',
                     'type' => 'text',
                 ],
                 'acabado_esfera' => [
-                    'label' => 'Acabado',
+                    'label' => 'Acabado de esfera',
                     'type' => 'text',
                 ],
                 'indices' => [
@@ -238,11 +238,11 @@ return [
             'label' => 'Correa',
             'fields' => [
                 'material_correa' => [
-                    'label' => 'Material',
+                    'label' => 'Material de correa',
                     'type' => 'text',
                 ],
                 'color_correa' => [
-                    'label' => 'Color',
+                    'label' => 'Color de correa',
                     'type' => 'text',
                 ],
                 'cierre' => [
