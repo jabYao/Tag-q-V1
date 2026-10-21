@@ -136,6 +136,34 @@ class PublicCartTest extends TestCase
             ->assertSee('href="'.route('catalog.show', $product).'"', false);
     }
 
+    public function test_la_bolsa_de_la_pagina_del_carrito_refleja_el_estado_del_carrito(): void
+    {
+        // El punto vive en el layout compartido: en /carrito también parte del
+        // estado real del carrito en la carga inicial.
+        $vacio = $this->get('/carrito')->assertOk()->getContent();
+        $this->assertStringContainsString('display: none', $this->indicadorDeBolsa($vacio), 'Sin líneas el punto queda oculto');
+
+        $product = $this->product();
+        $this->cart()->addToSession($product->id, 1);
+
+        $conLineas = $this->get('/carrito')->assertOk()->getContent();
+        $this->assertStringNotContainsString('display: none', $this->indicadorDeBolsa($conLineas), 'Con una línea el punto se ve');
+    }
+
+    /**
+     * Substring de la etiqueta de apertura del punto de la bolsa.
+     */
+    private function indicadorDeBolsa(string $html): string
+    {
+        $start = strpos($html, 'data-nav-cart-indicator');
+        $this->assertNotFalse($start, 'La bolsa expone su punto de presencia');
+
+        $end = strpos($html, '>', $start);
+        $this->assertNotFalse($end, 'La etiqueta del punto se cierra');
+
+        return substr($html, $start, $end - $start + 1);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Agregar: invitado, autenticado, inactivo y agotado
@@ -249,6 +277,82 @@ class PublicCartTest extends TestCase
 
         $this->assertCount(1, $session);
         $this->assertSame(1, $session[0]['quantity'], 'Repetir el clic no puede superar el stock disponible');
+    }
+
+    /**
+     * Variante compacta del home: un clic agrega exactamente una unidad. El
+     * componente no expone el selector de cantidad y, aunque el cliente
+     * manipule `quantity`, el servidor la fuerza a 1 antes de validar. El
+     * comportamiento de la variante `full` (selector de cantidad) sigue
+     * cubierto por los tests de catálogo y detalle existentes.
+     */
+    public function test_variante_compacta_agrega_una_unidad_aunque_se_manipule_la_cantidad(): void
+    {
+        $product = $this->product(['stock' => 5]);
+
+        Livewire::test(AddToCart::class, ['product' => $product, 'variant' => 'compact'])
+            ->assertSet('quantity', 1)
+            ->assertSee('data-variant="compact"', false)
+            ->assertDontSee('type="number"', false)
+            ->set('quantity', 4)
+            ->call('add')
+            ->assertHasNoErrors()
+            ->assertSet('quantity', 1)
+            ->assertSee('Producto agregado al carrito.');
+
+        $session = $this->cart()->getSessionCart();
+
+        $this->assertCount(1, $session, 'La acción compacta agrega una única línea');
+        $this->assertSame($product->id, $session[0]['product_id']);
+        $this->assertSame(1, $session[0]['quantity'], 'La acción compacta del home agrega exactamente una unidad');
+
+        // Triangulación: el mismo contrato para un cliente autenticado (BD).
+        $user = $this->user();
+        $otro = $this->product(['stock' => 3]);
+
+        Livewire::actingAs($user)
+            ->test(AddToCart::class, ['product' => $otro, 'variant' => 'compact'])
+            ->set('quantity', 3)
+            ->call('add')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('cart_items', [
+            'product_id' => $otro->id,
+            'quantity' => 1,
+        ]);
+    }
+
+    /**
+     * Variante editorial del detalle: conserva el selector de cantidad y el
+     * mismo límite de stock que la variante completa. El riel solo cambia la
+     * presentación; la validación y el carrito no se bifurcan.
+     */
+    public function test_variante_editorial_conserva_cantidad_y_limite_de_stock(): void
+    {
+        $product = $this->product(['stock' => 3, 'precio' => 100000]);
+
+        Livewire::test(AddToCart::class, ['product' => $product, 'variant' => 'editorial'])
+            ->assertSet('quantity', 1)
+            ->assertSee('data-variant="editorial"', false)
+            ->assertSee('data-editorial-quantity-decrement', false)
+            ->assertSee('data-editorial-quantity-increment', false)
+            ->assertSee('type="number"', false)
+            ->set('quantity', 2)
+            ->call('add')
+            ->assertHasNoErrors()
+            ->assertSet('quantity', 1)
+            ->assertSee('Producto agregado al carrito.');
+
+        $session = $this->cart()->getSessionCart();
+
+        $this->assertCount(1, $session);
+        $this->assertSame($product->id, $session[0]['product_id']);
+        $this->assertSame(2, $session[0]['quantity'], 'El riel editorial conserva la cantidad elegida');
+
+        Livewire::test(AddToCart::class, ['product' => $product, 'variant' => 'editorial'])
+            ->set('quantity', 4)
+            ->call('add')
+            ->assertHasErrors('quantity');
     }
 
     /*

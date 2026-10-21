@@ -31,7 +31,7 @@ class CatalogFilterRequest extends FormRequest
     {
         $normalized = [];
 
-        foreach (['q', 'categoria', 'marca', 'material_pulso', 'cristal', 'movimiento', 'disponibilidad', 'orden'] as $key) {
+        foreach (['q', 'categoria', 'subcategoria', 'marca', 'material_pulso', 'cristal', 'movimiento', 'disponibilidad', 'orden'] as $key) {
             $value = $this->query($key);
 
             if (is_string($value) && trim($value) === '') {
@@ -52,6 +52,7 @@ class CatalogFilterRequest extends FormRequest
         return [
             'q' => ['nullable', 'string', 'max:255'],
             'categoria' => ['nullable', 'string', 'max:255', 'exists:categories,slug'],
+            'subcategoria' => ['nullable', 'string', Rule::in(array_keys(config('tagq.subcategories', [])))],
             'marca' => ['nullable', 'string', 'max:255'],
             'material_pulso' => ['nullable', 'string', 'max:255'],
             'cristal' => ['nullable', 'string', 'max:255'],

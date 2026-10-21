@@ -5,6 +5,7 @@ namespace App\Livewire\Cart;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\CartService;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -18,12 +19,24 @@ class AddToCart extends Component
 
     public int $productId = 0;
 
+    /**
+     * Presentación del componente. `full` es la vista por defecto (catálogo,
+     * con selector de cantidad), `compact` la variante del home (un único botón
+     * con icono de bolsa que agrega exactamente una unidad) y `editorial` la
+     * del detalle: escalón de cantidad y CTA a lo ancho del riel de compra. Las
+     * tres conservan la misma validación de stock. Se fija al montar y no puede
+     * cambiarse desde el cliente.
+     */
+    #[Locked]
+    public string $variant = 'full';
+
     /** Mensaje de éxito tras agregar. */
     public string $addedMessage = '';
 
-    public function mount(int|Product $product): void
+    public function mount(int|Product $product, string $variant = 'full'): void
     {
         $this->productId = $product instanceof Product ? $product->id : $product;
+        $this->variant = in_array($variant, ['compact', 'editorial'], true) ? $variant : 'full';
     }
 
     protected function messages(): array
@@ -38,6 +51,12 @@ class AddToCart extends Component
     public function add(): void
     {
         $this->addedMessage = '';
+
+        // La variante compacta del home agrega siempre una sola unidad: no
+        // expone un campo de cantidad y no depende de lo que envíe el cliente.
+        if ($this->variant === 'compact') {
+            $this->quantity = 1;
+        }
 
         $this->validate([
             'quantity' => ['required', 'integer', 'min:1'],
@@ -81,6 +100,12 @@ class AddToCart extends Component
         $this->quantity = 1;
         $this->addedMessage = 'Producto agregado al carrito.';
         $this->dispatch('cart-updated');
+
+        // Apertura del panel lateral SOLO tras un agregado exitoso: el evento
+        // lleva la URL real del carrito para que el layout abra el drawer en
+        // escritorio o navegue a la página completa en móvil. No lo abre la
+        // bolsa de la navbar.
+        $this->dispatch('cart-added', url: route('cart.index'));
     }
 
     public function render()
@@ -91,6 +116,7 @@ class AddToCart extends Component
             'product' => $product,
             'available' => $product !== null && $product->is_active && $product->stock > 0,
             'maxQuantity' => max(1, (int) ($product?->stock ?? 0)),
+            'variant' => $this->variant,
         ]);
     }
 }

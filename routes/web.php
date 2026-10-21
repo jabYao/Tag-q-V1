@@ -1,25 +1,39 @@
 <?php
 
+use App\Http\Controllers\Admin\CollectionController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\RegistrationController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
+use App\Http\Controllers\StorefrontHomeController;
 use App\Http\Controllers\WompiWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// Home público: categorías existentes y hasta cuatro productos activos recientes.
+Route::get('/', StorefrontHomeController::class)->name('home');
 
 // Catálogo público — accesible sin autenticación (monolito Blade, AGENTS.md §1)
 Route::get('/catalogo', [CatalogController::class, 'index'])->name('catalog.index');
 
 // Detalle público de producto por slug (binding implícito: /catalogo/{slug})
 Route::get('/catalogo/{product:slug}', [CatalogController::class, 'show'])->name('catalog.show');
+
+// Páginas legales públicas. El contenido todavía no está aprobado: cada ruta
+// sirve la misma vista Blade provisional (`Route::view`, sin controlador ni
+// paquete nuevos) que conserva su título y avisa que el texto está pendiente.
+// Son destinos reales y navegables desde el footer del storefront.
+Route::view('/politica-de-privacidad', 'legal.placeholder', ['title' => 'Política de privacidad', 'key' => 'privacy'])->name('legal.privacy');
+Route::view('/terminos-y-condiciones', 'legal.placeholder', ['title' => 'Términos y condiciones', 'key' => 'terms'])->name('legal.terms');
+Route::view('/politica-de-cookies', 'legal.placeholder', ['title' => 'Política de cookies', 'key' => 'cookies'])->name('legal.cookies');
+Route::view('/cambios-y-devoluciones', 'legal.placeholder', ['title' => 'Cambios y devoluciones', 'key' => 'returns'])->name('legal.returns');
+Route::view('/envios-y-entregas', 'legal.placeholder', ['title' => 'Envíos y entregas', 'key' => 'shipping'])->name('legal.shipping');
+Route::view('/medios-de-pago', 'legal.placeholder', ['title' => 'Medios de pago', 'key' => 'payments'])->name('legal.payments');
+Route::view('/contacto', 'legal.placeholder', ['title' => 'Contacto', 'key' => 'contact'])->name('legal.contact');
 
 // Carrito público — invitado en sesión, cliente autenticado en carts/cart_items.
 Route::get('/carrito', fn () => view('cart.index'))->name('cart.index');
@@ -60,6 +74,9 @@ Route::middleware('auth')->prefix('mis-pedidos')->name('customer.orders.')->grou
 
 // Panel admin — solo admin y empleado (cliente e invitado quedan fuera)
 Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin.')->group(function () {
+    // Hoja de operación diaria: el nuevo inicio del panel.
+    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+
     Route::resource('products', ProductController::class)->except(['show'])->parameters(['products' => 'product']);
 
     // Pedidos — solo admin y empleado: listado, detalle, avance del flujo
@@ -73,6 +90,9 @@ Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin
 
 // Gestión de usuarios — solo admin (empleado, cliente e invitado quedan fuera)
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    // Colecciones curadas — exclusivo del admin (el empleado no publica colecciones).
+    Route::resource('collections', CollectionController::class)->except(['show']);
+
     Route::patch('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
     Route::resource('users', UserController::class)->except(['show', 'destroy']);
 });

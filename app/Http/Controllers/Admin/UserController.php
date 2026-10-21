@@ -16,7 +16,14 @@ class UserController extends Controller
     {
         $users = User::orderBy('name')->paginate(20);
 
-        return view('admin.users.index', compact('users'));
+        $stats = [
+            'total' => User::count(),
+            'active' => User::where('is_active', true)->count(),
+            'admins' => User::where('role', 'admin')->where('is_active', true)->count(),
+            'employees' => User::where('role', 'empleado')->where('is_active', true)->count(),
+        ];
+
+        return view('admin.users.index', compact('users', 'stats'));
     }
 
     public function create(): View

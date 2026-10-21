@@ -246,7 +246,7 @@ class OrderCancellationRefundTest extends DuskTestCase
      * Livewire de /login. Después se visita una ruta protegida del panel para
      * confirmar que la sesión quedó activa: si no lo estuviera, el middleware
      * `auth` redirigiría a /login, así que se espera la URL del listado de
-     * pedidos y la sesión visible («Salir») en vez de un sleep.
+     * pedidos y la sesión visible («Cerrar sesión») en vez de un sleep.
      */
     private function iniciarSesion(Browser $browser): void
     {
@@ -254,7 +254,7 @@ class OrderCancellationRefundTest extends DuskTestCase
             ->visit(route('admin.orders.index', [], false))
             ->waitForRoute('admin.orders.index', [], 15)
             ->assertSee('Pedidos')
-            ->assertSee('Salir');
+            ->assertSee('Cerrar sesión');
     }
 
     /**

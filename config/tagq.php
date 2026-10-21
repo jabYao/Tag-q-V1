@@ -31,4 +31,32 @@ return [
         ['name' => 'Niños', 'slug' => 'ninos'],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Subcategorías fijas del catálogo
+    |--------------------------------------------------------------------------
+    |
+    | Taxonomía cerrada: la clave es el slug canónico que se guarda en
+    | `products.subcategoria` y el valor es la etiqueta para la UI. Es la
+    | fuente única para validación, formulario admin y filtros del catálogo.
+    */
+
+    'subcategories' => [
+        'elegante' => 'Elegante',
+        'casual' => 'Casual',
+        'deportivo' => 'Deportivo',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Umbral operativo de stock bajo
+    |--------------------------------------------------------------------------
+    |
+    | El negocio todavía no confirmó un umbral. Se usa 3 como corte operativo
+    | visible y marcado como provisional en el panel; no debe presentarse como
+    | una política definitiva.
+    */
+
+    'low_stock_threshold' => 3,
+
 ];

@@ -61,9 +61,9 @@ class Login extends Component
 
         $this->password = '';
 
-        // Admin y empleado van al panel; un cliente vuelve al sitio público.
+        // Admin y empleado van a la hoja de operación; un cliente vuelve al sitio público.
         if (Auth::user()->canAccessAdmin()) {
-            $this->redirectIntended(route('admin.products.index'), navigate: true);
+            $this->redirectIntended(route('admin.dashboard'), navigate: true);
         } else {
             $this->redirect('/', navigate: true);
         }

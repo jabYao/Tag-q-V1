@@ -17,6 +17,7 @@ class StoreProductRequest extends FormRequest
     {
         return [
             'category_id' => ['required', 'exists:categories,id'],
+            'subcategoria' => ['required', Rule::in(array_keys(config('tagq.subcategories', [])))],
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'unique:products,slug'],
             'descripcion' => ['nullable', 'string'],

@@ -28,6 +28,7 @@ class CatalogController extends Controller
             ->where('is_active', true)
             ->when(filled($filters['q'] ?? null), fn (Builder $query) => $this->applySearch($query, $filters['q']))
             ->when(filled($filters['categoria'] ?? null), fn (Builder $query) => $query->whereHas('category', fn (Builder $category) => $category->where('slug', $filters['categoria'])))
+            ->when(filled($filters['subcategoria'] ?? null), fn (Builder $query) => $query->where('subcategoria', $filters['subcategoria']))
             ->when(filled($filters['marca'] ?? null), fn (Builder $query) => $query->where('marca', $filters['marca']))
             ->when(filled($filters['material_pulso'] ?? null), fn (Builder $query) => $query->where('material_pulso', $filters['material_pulso']))
             ->when(filled($filters['cristal'] ?? null), fn (Builder $query) => $query->where('cristal', $filters['cristal']))
@@ -46,6 +47,7 @@ class CatalogController extends Controller
             'categories' => Category::orderBy('name')->get(),
             'filters' => $filters,
             'options' => [
+                'subcategoria' => config('tagq.subcategories', []),
                 'marca' => $this->attributeOptions('marca'),
                 'material_pulso' => $this->attributeOptions('material_pulso'),
                 'cristal' => $this->attributeOptions('cristal'),

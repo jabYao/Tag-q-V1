@@ -1,13 +1,9 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pedido {{ $order->code }} — {{ config('app.name', 'Tag q') }}</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @livewireStyles
-</head>
-<body class="bg-gray-50 min-h-screen">
+@extends('layouts.storefront')
+
+@section('title', 'Pedido '.$order->code.' — '.config('app.name', 'Tag q'))
+
+@section('content')
+<div class="mx-auto w-full max-w-4xl">
 @php
 $statusLabels = [
     'pendiente_de_pago' => 'Pendiente de pago',
@@ -27,7 +23,6 @@ $paymentLabels = [
 ];
 $shipping = $order->shipping_address ?? [];
 @endphp
-<main class="max-w-4xl mx-auto px-6 py-8">
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
             <h1 class="text-2xl font-bold">Pedido {{ $order->code }}</h1>
@@ -90,7 +85,5 @@ $shipping = $order->shipping_address ?? [];
             </tfoot>
         </table>
     </div>
-</main>
-@livewireScripts
-</body>
-</html>
+</div>
+@endsection

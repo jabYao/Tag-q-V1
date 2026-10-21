@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateProductRequest extends FormRequest
 {
@@ -19,6 +20,7 @@ class UpdateProductRequest extends FormRequest
 
         return [
             'category_id' => ['required', 'exists:categories,id'],
+            'subcategoria' => ['required', Rule::in(array_keys(config('tagq.subcategories', [])))],
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'unique:products,slug,' . $productId],
             'descripcion' => ['nullable', 'string'],

@@ -1,3 +1,4 @@
+@use('App\Support\CloudinaryUrl')
 <div data-shopping-cart class="flex flex-col gap-6">
     @error('quantity')
         <p class="text-sm text-red-700" role="alert">{{ $message }}</p>
@@ -24,7 +25,7 @@
                 >
                     <a href="{{ route('catalog.show', $line['product']) }}" class="sm:w-28 shrink-0">
                         @if($imagen)
-                            <img src="{{ $imagen }}" alt="{{ $line['product']->name }}" class="w-full h-24 object-cover rounded">
+                            <img src="{{ CloudinaryUrl::webp($imagen) }}" alt="{{ $line['product']->name }}" class="w-full h-24 object-cover rounded">
                         @else
                             <div class="w-full h-24 bg-gray-100 flex items-center justify-center text-gray-400 text-xs rounded">Sin imagen</div>
                         @endif
@@ -54,7 +55,7 @@
                             <button
                                 type="button"
                                 wire:click="updateQuantity({{ $line['product_id'] }})"
-                                class="inline-flex items-center rounded bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-800"
+                                class="inline-flex items-center bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-800"
                             >
                                 Actualizar
                             </button>
@@ -81,7 +82,7 @@
             <a
                 href="{{ route('checkout.index') }}"
                 data-checkout-link
-                class="inline-flex items-center rounded bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
+                class="inline-flex items-center bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
             >
                 Proceder al checkout
             </a>

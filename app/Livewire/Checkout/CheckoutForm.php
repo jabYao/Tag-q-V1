@@ -5,6 +5,7 @@ namespace App\Livewire\Checkout;
 use App\Models\User;
 use App\Services\CartService;
 use App\Services\CheckoutService;
+use App\Services\OrderNotificationService;
 use App\Services\WompiService;
 use Livewire\Component;
 
@@ -106,6 +107,7 @@ class CheckoutForm extends Component
         }
 
         $this->orderCode = $order->code;
+        app(OrderNotificationService::class)->notifyCreated($order);
         $this->dispatch('cart-updated');
     }
 
@@ -144,6 +146,7 @@ class CheckoutForm extends Component
         }
 
         $this->orderCode = $order->code;
+        app(OrderNotificationService::class)->notifyCreated($order);
         $this->wompiPayload = $wompi->buildWidgetPayload($order);
         $this->wompiFallbackUrl = $wompi->buildWidgetFallbackUrl($order);
         $this->dispatch('cart-updated');

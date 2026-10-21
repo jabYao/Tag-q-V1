@@ -62,6 +62,16 @@ class ProductionSeederTest extends TestCase
         $this->assertSame(0, User::count());
     }
 
+    public function test_config_expone_las_tres_subcategorias_fijas(): void
+    {
+        // Fuente única de verdad para validación, formularios y filtros.
+        $this->assertSame([
+            'elegante' => 'Elegante',
+            'casual' => 'Casual',
+            'deportivo' => 'Deportivo',
+        ], config('tagq.subcategories'));
+    }
+
     public function test_actualiza_la_password_de_un_admin_existente(): void
     {
         User::factory()->create([
