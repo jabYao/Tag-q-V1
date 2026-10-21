@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -26,6 +27,10 @@ class CatalogFilterRequest extends FormRequest
     /**
      * Normaliza cadenas en blanco a null para que `nullable` se aplique
      * también cuando el formulario GET envía selects/inputs vacíos.
+     *
+     * Además resuelve las etiquetas legadas de `cristal` y `movimiento`
+     * (con o sin acentos y mayúsculas) al slug canónico que guarda la base.
+     * El formulario nuevo envía slugs; los enlaces viejos enviaban etiquetas.
      */
     protected function prepareForValidation(): void
     {
@@ -57,9 +62,48 @@ class CatalogFilterRequest extends FormRequest
             }
         }
 
+        foreach ([
+            'cristal' => 'watch_specs.crystal_materials',
+            'movimiento' => 'watch_specs.movement_types',
+        ] as $key => $configKey) {
+            $value = $this->query($key);
+
+            if (! is_string($value) || trim($value) === '') {
+                continue;
+            }
+
+            $normalized[$key] = $this->resolveTaxonomySlug($value, config($configKey, []));
+        }
+
         if ($normalized !== []) {
             $this->merge($normalized);
         }
+    }
+
+    /**
+     * @param array<string, string> $options
+     */
+    private function resolveTaxonomySlug(string $value, array $options): string
+    {
+        if (array_key_exists($value, $options)) {
+            return $value;
+        }
+
+        $needle = $this->normalizeTaxonomyValue($value);
+
+        foreach ($options as $slug => $label) {
+            if ($this->normalizeTaxonomyValue($slug) === $needle
+                || $this->normalizeTaxonomyValue($label) === $needle) {
+                return $slug;
+            }
+        }
+
+        return $value;
+    }
+
+    private function normalizeTaxonomyValue(string $value): string
+    {
+        return mb_strtolower(Str::ascii(trim($value)));
     }
 
     /**

@@ -613,6 +613,32 @@ class PublicCatalogTest extends TestCase
             ->assertSee('Con Stock');
     }
 
+    public function test_catalogo_filtra_por_cristal_con_slug_o_etiqueta_legada(): void
+    {
+        $this->product(['name' => 'Cristal Mineral', 'slug' => 'cristal-mineral', 'cristal' => 'mineral']);
+        $this->product(['name' => 'Cristal Zafiro', 'slug' => 'cristal-zafiro', 'cristal' => 'zafiro']);
+
+        foreach (['mineral', 'Mineral'] as $value) {
+            $this->get('/catalogo?cristal='.urlencode($value))
+                ->assertOk()
+                ->assertSee('Cristal Mineral')
+                ->assertDontSee('Cristal Zafiro');
+        }
+    }
+
+    public function test_catalogo_filtra_por_movimiento_con_slug_o_etiqueta_legada(): void
+    {
+        $this->product(['name' => 'Movimiento Automático', 'slug' => 'movimiento-automatico', 'movimiento' => 'automatico']);
+        $this->product(['name' => 'Movimiento Cuarzo', 'slug' => 'movimiento-cuarzo', 'movimiento' => 'cuarzo']);
+
+        foreach (['automatico', 'Automático', 'Automatico'] as $value) {
+            $this->get('/catalogo?movimiento='.urlencode($value))
+                ->assertOk()
+                ->assertSee('Movimiento Automático')
+                ->assertDontSee('Movimiento Cuarzo');
+        }
+    }
+
     public function test_catalogo_regresion_activos_agotados_con_filtros(): void
     {
         $this->product(['name' => 'Activo Con Stock', 'slug' => 'activo-con-stock', 'stock' => 2]);
