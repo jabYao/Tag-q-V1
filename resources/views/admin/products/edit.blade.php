@@ -1,30 +1,24 @@
-@use('App\Support\CloudinaryUrl')
-@extends('layouts.app')
+@extends('layouts.admin')
+
 @section('title', 'Editar producto')
 
 @section('content')
-<h1 class="text-2xl font-bold mb-6">Editar: {{ $product->name }}</h1>
-
-<form method="POST" action="{{ route('admin.products.update', $product) }}" enctype="multipart/form-data" class="bg-white p-6 rounded shadow space-y-4">
-    @csrf @method('PUT')
-    @include('admin.products._form', ['product' => $product])
-
-    @if(!empty($product->imagenes))
-        <div class="border p-3 rounded">
-            <p class="text-sm font-medium mb-2">Imágenes actuales (desmarca para eliminar)</p>
-            <div class="grid grid-cols-3 gap-3">
-            @foreach($product->imagenes as $url)
-                <label class="border rounded p-2 text-center">
-                    <img src="{{ CloudinaryUrl::webp($url) }}" class="w-full h-24 object-cover rounded mb-1">
-                    <input type="checkbox" name="imagenes_existentes[]" value="{{ $url }}" checked class="mr-1"> Conservar
-                    <span class="text-xs text-gray-400 block truncate">{{ $url }}</span>
-                </label>
-            @endforeach
-            </div>
+    <div class="admin-page-head admin-page-head--compact">
+        <div class="admin-page-head__main">
+            <a class="admin-link admin-link--back" href="{{ route('admin.products.index') }}">← Volver al catálogo</a>
+            <h1 class="admin-page-title admin-page-title--form">EDITAR PRODUCTO</h1>
+            <p class="admin-page-note">{{ $product->name }} · {{ $product->slug }}</p>
         </div>
-    @endif
+    </div>
 
-    <button class="bg-black text-white px-6 py-2 rounded">Actualizar</button>
-    <a href="{{ route('admin.products.index') }}" class="ml-2 text-gray-500">Cancelar</a>
-</form>
+    <form class="admin-form" method="POST" action="{{ route('admin.products.update', $product) }}" enctype="multipart/form-data">
+        @csrf
+        @method('PUT')
+        @include('admin.products._form', ['product' => $product])
+
+        <div class="admin-form__actions">
+            <a class="admin-link" href="{{ route('admin.products.index') }}">Cancelar</a>
+            <button class="admin-btn admin-btn--dark admin-btn--save" type="submit">Guardar cambios</button>
+        </div>
+    </form>
 @endsection

@@ -322,6 +322,39 @@ class PublicCartTest extends TestCase
         ]);
     }
 
+    /**
+     * Variante editorial del detalle: conserva el selector de cantidad y el
+     * mismo límite de stock que la variante completa. El riel solo cambia la
+     * presentación; la validación y el carrito no se bifurcan.
+     */
+    public function test_variante_editorial_conserva_cantidad_y_limite_de_stock(): void
+    {
+        $product = $this->product(['stock' => 3, 'precio' => 100000]);
+
+        Livewire::test(AddToCart::class, ['product' => $product, 'variant' => 'editorial'])
+            ->assertSet('quantity', 1)
+            ->assertSee('data-variant="editorial"', false)
+            ->assertSee('data-editorial-quantity-decrement', false)
+            ->assertSee('data-editorial-quantity-increment', false)
+            ->assertSee('type="number"', false)
+            ->set('quantity', 2)
+            ->call('add')
+            ->assertHasNoErrors()
+            ->assertSet('quantity', 1)
+            ->assertSee('Producto agregado al carrito.');
+
+        $session = $this->cart()->getSessionCart();
+
+        $this->assertCount(1, $session);
+        $this->assertSame($product->id, $session[0]['product_id']);
+        $this->assertSame(2, $session[0]['quantity'], 'El riel editorial conserva la cantidad elegida');
+
+        Livewire::test(AddToCart::class, ['product' => $product, 'variant' => 'editorial'])
+            ->set('quantity', 4)
+            ->call('add')
+            ->assertHasErrors('quantity');
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Actualizar y eliminar líneas

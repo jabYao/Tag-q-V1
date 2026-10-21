@@ -1,33 +1,67 @@
-@php $u = $user ?? null; @endphp
+@php
+    $u = $user ?? null;
+    $isEdit = $u !== null;
+@endphp
 
-@if($errors->any())
-    <div class="bg-red-50 text-red-700 p-3 rounded text-sm">
-        <ul class="list-disc ml-4">
-            @foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach
-        </ul>
+<section class="admin-form__section" aria-labelledby="usuario-datos">
+    <div class="admin-form__section-head">
+        <h2 class="admin-form__section-title" id="usuario-datos">Datos</h2>
+        <p class="admin-form__section-note">Nombre y correo de la cuenta.</p>
     </div>
-@endif
 
-<div class="grid grid-cols-2 gap-4">
-    <label class="block">Nombre
-        <input name="name" value="{{ old('name', $u?->name) }}" class="w-full border rounded px-3 py-2" required>
-    </label>
-    <label class="block">Email
-        <input name="email" type="email" value="{{ old('email', $u?->email) }}" class="w-full border rounded px-3 py-2" required>
-    </label>
-    <label class="block">Rol
-        <select name="role" class="w-full border rounded px-3 py-2" required>
-            @foreach(['admin' => 'Administrador', 'empleado' => 'Empleado', 'cliente' => 'Cliente'] as $value => $label)
-                <option value="{{ $value }}" @selected(old('role', $u?->role ?? 'cliente') === $value)>{{ $label }}</option>
-            @endforeach
-        </select>
-    </label>
-    <label class="block">
-        {{ $u ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña' }}
-        <input name="password" type="password" class="w-full border rounded px-3 py-2" @required(! $u) autocomplete="new-password">
-    </label>
-    <label class="block">
-        Confirmar contraseña
-        <input name="password_confirmation" type="password" class="w-full border rounded px-3 py-2" @required(! $u) autocomplete="new-password">
-    </label>
-</div>
+    <div class="admin-form__grid">
+        <div class="admin-field">
+            <label class="admin-label" for="name">Nombre</label>
+            <input class="admin-input" id="name" name="name" type="text" value="{{ old('name', $u?->name) }}" required autocomplete="off">
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="email">Email</label>
+            <input class="admin-input" id="email" name="email" type="email" value="{{ old('email', $u?->email) }}" required autocomplete="off">
+        </div>
+    </div>
+</section>
+
+<section class="admin-form__section" aria-labelledby="usuario-rol">
+    <div class="admin-form__section-head">
+        <h2 class="admin-form__section-title" id="usuario-rol">Rol y acceso</h2>
+        <p class="admin-form__section-note">Define qué puede hacer esta cuenta en la tienda y el panel.</p>
+    </div>
+
+    <div class="admin-form__grid">
+        <div class="admin-field">
+            <label class="admin-label" for="role">Rol</label>
+            <select class="admin-select" id="role" name="role" required>
+                @foreach(['admin' => 'Administrador', 'empleado' => 'Empleado', 'cliente' => 'Cliente'] as $value => $label)
+                    <option value="{{ $value }}" @selected(old('role', $u?->role ?? 'cliente') === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <p class="admin-help">Administrador gestiona el panel · empleado opera pedidos y productos · cliente compra en la tienda.</p>
+        </div>
+    </div>
+</section>
+
+<section class="admin-form__section" aria-labelledby="usuario-contrasena">
+    <div class="admin-form__section-head">
+        <h2 class="admin-form__section-title" id="usuario-contrasena">Contraseña</h2>
+        <p class="admin-form__section-note">
+            {{ $isEdit ? 'Opcional. Solo se actualiza si escribes una contraseña nueva.' : 'Contraseña de acceso a la cuenta.' }}
+        </p>
+    </div>
+
+    <div class="admin-form__grid">
+        <div class="admin-field">
+            <label class="admin-label" for="password">
+                {{ $isEdit ? 'Nueva contraseña (déjala en blanco para conservar la actual)' : 'Contraseña' }}
+            </label>
+            <input class="admin-input" id="password" name="password" type="password" @required(! $isEdit) autocomplete="new-password">
+            <p class="admin-help">{{ $isEdit ? 'Mínimo 8 caracteres si escribes una nueva.' : 'Obligatoria, mínimo 8 caracteres.' }}</p>
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="password_confirmation">Confirmar contraseña</label>
+            <input class="admin-input" id="password_confirmation" name="password_confirmation" type="password" @required(! $isEdit) autocomplete="new-password">
+            <p class="admin-help">Debe coincidir con la contraseña.</p>
+        </div>
+    </div>
+</section>

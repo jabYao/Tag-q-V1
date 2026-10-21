@@ -34,8 +34,32 @@ class OrderStatusService
         'reembolsado',
     ];
 
+    /**
+     * Etiquetas visibles del flujo. Son parte de la operación diaria: no se
+     * traducen ni se abrevian en la interfaz.
+     *
+     * @var array<string, string>
+     */
+    public const LABELS = [
+        'pendiente_de_pago' => 'Pendiente de pago',
+        'pagado' => 'Pagado',
+        'en_preparacion' => 'En preparación',
+        'enviado' => 'Enviado',
+        'entregado' => 'Entregado',
+        'cancelado' => 'Cancelado',
+        'reembolsado' => 'Reembolsado',
+    ];
+
     /** Estado inicial del flujo operativo. */
     public const STATUS_PENDING = 'pendiente_de_pago';
+
+    /**
+     * Etiqueta visible para un estado; conserva el valor crudo si es desconocido.
+     */
+    public static function label(string $status): string
+    {
+        return self::LABELS[$status] ?? $status;
+    }
 
     /**
      * Flujo operativo permitido: cada estado apunta a su único sucesor.

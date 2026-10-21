@@ -2,9 +2,8 @@
 
 @section('title', 'Pedido '.$order->code.' — '.config('app.name', 'Tag q'))
 
-@section('main-class', 'max-w-4xl mx-auto px-6 py-8')
-
 @section('content')
+<div class="mx-auto w-full max-w-4xl">
 @php
 $statusLabels = [
     'pendiente_de_pago' => 'Pendiente de pago',
@@ -86,4 +85,5 @@ $shipping = $order->shipping_address ?? [];
             </tfoot>
         </table>
     </div>
+</div>
 @endsection

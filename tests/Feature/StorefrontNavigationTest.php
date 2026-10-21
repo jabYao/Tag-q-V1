@@ -614,7 +614,8 @@ class StorefrontNavigationTest extends TestCase
 
         // La altura se publica antes del primer render del hero para evitar un salto.
         $this->assertStringContainsString('data-storefront-header-height-bootstrap', $html);
-        $this->assertStringContainsString("getBoundingClientRect().bottom + window.scrollY", $html);
+        $this->assertStringContainsString('data-shipping-topbar', $html);
+        $this->assertStringContainsString('(topbar ? topbar.offsetHeight : 0) + nav.offsetHeight', $html);
         $css = file_get_contents(base_path('resources/css/app.css'));
         $this->assertStringContainsString('storefront-nav-content-entry', $css);
         $this->assertStringContainsString('[data-storefront-nav] [data-nav-primary]', $css);
@@ -1440,19 +1441,21 @@ class StorefrontNavigationTest extends TestCase
         $this->assertStringContainsString('destroy()', $html, 'El componente limpia sus listeners al destruirse');
     }
 
-    public function test_la_navbar_y_el_top_bar_quedan_visibles_por_encima_del_fondo(): void
+    public function test_la_navbar_fija_y_el_top_bar_quedan_visibles_por_encima_del_fondo(): void
     {
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
         $xpath = $this->xpathDe($html);
 
-        // La navbar crea su propio contexto de apilado por encima del fondo.
+        // La navbar se fija al hacer scroll y crea su propio contexto de apilado
+        // por encima del fondo.
         $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
         $this->assertNotNull($nav, 'La navbar existe');
 
         $navClasses = preg_split('/\s+/', trim((string) $nav->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
 
-        $this->assertContains('relative', $navClasses, 'La navbar se posiciona para quedar encima del fondo');
+        $this->assertContains('sticky', $navClasses, 'La navbar se fija al hacer scroll');
+        $this->assertContains('top-0', $navClasses, 'La navbar se pega al borde superior');
         $this->assertContains('z-50', $navClasses, 'La navbar se apila por encima del fondo');
 
         // El top bar y la navbar van antes que el fondo y el panel, y el fondo
@@ -1471,6 +1474,31 @@ class StorefrontNavigationTest extends TestCase
         $this->assertLessThan($positions['nav'], $positions['topbar'], 'El top bar se conserva arriba');
         $this->assertLessThan($positions['backdrop'], $positions['nav'], 'La navbar va antes que el fondo del panel');
         $this->assertLessThan($positions['panel'], $positions['backdrop'], 'El fondo se pinta antes que el panel');
+    }
+
+    public function test_la_navbar_solo_muestra_sombra_cuando_el_top_bar_sale_de_vista(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
+        $this->assertNotNull($nav, 'La navbar existe');
+        $this->assertStringContainsString('data-stuck', $html, 'La navbar publica el estado sticky a Alpine');
+        $this->assertStringContainsString('data-shipping-topbar', $html, 'La sombra se decide observando el top bar');
+        $this->assertStringContainsString('IntersectionObserver', $html, 'El estado sticky se observa sin listener de scroll');
+
+        $navClasses = preg_split('/\s+/', trim((string) $nav->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('border-transparent', $navClasses, 'El borde reservado no se pinta en reposo');
+        $this->assertContains('transition-shadow', $navClasses, 'La sombra tiene transición');
+
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertStringContainsString("[data-storefront-nav][data-stuck='true']", $css);
+        $this->assertStringContainsString('box-shadow', $css);
+        $this->assertStringContainsString('@media (forced-colors: active)', $css);
+        $this->assertStringContainsString('CanvasText', $css);
     }
 
     public function test_el_panel_de_busqueda_se_repite_igual_en_todo_el_shell(): void

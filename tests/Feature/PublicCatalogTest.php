@@ -110,17 +110,19 @@ class PublicCatalogTest extends TestCase
             'slug' => 'heritage-cuero',
             'precio' => 980000,
             'stock' => 5,
+            'marca' => 'Tag Heuer',
+            'movimiento' => 'Automático',
             'imagenes' => ['https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/heritage.jpg'],
         ]);
 
         $this->get('/catalogo')
             ->assertOk()
             ->assertSee('Heritage Cuero')
-            ->assertSee('Caballero')
-            ->assertSee('Casual')
+            ->assertSee('Tag Heuer · Automático')
+            ->assertSee('Nuevo')
             ->assertSee('980.000')
-            ->assertSee('Disponible: 5')
-            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage.jpg', false);
+            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage.jpg', false)
+            ->assertDontSee('Disponible: 5');
     }
 
     public function test_catalogo_usa_imagen_de_fallback_sin_imagenes(): void
@@ -207,6 +209,16 @@ class PublicCatalogTest extends TestCase
 
         $this->assertMatchesRegularExpression('/<button[^>]*type="submit"/i', $content, 'Debe existir un botón para aplicar los filtros');
         $this->assertStringContainsString('Limpiar', $content, 'Debe existir un enlace para limpiar los filtros');
+    }
+
+    public function test_catalogo_expone_el_control_de_filtros_para_movil(): void
+    {
+        $html = $this->get('/catalogo')->assertOk()->getContent();
+
+        $this->assertStringContainsString('data-catalog-filters', $html, 'El panel de filtros expone su hook');
+        $this->assertStringContainsString('data-catalog-filter-toggle', $html, 'El catálogo tiene un control para abrir los filtros en móvil');
+        $this->assertStringContainsString('aria-controls="catalog-filters"', $html, 'El control declara qué panel abre');
+        $this->assertStringContainsString('id="catalog-filters"', $html, 'El panel tiene el id que referencia el control');
     }
 
     public function test_catalogo_carga_categorias_en_el_select_aunque_no_tengan_productos(): void
@@ -341,6 +353,32 @@ class PublicCatalogTest extends TestCase
 
         $nameAsc = $this->orderedNames($this->get('/catalogo?orden=nombre_asc')->assertOk()->getContent());
         $this->assertSame(['Alfa Reloj', 'Beta Reloj', 'Gamma Reloj'], $nameAsc, 'nombre_asc debe ordenar alfabéticamente');
+    }
+
+    public function test_catalogo_ordena_desde_el_encabezado_y_conserva_los_filtros(): void
+    {
+        $html = $this->get('/catalogo?marca=Acme&orden=precio_asc')->assertOk()->getContent();
+
+        $this->assertStringContainsString('aria-label="Ordenar productos"', $html, 'El encabezado debe exponer el ordenamiento');
+
+        // El control es un desplegable y la opción vigente queda seleccionada.
+        $this->assertMatchesRegularExpression(
+            '/<select(?=[^>]*id="catalog-sort")(?=[^>]*name="orden")[^>]*>.*?<option value="precio_asc"[^>]*selected/s',
+            $html,
+            'El desplegable debe marcar el orden vigente'
+        );
+
+        // El formulario conserva los filtros activos como campos ocultos.
+        $this->assertMatchesRegularExpression(
+            '/<input(?=[^>]*type="hidden")(?=[^>]*name="marca")(?=[^>]*value="Acme")[^>]*>/',
+            $html,
+            'Cambiar el orden debe conservar el filtro de marca'
+        );
+
+        // Las cuatro opciones están disponibles.
+        foreach (['recientes', 'precio_asc', 'precio_desc', 'nombre_asc'] as $orden) {
+            $this->assertStringContainsString('value="'.$orden.'"', $html, "El desplegable debe ofrecer {$orden}");
+        }
     }
 
     public function test_catalogo_orden_recientes_es_estable_por_id_descendente(): void

@@ -16,7 +16,13 @@ class CollectionController extends Controller
     {
         $collections = Collection::withCount('products')->latest()->paginate(20);
 
-        return view('admin.collections.index', compact('collections'));
+        $stats = [
+            'total' => Collection::count(),
+            'active' => Collection::where('is_active', true)->count(),
+            'products' => (int) \DB::table('collection_product')->count(),
+        ];
+
+        return view('admin.collections.index', compact('collections', 'stats'));
     }
 
     public function create(): View

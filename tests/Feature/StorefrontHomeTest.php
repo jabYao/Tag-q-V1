@@ -1401,16 +1401,44 @@ class StorefrontHomeTest extends TestCase
 
     public function test_el_contenedor_acotado_por_defecto_sigue_vigente_fuera_del_home(): void
     {
-        // La excepción a sangre es solo del home: el catálogo conserva el
-        // contenedor por defecto del shell compartido.
+        // El contenedor único del shell sigue vigente en el resto del
+        // storefront; catálogo y home son las dos excepciones (rail de filtros
+        // y hero a sangre, respectivamente).
+        foreach ([route('cart.index'), route('legal.privacy')] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+
+            preg_match('/<main\b[^>]*class="([^"]*)"/', $html, $matches);
+            $classes = array_values(array_filter(preg_split('/\s+/', trim($matches[1] ?? ''))));
+
+            foreach (['max-w-[1600px]', 'mx-auto', 'px-5', 'py-8', 'sm:px-8', 'lg:px-10'] as $class) {
+                $this->assertContains($class, $classes, "{$url} debe usar el contenedor global del storefront ({$class})");
+            }
+        }
+    }
+
+    public function test_el_catalogo_pega_los_filtros_al_gutter_de_la_ventana(): void
+    {
+        // El catálogo suelta el contenedor centrado para que la columna de
+        // filtros arranque en el gutter, a la misma altura que el logo del
+        // navbar. La grilla de productos conserva un tope propio para que las
+        // tres tarjetas no se estiren en pantallas anchas.
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
         preg_match('/<main\b[^>]*class="([^"]*)"/', $html, $matches);
         $classes = array_values(array_filter(preg_split('/\s+/', trim($matches[1] ?? ''))));
 
-        foreach (['max-w-6xl', 'mx-auto', 'px-6', 'py-8'] as $class) {
-            $this->assertContains($class, $classes, "El catálogo debe conservar el contenedor del shell ({$class})");
+        foreach (['w-full', 'px-5', 'py-8', 'sm:px-8', 'lg:px-10'] as $class) {
+            $this->assertContains($class, $classes, "El catálogo debe ir a todo el ancho ({$class})");
         }
+
+        $this->assertNotContains('max-w-[1600px]', $classes, 'El catálogo no debe quedar centrado en el contenedor');
+        $this->assertNotContains('mx-auto', $classes, 'El catálogo no debe centrar su <main>');
+
+        $this->assertMatchesRegularExpression(
+            '/aria-label="Productos del catálogo"[^>]*lg:max-w-\[1400px\]/',
+            $html,
+            'La grilla de productos debe conservar un tope propio'
+        );
     }
 
     public function test_el_alto_del_hero_se_calcula_con_la_cabecera_del_storefront(): void
@@ -1433,15 +1461,19 @@ class StorefrontHomeTest extends TestCase
             'app.js debe publicar --storefront-header-h en el documento',
         );
 
-        // La medida se toma contra el DOCUMENTO y no contra el viewport: el nav
-        // está en flujo normal, así que `getBoundingClientRect().bottom` encoge
-        // al scrollear. Sin sumar `window.scrollY`, un resize con la página
-        // bajada publicaba una cabecera más chica, se restaba de menos en el
-        // `calc` y el hero se salía del viewport.
+        // La navbar es sticky: al scrollear se pega al borde superior, así que
+        // `getBoundingClientRect().bottom + window.scrollY` ya no representa la
+        // cabecera. La altura estable se calcula sumando el top bar y la navbar.
+        $this->assertStringContainsString('data-shipping-topbar', $js);
         $this->assertMatchesRegularExpression(
-            '/getBoundingClientRect\(\)\.bottom\s*\+\s*window\.scrollY/',
+            '/\(topbar\s*\?\s*topbar\.offsetHeight\s*:\s*0\)\s*\+\s*nav\.offsetHeight/',
             $js,
-            'app.js debe medir la cabecera contra el documento sumando window.scrollY',
+            'app.js debe sumar el alto del top bar y la navbar para medir la cabecera',
+        );
+        $this->assertStringNotContainsString(
+            'getBoundingClientRect().bottom + window.scrollY',
+            $js,
+            'app.js no debe medir una navbar sticky contra el scroll',
         );
 
         // Se vuelve a medir si la cabecera cambia de alto después del primer

@@ -1,78 +1,171 @@
-@extends('layouts.app')
+@extends('layouts.admin')
+
 @section('title', 'Pedidos')
 
 @section('content')
-@php
-$statusLabels = [
-    'pendiente_de_pago' => 'Pendiente de pago',
-    'pagado' => 'Pagado',
-    'en_preparacion' => 'En preparación',
-    'enviado' => 'Enviado',
-    'entregado' => 'Entregado',
-    'cancelado' => 'Cancelado',
-    'reembolsado' => 'Reembolsado',
-];
-@endphp
-<div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold">Pedidos</h1>
-</div>
+    @php
+        $activeStatus = $filters['status'] ?? null;
+        $searchTerm = $filters['q'] ?? null;
+        $hasFilter = filled($activeStatus) || filled($searchTerm);
+        $lastPage = max(1, $orders->lastPage());
+    @endphp
 
-<form method="GET" action="{{ route('admin.orders.index') }}" class="bg-white rounded shadow p-4 mb-6 flex flex-wrap items-end gap-4">
-    <div>
-        <label for="status" class="block text-xs text-gray-500 mb-1">Estado</label>
-        <select id="status" name="status" class="border rounded px-3 py-2 text-sm">
-            <option value="">Todos</option>
-            @foreach($statuses as $status)
-                <option value="{{ $status }}" @selected(($filters['status'] ?? null) === $status)>{{ $statusLabels[$status] ?? $status }}</option>
-            @endforeach
-        </select>
-    </div>
-    <div>
-        <label for="q" class="block text-xs text-gray-500 mb-1">Buscar</label>
-        <input id="q" type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Código o email del cliente" class="border rounded px-3 py-2 text-sm w-64">
-    </div>
-    <button type="submit" class="bg-black text-white px-4 py-2 rounded text-sm">Filtrar</button>
-    @if(($filters['status'] ?? null) || ($filters['q'] ?? null))
-        <a href="{{ route('admin.orders.index') }}" class="text-sm text-gray-600 hover:text-black">Limpiar</a>
-    @endif
-</form>
+    <div class="admin-page-head admin-page-head--compact">
+        <div class="admin-page-head__main">
+            <h1 class="admin-page-title admin-page-title--compact">PEDIDOS</h1>
+            <p class="admin-page-note">Agenda de despacho · abre una fila para avanzar el estado del pedido.</p>
+        </div>
 
-<table class="w-full bg-white rounded shadow overflow-hidden">
-    <thead class="bg-gray-100 text-left text-sm">
-        <tr>
-            <th class="px-4 py-2">Código</th>
-            <th class="px-4 py-2">Cliente</th>
-            <th class="px-4 py-2">Total COP</th>
-            <th class="px-4 py-2">Método de pago</th>
-            <th class="px-4 py-2">Estado</th>
-            <th class="px-4 py-2">Fecha</th>
-            <th class="px-4 py-2">Acciones</th>
-        </tr>
-    </thead>
-    <tbody>
-    @forelse($orders as $order)
-        <tr class="border-t">
-            <td class="px-4 py-2 font-mono text-sm">{{ $order->code }}</td>
-            <td class="px-4 py-2">
-                @if($order->user)
-                    {{ $order->user->name }}
-                @else
-                    Invitado
+        <div class="admin-glance" aria-label="Resumen de pedidos">
+            <div class="admin-glance__item">
+                <p class="admin-micro">Total</p>
+                <p class="admin-glance__value">{{ $totalCount }}</p>
+            </div>
+            <div class="admin-glance__item">
+                <p class="admin-micro">Abiertos</p>
+                <p class="admin-glance__value">{{ $openCount }}</p>
+                <p class="admin-glance__note">{{ $statusCounts['pendiente_de_pago'] ?? 0 }} por cobrar</p>
+            </div>
+            <div class="admin-glance__item">
+                <p class="admin-micro">Por despachar</p>
+                <p class="admin-glance__value">{{ $toShipCount }}</p>
+                <p class="admin-glance__note">pagados y en preparación</p>
+            </div>
+        </div>
+    </div>
+
+    <form class="admin-filter" method="GET" action="{{ route('admin.orders.index') }}" role="search" aria-label="Filtrar pedidos">
+        <div class="admin-filter__field">
+            <label class="admin-filter__label" for="order-status">Estado</label>
+            <select class="admin-select" id="order-status" name="status">
+                <option value="">Todos</option>
+                @foreach($statuses as $status)
+                    <option value="{{ $status }}" @selected($activeStatus === $status)>{{ $statusLabels[$status] ?? $status }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="admin-filter__field admin-filter__field--grow">
+            <label class="admin-filter__label" for="order-q">Buscar</label>
+            <input
+                class="admin-input"
+                id="order-q"
+                type="search"
+                name="q"
+                value="{{ $searchTerm }}"
+                placeholder="Código del pedido o email del cliente"
+                autocomplete="off"
+            >
+        </div>
+
+        <div class="admin-filter__actions">
+            <button class="admin-btn admin-btn--dark" type="submit">Filtrar</button>
+            @if($hasFilter)
+                <a class="admin-btn" href="{{ route('admin.orders.index') }}">Limpiar</a>
+            @endif
+        </div>
+
+        <p class="admin-filter__summary">Página {{ $orders->currentPage() }} de {{ $lastPage }}</p>
+    </form>
+
+    <section class="admin-card" aria-labelledby="bandeja-titulo">
+        <header class="admin-card-head">
+            <h2 class="admin-card-title" id="bandeja-titulo">Bandeja</h2>
+            <span class="admin-card-meta">
+                {{ $orders->total() }} {{ $orders->total() === 1 ? 'pedido' : 'pedidos' }}
+                @if($activeStatus)
+                    · {{ $statusLabels[$activeStatus] ?? $activeStatus }}
                 @endif
-            </td>
-            <td class="px-4 py-2">{{ number_format($order->total, 0, ',', '.') }}</td>
-            <td class="px-4 py-2">{{ $order->payment_method ?? '—' }}</td>
-            <td class="px-4 py-2">{{ $statusLabels[$order->status] ?? $order->status }}</td>
-            <td class="px-4 py-2 text-sm text-gray-500">{{ $order->created_at->format('d/m/Y H:i') }}</td>
-            <td class="px-4 py-2">
-                <a href="{{ route('admin.orders.show', $order) }}" class="text-blue-600 text-sm">Ver detalle</a>
-            </td>
-        </tr>
-    @empty
-        <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">Sin pedidos</td></tr>
-    @endforelse
-    </tbody>
-</table>
+            </span>
+        </header>
 
-<div class="mt-4">{{ $orders->links() }}</div>
+        <div class="admin-table-wrap">
+            <table class="admin-table admin-table--orders">
+                <caption class="sr-only">Pedidos con código, cliente, estado, total, método de pago y fecha</caption>
+                <colgroup>
+                    <col class="col-order">
+                    <col>
+                    <col class="col-status">
+                    <col class="col-total">
+                    <col class="col-payment">
+                    <col class="col-date">
+                    <col class="col-chev">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th scope="col">Pedido</th>
+                        <th scope="col">Cliente</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col" class="admin-cell-right">Total</th>
+                        <th scope="col">Pago</th>
+                        <th scope="col">Fecha</th>
+                        <th scope="col"><span class="sr-only">Abrir pedido</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @forelse($orders as $order)
+                    <tr class="admin-status-{{ $order->status }} @if($order->status === 'pendiente_de_pago') admin-row--late @endif">
+                        <td>
+                            <a class="admin-order-code" href="{{ route('admin.orders.show', $order) }}">
+                                <svg class="admin-tagmark" width="8" height="11" viewBox="0 0 8 11" aria-hidden="true" fill="none">
+                                    <path d="M1 1h6v9H1z" stroke="currentColor" stroke-width="0.9"/>
+                                    <circle cx="4" cy="1" r="0.7" fill="currentColor"/>
+                                </svg>
+                                {{ $order->code }}
+                            </a>
+                        </td>
+                        <td>
+                            <div class="admin-customer">
+                                <p class="admin-customer__name" title="{{ $order->user?->name ?? 'Invitado' }}">{{ $order->user?->name ?? 'Invitado' }}</p>
+                                @if($order->user?->email)
+                                    <p class="admin-customer__email">{{ $order->user->email }}</p>
+                                @endif
+                            </div>
+                        </td>
+                        <td>
+                            <span class="admin-stamp">
+                                <span class="admin-status-dot" aria-hidden="true"></span>
+                                {{ $statusLabels[$order->status] ?? $order->status }}
+                            </span>
+                        </td>
+                        <td class="admin-total">$ {{ number_format($order->total, 0, ',', '.') }}</td>
+                        <td class="admin-payment">{{ $order->payment_method ?? '—' }}</td>
+                        <td class="admin-date-cell">
+                            <time
+                                datetime="{{ $order->created_at?->toIso8601String() }}"
+                                title="{{ $order->created_at?->format('d/m/Y H:i') }}"
+                            >
+                                {{ $order->created_at?->isToday() ? $order->created_at->format('H:i') : $order->created_at?->format('d/m') }}
+                            </time>
+                        </td>
+                        <td class="admin-cell-right">
+                            <a class="admin-chev" href="{{ route('admin.orders.show', $order) }}" aria-label="Abrir pedido {{ $order->code }}">
+                                <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true" fill="none">
+                                    <path d="m4 2 3.5 3.5L4 9" stroke="currentColor" stroke-width="1.2"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="7">
+                            <div class="admin-empty admin-empty--table">
+                                @if($hasFilter)
+                                    No hay pedidos que coincidan con este filtro.
+                                    <a class="admin-link" href="{{ route('admin.orders.index') }}">Limpiar filtros</a>
+                                @else
+                                    Todavía no hay pedidos. La bandeja se llena en cuanto entra el primero.
+                                @endif
+                            </div>
+                        </td>
+                    </tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <footer class="admin-card-foot">
+            @include('admin.partials.pagination', ['paginator' => $orders])
+        </footer>
+    </section>
 @endsection

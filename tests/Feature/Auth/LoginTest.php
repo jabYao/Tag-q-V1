@@ -49,7 +49,7 @@ class LoginTest extends TestCase
             ->set('password', 'secreto123')
             ->call('login')
             ->assertHasNoErrors()
-            ->assertRedirect(route('admin.products.index'));
+            ->assertRedirect(route('admin.dashboard'));
 
         $this->assertAuthenticatedAs($user);
     }
@@ -63,7 +63,7 @@ class LoginTest extends TestCase
             ->set('password', 'secreto123')
             ->call('login')
             ->assertHasNoErrors()
-            ->assertRedirect(route('admin.products.index'));
+            ->assertRedirect(route('admin.dashboard'));
 
         $this->assertAuthenticatedAs($user);
     }

@@ -47,4 +47,16 @@ return [
         'deportivo' => 'Deportivo',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Umbral operativo de stock bajo
+    |--------------------------------------------------------------------------
+    |
+    | El negocio todavía no confirmó un umbral. Se usa 3 como corte operativo
+    | visible y marcado como provisional en el panel; no debe presentarse como
+    | una política definitiva.
+    */
+
+    'low_stock_threshold' => 3,
+
 ];

@@ -135,7 +135,8 @@
          (buscar, cuenta, bolsa) enlazan los flujos ya existentes. Todo el
          comportamiento interactivo usa Alpine (ya cargado por Vite) con `<svg>`
          en línea: sin dependencias nuevas. La barra superior de envíos queda
-         intacta arriba. T8 solo ajusta la presentación: las etiquetas de
+         intacta arriba y se va con el scroll; la navbar se fija al borde superior
+          (`sticky top-0`). T8 solo ajusta la presentación: las etiquetas de
          categoría van en mayúsculas con tracking, las utilidades (buscar,
          cuenta, bolsa) son solo-icono con su nombre en `aria-label`/`title`. T9 amplía
          el padding responsive del encabezado y da a la marca `Tag Q` un aspecto
@@ -168,6 +169,7 @@
          `storefront.featured-products-menu` (montado en carga diferida). --}}
     <nav
         data-storefront-nav
+        :data-stuck="stuck ? 'true' : 'false'"
         x-data="{
             // Punto de presencia de la bolsa: se siembra con el estado real del
             // carrito calculado en el servidor y se actualiza sin recargar con
@@ -182,6 +184,10 @@
             // disparador al panel; Escape y `closeMega()` lo cierran al instante.
             megaOpen: false,
             megaCloseTimer: null,
+            // Sombra del navbar sticky: la enciende el observer del top bar
+            // cuando el top bar sale de vista, para no dejar una línea dura
+            // permanente.
+            stuck: false,
             // T20 — el panel solo mide su contenido (barra + padding) mientras
             // el área viva del componente Livewire está inactiva; desde la
             // segunda letra se fija al 80% del alto restante.
@@ -195,6 +201,35 @@
                     this.searchPanelTop = nav.getBoundingClientRect().bottom;
                     this.searchPanelHeight = (window.innerHeight - nav.getBoundingClientRect().bottom) * 0.8;
                 };
+                this.observeTopbarForStuck();
+            },
+            // Mientras el top bar siga en el viewport el navbar está en su
+            // posición natural; cuando sale de vista, el navbar se despega y
+            // aparece la sombra. Se usa IntersectionObserver (sin listener de
+            // scroll); el fallback queda solo para navegadores sin soporte.
+            observeTopbarForStuck() {
+                const topbar = document.querySelector('[data-shipping-topbar]');
+
+                if (! topbar) {
+                    return;
+                }
+
+                if (typeof IntersectionObserver === 'function') {
+                    this.stuckObserver = new IntersectionObserver((entries) => {
+                        this.stuck = ! entries[0].isIntersecting;
+                    });
+
+                    this.stuckObserver.observe(topbar);
+
+                    return;
+                }
+
+                this.handleStuckFallback = () => {
+                    this.stuck = topbar.getBoundingClientRect().bottom <= 0;
+                };
+
+                window.addEventListener('scroll', this.handleStuckFallback, { passive: true });
+                this.handleStuckFallback();
             },
             openSearch() {
                 if (this.searchOpen) {
@@ -254,13 +289,21 @@
                 clearTimeout(this.megaCloseTimer);
                 window.removeEventListener('resize', this.handleSearchResize);
                 document.body.style.overflow = this.previousBodyOverflow;
+
+                if (this.stuckObserver) {
+                    this.stuckObserver.disconnect();
+                }
+
+                if (this.handleStuckFallback) {
+                    window.removeEventListener('scroll', this.handleStuckFallback);
+                }
             },
         }"
         @keydown.escape.window="closeSearch(); mobileOpen = false; closeMega()"
         @storefront-search-area.window="searchAreaActive = !! ($event.detail && $event.detail.active)"
         @cart-added.window="onCartIndicatorAdded()"
         @cart-updated.window="onCartIndicatorUpdated($event)"
-        class="relative z-50 bg-white border-b px-5 py-4 sm:px-8 sm:py-5 lg:px-10"
+        class="sticky top-0 z-50 border-b border-transparent bg-white px-5 py-4 transition-shadow duration-200 motion-reduce:transition-none sm:px-8 sm:py-5 lg:px-10"
         aria-label="Navegación principal"
     >
         <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
@@ -632,22 +675,32 @@
     </nav>
     {{-- Bootstrap síncrono: publica la altura real de la cabecera antes de que
          el primer frame del hero pueda calcular su `min-height`, evitando el
-         salto que producía el fallback de 0px mientras cargaba app.js. --}}
+         salto que producía el fallback de 0px mientras cargaba app.js. La
+         navbar es sticky, así que la altura se mide sumando el top bar y la
+         navbar, no con `getBoundingClientRect().bottom + scrollY`. --}}
     <script data-storefront-header-height-bootstrap>
         (() => {
             const nav = document.querySelector('[data-storefront-nav]');
+            const topbar = document.querySelector('[data-shipping-topbar]');
+
             if (nav) {
+                const height = (topbar ? topbar.offsetHeight : 0) + nav.offsetHeight;
+
                 document.documentElement.style.setProperty(
                     '--storefront-header-h',
-                    `${nav.getBoundingClientRect().bottom + window.scrollY}px`,
+                    `${height}px`,
                 );
             }
         })();
     </script>
-    {{-- `main-class` conserva el ancho de cada página; `main-attributes` permite
-         conservar los atributos de marcado que vivían en el <main> de la página
-         (debe incluir su espacio inicial). --}}
-    <main class="@yield('main-class', 'max-w-6xl mx-auto px-6 py-8')"@yield('main-attributes')>
+    {{-- Contenedor único del storefront: `1600px` con el mismo padding del
+         navbar. Las páginas que necesitan una medida de lectura más corta
+         (checkout, legales, detalle) acotan su contenido dentro. `main-class`
+         queda para las dos excepciones: el home a sangre y el catálogo, que
+         suelta el centrado para pegar los filtros al gutter.
+         `main-attributes` conserva los atributos de marcado que vivían en el
+         <main> de la página (debe incluir su espacio inicial). --}}
+    <main class="@yield('main-class', 'mx-auto w-full max-w-[1600px] px-5 py-8 sm:px-8 lg:px-10')"@yield('main-attributes')>
         @yield('content')
     </main>
     {{-- Pie de página compartido del storefront: presente en todas las páginas

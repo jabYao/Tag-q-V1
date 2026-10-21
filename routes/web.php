@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\CollectionController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UserController;
@@ -73,6 +74,9 @@ Route::middleware('auth')->prefix('mis-pedidos')->name('customer.orders.')->grou
 
 // Panel admin — solo admin y empleado (cliente e invitado quedan fuera)
 Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin.')->group(function () {
+    // Hoja de operación diaria: el nuevo inicio del panel.
+    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+
     Route::resource('products', ProductController::class)->except(['show'])->parameters(['products' => 'product']);
 
     // Pedidos — solo admin y empleado: listado, detalle, avance del flujo

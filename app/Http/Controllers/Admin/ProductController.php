@@ -17,7 +17,18 @@ class ProductController extends Controller
     public function index(): View
     {
         $products = Product::with('category')->latest()->paginate(20);
-        return view('admin.products.index', compact('products'));
+        $lowStockThreshold = (int) config('tagq.low_stock_threshold', 3);
+
+        $stats = [
+            'total' => Product::count(),
+            'active' => Product::where('is_active', true)->count(),
+            'low_stock' => Product::where('is_active', true)
+                ->where('stock', '<=', $lowStockThreshold)
+                ->count(),
+            'low_stock_threshold' => $lowStockThreshold,
+        ];
+
+        return view('admin.products.index', compact('products', 'stats'));
     }
 
     public function create(): View

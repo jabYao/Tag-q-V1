@@ -2,9 +2,8 @@
 
 @section('title', $title.' — '.config('app.name', 'Tag q'))
 
-@section('main-class', 'max-w-3xl mx-auto px-6 py-12')
-
 @section('content')
+    <div class="mx-auto w-full max-w-3xl py-4">
     {{-- Página legal provisional: conserva su título y declara que el
          contenido todavía no existe. No se inventan políticas, direcciones,
          correos ni plazos; cuando el texto real esté aprobado se reemplaza el
@@ -16,4 +15,5 @@
         </p>
         <a href="{{ route('home') }}" class="inline-block text-sm text-blue-700 underline-offset-4 hover:underline">&larr; Volver al inicio</a>
     </article>
+    </div>
 @endsection

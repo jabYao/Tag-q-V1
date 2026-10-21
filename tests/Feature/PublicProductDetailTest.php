@@ -80,8 +80,35 @@ class PublicProductDetailTest extends TestCase
             ->assertSee('Zafiro')
             ->assertSee('22mm')
             ->assertSee('Automático')
+            ->assertSee('Categoría')
+            ->assertDontSee('pd-eyebrow', false)
             ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage-1.jpg', false)
-            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage-2.jpg', false);
+            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage-2.jpg', false)
+            ->assertSee('data-gallery-count="2"', false)
+            ->assertSee('data-gallery-main', false)
+            ->assertSee('data-gallery-thumb-index="0"', false)
+            ->assertSee('data-gallery-thumb-index="1"', false)
+            ->assertDontSee('data-gallery-single', false);
+    }
+
+    public function test_detalle_con_una_sola_imagen_oculta_el_riel_de_miniaturas(): void
+    {
+        $this->product([
+            'name' => 'Una Sola Vista',
+            'slug' => 'una-sola-vista',
+            'imagenes' => [
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/unica.jpg',
+            ],
+        ]);
+
+        $this->get('/catalogo/una-sola-vista')
+            ->assertOk()
+            ->assertSee('data-gallery-count="1"', false)
+            ->assertSee('data-gallery-single', false)
+            ->assertSee('data-gallery-main', false)
+            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/unica.jpg', false)
+            ->assertDontSee('data-gallery-thumb-index', false)
+            ->assertDontSee('data-gallery-empty', false);
     }
 
     public function test_detalle_de_producto_agotado_sigue_visible_con_etiqueta(): void
@@ -145,7 +172,10 @@ class PublicProductDetailTest extends TestCase
             ->assertOk()
             ->assertSee('Sin Imagen')
             ->assertSee('Sin imagen')
-            ->assertSee('Sin especificaciones');
+            ->assertSee('Sin especificaciones')
+            ->assertSee('data-gallery-count="0"', false)
+            ->assertSee('data-gallery-empty', false)
+            ->assertDontSee('data-gallery-thumb-index', false);
     }
 
     /**

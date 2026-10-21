@@ -1,13 +1,23 @@
-@extends('layouts.app')
+@extends('layouts.admin')
+
 @section('title', 'Nuevo producto')
 
 @section('content')
-<h1 class="text-2xl font-bold mb-6">Nuevo producto</h1>
+    <div class="admin-page-head admin-page-head--compact">
+        <div class="admin-page-head__main">
+            <a class="admin-link admin-link--back" href="{{ route('admin.products.index') }}">← Volver al catálogo</a>
+            <h1 class="admin-page-title admin-page-title--form">NUEVO PRODUCTO</h1>
+            <p class="admin-page-note">Una referencia nueva para el catálogo.</p>
+        </div>
+    </div>
 
-<form method="POST" action="{{ route('admin.products.store') }}" enctype="multipart/form-data" class="bg-white p-6 rounded shadow space-y-4">
-    @csrf
-    @include('admin.products._form')
-    <button class="bg-black text-white px-6 py-2 rounded">Crear</button>
-    <a href="{{ route('admin.products.index') }}" class="ml-2 text-gray-500">Cancelar</a>
-</form>
+    <form class="admin-form" method="POST" action="{{ route('admin.products.store') }}" enctype="multipart/form-data">
+        @csrf
+        @include('admin.products._form')
+
+        <div class="admin-form__actions">
+            <a class="admin-link" href="{{ route('admin.products.index') }}">Cancelar</a>
+            <button class="admin-btn admin-btn--dark admin-btn--save" type="submit">Crear producto</button>
+        </div>
+    </form>
 @endsection

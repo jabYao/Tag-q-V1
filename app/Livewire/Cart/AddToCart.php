@@ -20,10 +20,12 @@ class AddToCart extends Component
     public int $productId = 0;
 
     /**
-     * Presentación del componente. `full` es la vista por defecto (catálogo y
-     * detalle, con selector de cantidad) y `compact` la variante del home: un
-     * único botón con icono de bolsa que agrega exactamente una unidad. Se fija
-     * al montar y no puede cambiarse desde el cliente.
+     * Presentación del componente. `full` es la vista por defecto (catálogo,
+     * con selector de cantidad), `compact` la variante del home (un único botón
+     * con icono de bolsa que agrega exactamente una unidad) y `editorial` la
+     * del detalle: escalón de cantidad y CTA a lo ancho del riel de compra. Las
+     * tres conservan la misma validación de stock. Se fija al montar y no puede
+     * cambiarse desde el cliente.
      */
     #[Locked]
     public string $variant = 'full';
@@ -34,7 +36,7 @@ class AddToCart extends Component
     public function mount(int|Product $product, string $variant = 'full'): void
     {
         $this->productId = $product instanceof Product ? $product->id : $product;
-        $this->variant = $variant === 'compact' ? 'compact' : 'full';
+        $this->variant = in_array($variant, ['compact', 'editorial'], true) ? $variant : 'full';
     }
 
     protected function messages(): array

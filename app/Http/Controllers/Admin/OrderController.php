@@ -51,10 +51,25 @@ class OrderController extends Controller
             ->paginate(20)
             ->withQueryString();
 
+        $countsByStatus = Order::query()
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $statusCounts = collect(OrderStatusService::STATUSES)
+            ->mapWithKeys(fn (string $status): array => [$status => (int) ($countsByStatus[$status] ?? 0)]);
+
+        $openStatuses = ['pendiente_de_pago', 'pagado', 'en_preparacion', 'enviado'];
+
         return view('admin.orders.index', [
             'orders' => $orders,
             'filters' => $filters,
             'statuses' => OrderStatusService::STATUSES,
+            'statusLabels' => OrderStatusService::LABELS,
+            'statusCounts' => $statusCounts,
+            'openCount' => (int) $statusCounts->only($openStatuses)->sum(),
+            'totalCount' => Order::count(),
+            'toShipCount' => (int) $statusCounts->only(['pagado', 'en_preparacion'])->sum(),
         ]);
     }
 
@@ -65,6 +80,7 @@ class OrderController extends Controller
         return view('admin.orders.show', [
             'order' => $order,
             'statuses' => OrderStatusService::STATUSES,
+            'statusLabels' => OrderStatusService::LABELS,
             'availableTransitions' => $this->statuses->availableTransitions((string) $order->status),
             'canCancel' => $this->cancellations->canCancel($order),
             'canRefund' => $this->cancellations->canRefund($order),

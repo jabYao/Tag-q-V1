@@ -14,12 +14,15 @@ import ScrollTrigger from 'gsap/ScrollTrigger';
 /**
  * Alto real de la cabecera del storefront (`--storefront-header-h`).
  *
- * El top bar de envíos y la navbar son hermanos al principio del `<body>`, así
- * que el borde inferior de la navbar ya suma ambos. Esa medida se publica en px
- * sobre `<html>` para que el hero del home se dibuje como
- * `100dvh - cabecera` y quede pegado a la navbar. Se recalcula al cargar y al
- * redimensionar; las páginas sin navbar (panel de administración) no hacen
- * nada. El script es `type="module"`, así que ya corre con el DOM listo.
+ * El top bar de envíos y la navbar son hermanos al principio del `<body>`.
+ * La navbar es sticky: al scrollear se pega al borde superior, así que su
+ * `getBoundingClientRect().bottom` deja de representar la cabecera completa.
+ * La altura estable se obtiene sumando el alto del top bar y el de la navbar;
+ * esa suma no depende del scroll. Se publica en px sobre `<html>` para que el
+ * hero del home se dibuje como `100dvh - cabecera` y quede pegado a la navbar.
+ * Se recalcula al cargar y al redimensionar; las páginas sin navbar (panel de
+ * administración) no hacen nada. El script es `type="module"`, así que ya corre
+ * con el DOM listo.
  */
 function publishStorefrontHeaderHeight() {
     const nav = document.querySelector('[data-storefront-nav]');
@@ -28,14 +31,8 @@ function publishStorefrontHeaderHeight() {
         return;
     }
 
-    // Medida tomada desde el inicio del documento, NO desde el viewport: el
-    // nav vive en flujo normal, así que `getBoundingClientRect().bottom`
-    // encoge a medida que la página baja (y puede volverse negativo). Usarlo
-    // directamente hacía que un redimensionar con la página scrolleada
-    // sobrestimara la cabecera y el hero se pasara del viewport. Sumarle
-    // `window.scrollY` devuelve siempre la altura acumulada real de la
-    // cabecera, sea cual sea el scroll.
-    const height = nav.getBoundingClientRect().bottom + window.scrollY;
+    const topbar = document.querySelector('[data-shipping-topbar]');
+    const height = (topbar ? topbar.offsetHeight : 0) + nav.offsetHeight;
 
     document.documentElement.style.setProperty('--storefront-header-h', `${height}px`);
 }
@@ -50,7 +47,14 @@ if (typeof ResizeObserver === 'function') {
     const nav = document.querySelector('[data-storefront-nav]');
 
     if (nav) {
-        new ResizeObserver(publishStorefrontHeaderHeight).observe(nav);
+        const topbar = document.querySelector('[data-shipping-topbar]');
+        const observer = new ResizeObserver(publishStorefrontHeaderHeight);
+
+        observer.observe(nav);
+
+        if (topbar) {
+            observer.observe(topbar);
+        }
     }
 }
 
