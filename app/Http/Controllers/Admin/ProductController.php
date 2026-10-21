@@ -50,7 +50,8 @@ class ProductController extends Controller
         }
 
         $data['imagenes'] = $uploadedUrls;
-        $data['is_active'] = $request->boolean('is_active', true);
+        // El checkbox se omite al desmarcar: la ausencia equivale a "no publicado".
+        $data['is_active'] = $request->boolean('is_active');
 
         Product::create($data);
 

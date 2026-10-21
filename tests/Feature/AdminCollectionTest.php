@@ -88,6 +88,22 @@ class AdminCollectionTest extends TestCase
         $this->assertNull($collection->description);
     }
 
+    public function test_admin_puede_crear_coleccion_despublicada_al_omitir_el_checkbox(): void
+    {
+        $data = $this->validData();
+        unset($data['is_active']);
+
+        // El formulario omite is_active cuando el checkbox queda sin marcar.
+        $this->actingAs($this->admin)
+            ->post(route('admin.collections.store'), $data)
+            ->assertRedirect(route('admin.collections.index'));
+
+        $collection = Collection::where('slug', 'edicion-limitada')->first();
+
+        $this->assertNotNull($collection);
+        $this->assertFalse($collection->is_active);
+    }
+
     public function test_admin_puede_crear_coleccion_con_productos_asignados(): void
     {
         $a = $this->product('reloj-a');

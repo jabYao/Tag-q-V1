@@ -38,7 +38,8 @@ class CollectionController extends Controller
         $products = $data['products'] ?? [];
         unset($data['products']);
 
-        $data['is_active'] = $request->boolean('is_active', true);
+        // El checkbox se omite al desmarcar: la ausencia equivale a "no publicado".
+        $data['is_active'] = $request->boolean('is_active');
 
         $collection = Collection::create($data);
         $collection->products()->sync($products);

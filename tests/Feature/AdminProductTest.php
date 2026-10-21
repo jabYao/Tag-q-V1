@@ -66,6 +66,22 @@ class AdminProductTest extends TestCase
         $this->assertEquals([], $product->imagenes);
     }
 
+    public function test_admin_puede_crear_producto_desactivado_al_omitir_el_checkbox(): void
+    {
+        $data = $this->validData();
+        unset($data['is_active']);
+
+        // El formulario omite is_active cuando el checkbox queda sin marcar.
+        $this->actingAs($this->admin)
+            ->post(route('admin.products.store'), $data)
+            ->assertRedirect(route('admin.products.index'));
+
+        $product = Product::where('slug', 'chronos-test')->first();
+
+        $this->assertNotNull($product);
+        $this->assertFalse($product->is_active);
+    }
+
     public function test_admin_puede_crear_producto_con_imagenes_cloudinary(): void
     {
         Storage::fake('local');
