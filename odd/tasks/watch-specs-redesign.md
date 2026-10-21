@@ -27,8 +27,8 @@ Branch: `feat/watch-specs-redesign` (local only; no push/PR until the owner auth
 - T2. Add `config/watch_specs.php`; add `Brand` model; update `Product` model. (S1, S2, S3, S13) — done (`6647047`).
 - T3. Add brand admin CRUD: requests, controller, routes, views, navigation. (S6) — done (`7fbd806`).
 - T4. Update product requests, controller, and admin form for the new fields and JSONB specs. (S1, S2, S10, S12, S13) — done (`f9f013b`).
-- T5. Update catalog detail display and filters. (S1, S2, S12, S13) — done (`7aedcf4`).
-- T6. Update seeders, add/update tests, run the full suite. (S8, S9, S14) — done (`6647047`, `7fbd806`, `f9f013b`, `7aedcf4`, `1f341e1`, `58e3121`); full suite 532 passed.
+- T5. Update catalog detail display and filters. (S1, S2, S12, S13) — done (`7aedcf4`, `ef951ac`).
+- T6. Update seeders, add/update tests, run the full suite. (S8, S9, S14) — done (`6647047`, `7fbd806`, `f9f013b`, `7aedcf4`, `1f341e1`, `58e3121`, `ef951ac`); full suite 534 passed.
 
 ## Log
 
@@ -41,3 +41,4 @@ Branch: `feat/watch-specs-redesign` (local only; no push/PR until the owner auth
 - L7 (pending): The `NOT NULL` migration for required spec columns waits for the owner's manual product deletion.
 - L8 (coverage): Added catalog search coverage for the new brand relation, so searching by brand name finds products without a legacy `marca` value.
 - L9 (regression fix): The flat detail table keyed informative specs by label, so duplicate labels (`Color`, `Acabado`) overwrote each other. Renamed them to `Color de esfera`, `Color de correa`, `Acabado de caja`, `Acabado de esfera`, and `Material de correa`, with a regression test covering the four values together.
+- L10 (independent verification + blocker fix): A fresh verifier confirmed the feature against S1-S14 and found one blocker: the `cristal` and `movimiento` filters accepted legacy labels in validation but queried the normalized slug columns with the label, returning zero results. `CatalogFilterRequest` now resolves slugs and legacy labels (with or without accents/case) to the canonical slug before validation; regression tests cover both directions. Final suite: 534 passed.
