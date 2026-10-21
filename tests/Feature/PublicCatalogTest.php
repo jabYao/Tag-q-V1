@@ -248,6 +248,23 @@ class PublicCatalogTest extends TestCase
             ->assertDontSee('Seiko Clásico');
     }
 
+    public function test_catalogo_busca_por_la_marca_nueva_sin_distinguir_mayusculas(): void
+    {
+        $brand = Brand::create([
+            'name' => 'Orient',
+            'slug' => 'orient',
+            'is_active' => true,
+        ]);
+
+        $this->product(['name' => 'Reloj Orient', 'slug' => 'reloj-orient', 'brand_id' => $brand->id]);
+        $this->product(['name' => 'Reloj Sin Marca', 'slug' => 'reloj-sin-marca']);
+
+        $this->get('/catalogo?q=orient')
+            ->assertOk()
+            ->assertSee('Reloj Orient')
+            ->assertDontSee('Reloj Sin Marca');
+    }
+
     public function test_catalogo_filtra_por_categoria(): void
     {
         $dama = Category::create(['name' => 'Dama', 'slug' => 'dama']);
