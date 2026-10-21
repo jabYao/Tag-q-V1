@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
+use App\Models\Brand;
 use App\Models\Product;
 use App\Services\ProductImageService;
 use Illuminate\Http\RedirectResponse;
@@ -16,7 +17,7 @@ class ProductController extends Controller
 
     public function index(): View
     {
-        $products = Product::with('category')->latest()->paginate(20);
+        $products = Product::with(['category', 'brand'])->latest()->paginate(20);
         $lowStockThreshold = (int) config('tagq.low_stock_threshold', 3);
 
         $stats = [
@@ -37,12 +38,14 @@ class ProductController extends Controller
         abort_unless(auth()->user()?->isAdmin(), 403);
 
         $categories = \App\Models\Category::orderBy('name')->get();
-        return view('admin.products.create', compact('categories'));
+        $brands = Brand::where('is_active', true)->orderBy('name')->get();
+
+        return view('admin.products.create', compact('categories', 'brands'));
     }
 
     public function store(StoreProductRequest $request): RedirectResponse
     {
-        $data = $request->validated();
+        $data = $this->normalizeSpecs($request->validated());
         $uploadedUrls = [];
 
         if ($request->hasFile('imagenes')) {
@@ -61,12 +64,17 @@ class ProductController extends Controller
     public function edit(Product $product): View
     {
         $categories = \App\Models\Category::orderBy('name')->get();
-        return view('admin.products.edit', compact('product', 'categories'));
+        $brands = Brand::where('is_active', true)
+            ->when($product->brand_id, fn ($query) => $query->orWhere('id', $product->brand_id))
+            ->orderBy('name')
+            ->get();
+
+        return view('admin.products.edit', compact('product', 'categories', 'brands'));
     }
 
     public function update(UpdateProductRequest $request, Product $product): RedirectResponse
     {
-        $data = $request->validated();
+        $data = $this->normalizeSpecs($request->validated());
 
         $existentes = $request->input('imagenes_existentes', []);
         // Solo conservar las que realmente pertenecen al producto (evita inyección)
@@ -99,6 +107,25 @@ class ProductController extends Controller
         $product->update($data);
 
         return redirect()->route('admin.products.index')->with('success', 'Producto actualizado');
+    }
+
+    /**
+     * Solo persiste los specs informativos que el formulario marcó como
+     * activos y que además tienen un valor. La presencia en `specs` es la
+     * señal de que la ficha debe mostrarlos.
+     */
+    private function normalizeSpecs(array $data): array
+    {
+        $active = array_keys($data['specs_activos'] ?? []);
+        $specs = collect($data['specs'] ?? [])
+            ->only($active)
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->all();
+
+        unset($data['specs_activos']);
+        $data['specs'] = $specs ?: null;
+
+        return $data;
     }
 
     public function destroy(Product $product): RedirectResponse

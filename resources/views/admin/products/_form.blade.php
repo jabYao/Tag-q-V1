@@ -2,6 +2,11 @@
     $p = $product ?? null;
     $isAdmin = auth()->user()?->isAdmin() ?? false;
     $lowStockThreshold = (int) config('tagq.low_stock_threshold', 3);
+    $brands = $brands ?? collect();
+    $specs = old('specs', $p?->specs ?? []);
+    $specs = is_array($specs) ? $specs : [];
+    $activeSpecs = old('specs_activos', array_fill_keys(array_keys($specs), '1'));
+    $activeSpecs = is_array($activeSpecs) ? $activeSpecs : [];
 @endphp
 
 <section class="admin-form__section" aria-labelledby="producto-identidad">
@@ -30,8 +35,33 @@
         </div>
 
         <div class="admin-field">
-            <label class="admin-label" for="name">Nombre</label>
+            <label class="admin-label" for="name">Nombre / modelo</label>
             <input class="admin-input" id="name" name="name" value="{{ old('name', $p?->name) }}" required autocomplete="off">
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="brand_id">Marca</label>
+            <select class="admin-select" id="brand_id" name="brand_id" required>
+                <option value="">Seleccioná una marca</option>
+                @foreach($brands as $brand)
+                    <option value="{{ $brand->id }}" @selected((string) old('brand_id', $p?->brand_id) === (string) $brand->id)>
+                        {{ $brand->name }}{{ $brand->is_active ? '' : ' (inactiva)' }}
+                    </option>
+                @endforeach
+            </select>
+            @if($brands->isEmpty())
+                <p class="admin-help">
+                    No hay marcas activas.
+                    <a class="admin-link" href="{{ route('admin.brands.create') }}">Creá una marca</a>
+                    antes de guardar el producto.
+                </p>
+            @endif
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="reference">Referencia</label>
+            <input class="admin-input" id="reference" name="reference" value="{{ old('reference', $p?->reference) }}" required autocomplete="off">
+            <p class="admin-help">Única dentro de la marca.</p>
         </div>
 
         <div class="admin-field">
@@ -50,35 +80,154 @@
 <section class="admin-form__section" aria-labelledby="producto-especificaciones">
     <div class="admin-form__section-head">
         <h2 class="admin-form__section-title" id="producto-especificaciones">Especificaciones</h2>
-        <p class="admin-form__section-note">Ficha técnica del reloj.</p>
+        <p class="admin-form__section-note">Ficha técnica obligatoria del reloj. Los campos libres aceptan cualquier valor; las listas usan slugs canónicos.</p>
     </div>
 
     <div class="admin-form__grid">
         <div class="admin-field">
-            <label class="admin-label" for="marca">Marca</label>
-            <input class="admin-input" id="marca" name="marca" value="{{ old('marca', $p?->marca) }}">
+            <label class="admin-label" for="case_shape">Forma de caja</label>
+            <select class="admin-select" id="case_shape" name="case_shape" required>
+                <option value="">Seleccioná una forma</option>
+                @foreach(config('watch_specs.case_shapes', []) as $slug => $label)
+                    <option value="{{ $slug }}" @selected(old('case_shape', $p?->case_shape) === $slug)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="case_material">Material de caja</label>
+            <input class="admin-input" id="case_material" name="case_material" value="{{ old('case_material', $p?->case_material) }}" list="case-material-suggestions" required autocomplete="off">
+            <datalist id="case-material-suggestions">
+                @foreach(config('watch_specs.case_material_suggestions', []) as $suggestion)
+                    <option value="{{ $suggestion }}"></option>
+                @endforeach
+            </datalist>
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="case_color">Color de caja</label>
+            <input class="admin-input" id="case_color" name="case_color" value="{{ old('case_color', $p?->case_color) }}" list="case-color-suggestions" required autocomplete="off">
+            <datalist id="case-color-suggestions">
+                @foreach(config('watch_specs.case_color_suggestions', []) as $suggestion)
+                    <option value="{{ $suggestion }}"></option>
+                @endforeach
+            </datalist>
         </div>
 
         <div class="admin-field">
             <label class="admin-label" for="movimiento">Movimiento</label>
-            <input class="admin-input" id="movimiento" name="movimiento" value="{{ old('movimiento', $p?->movimiento) }}">
-        </div>
-
-        <div class="admin-field">
-            <label class="admin-label" for="material_pulso">Material del pulso</label>
-            <input class="admin-input" id="material_pulso" name="material_pulso" value="{{ old('material_pulso', $p?->material_pulso) }}">
+            <select class="admin-select" id="movimiento" name="movimiento" required>
+                <option value="">Seleccioná un movimiento</option>
+                @foreach(config('watch_specs.movement_types', []) as $slug => $label)
+                    <option value="{{ $slug }}" @selected(old('movimiento', $p?->movimiento) === $slug)>{{ $label }}</option>
+                @endforeach
+            </select>
         </div>
 
         <div class="admin-field">
             <label class="admin-label" for="cristal">Cristal</label>
-            <input class="admin-input" id="cristal" name="cristal" value="{{ old('cristal', $p?->cristal) }}">
+            <select class="admin-select" id="cristal" name="cristal" required>
+                <option value="">Seleccioná un cristal</option>
+                @foreach(config('watch_specs.crystal_materials', []) as $slug => $label)
+                    <option value="{{ $slug }}" @selected(old('cristal', $p?->cristal) === $slug)>{{ $label }}</option>
+                @endforeach
+            </select>
         </div>
 
         <div class="admin-field">
-            <label class="admin-label" for="ancho_correa">Ancho de correa</label>
-            <input class="admin-input" id="ancho_correa" name="ancho_correa" value="{{ old('ancho_correa', $p?->ancho_correa) }}">
+            <label class="admin-label" for="diameter_mm">Diámetro (mm)</label>
+            <input class="admin-input" id="diameter_mm" name="diameter_mm" type="number" min="0" max="100" step="0.1" value="{{ old('diameter_mm', $p?->diameter_mm) }}">
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="thickness_mm">Grosor (mm)</label>
+            <input class="admin-input" id="thickness_mm" name="thickness_mm" type="number" min="0" max="100" step="0.1" value="{{ old('thickness_mm', $p?->thickness_mm) }}">
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="water_resistance_atm">Resistencia al agua</label>
+            <select class="admin-select" id="water_resistance_atm" name="water_resistance_atm">
+                <option value="">Sin especificar</option>
+                @foreach(config('watch_specs.water_resistance_options', []) as $atm => $label)
+                    <option value="{{ $atm }}" @selected((string) old('water_resistance_atm', $p?->water_resistance_atm) === (string) $atm)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="admin-field">
+            <label class="admin-label" for="strap_type">Tipo de correa</label>
+            <select class="admin-select" id="strap_type" name="strap_type">
+                <option value="">Sin especificar</option>
+                @foreach(config('watch_specs.strap_types', []) as $slug => $label)
+                    <option value="{{ $slug }}" @selected(old('strap_type', $p?->strap_type) === $slug)>{{ $label }}</option>
+                @endforeach
+            </select>
         </div>
     </div>
+</section>
+
+<section class="admin-form__section" aria-labelledby="producto-especificaciones-informativas">
+    <div class="admin-form__section-head">
+        <h2 class="admin-form__section-title" id="producto-especificaciones-informativas">Especificaciones informativas</h2>
+        <p class="admin-form__section-note">Opcionales. Activá solo las que quieras mostrar en la ficha pública; si no tienen valor, no se publican.</p>
+    </div>
+
+    @foreach(config('watch_specs.informative_groups', []) as $groupKey => $group)
+        <div class="admin-form__subsection" aria-labelledby="spec-group-{{ $groupKey }}">
+            <h3 class="admin-form__section-title admin-form__section-title--small" id="spec-group-{{ $groupKey }}">{{ $group['label'] }}</h3>
+
+            <div class="admin-form__grid">
+                @foreach($group['fields'] as $key => $field)
+                    @php
+                        $value = $specs[$key] ?? null;
+                        $isActive = array_key_exists($key, $activeSpecs);
+                    @endphp
+                    <div class="admin-field">
+                        <label class="admin-label" for="spec_{{ $key }}">{{ $field['label'] }}</label>
+
+                        @if($field['type'] === 'textarea')
+                            <textarea
+                                class="admin-textarea"
+                                id="spec_{{ $key }}"
+                                name="specs[{{ $key }}]"
+                                rows="{{ $field['rows'] ?? 3 }}"
+                                placeholder="{{ $field['placeholder'] ?? '' }}"
+                            >{{ $value }}</textarea>
+                        @elseif($field['type'] === 'select')
+                            <select class="admin-select" id="spec_{{ $key }}" name="specs[{{ $key }}]">
+                                <option value="">Sin especificar</option>
+                                @foreach($field['options'] as $optionValue => $optionLabel)
+                                    <option value="{{ $optionValue }}" @selected((string) $value === (string) $optionValue)>{{ $optionLabel }}</option>
+                                @endforeach
+                            </select>
+                        @else
+                            <input
+                                class="admin-input"
+                                id="spec_{{ $key }}"
+                                name="specs[{{ $key }}]"
+                                type="{{ $field['type'] }}"
+                                value="{{ $value }}"
+                                @if(isset($field['step'])) step="{{ $field['step'] }}" @endif
+                                @if(isset($field['min'])) min="{{ $field['min'] }}" @endif
+                                @if(isset($field['max'])) max="{{ $field['max'] }}" @endif
+                                placeholder="{{ $field['placeholder'] ?? '' }}"
+                            >
+                        @endif
+
+                        <label class="admin-help flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                name="specs_activos[{{ $key }}]"
+                                value="1"
+                                @checked($isActive)
+                            >
+                            Mostrar en la ficha
+                        </label>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endforeach
 </section>
 
 <section class="admin-form__section" aria-labelledby="producto-precio">

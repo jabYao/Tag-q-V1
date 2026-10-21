@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
@@ -16,15 +17,19 @@ class AdminProductTest extends TestCase
     use RefreshDatabase;
 
     private Category $category;
+    private Brand $brand;
     private User $admin;
     private User $empleado;
     private User $cliente;
+
+    private static int $referenceCounter = 0;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->category = Category::create(['name' => 'Caballero', 'slug' => 'caballero']);
+        $this->brand = Brand::create(['name' => 'Tag q', 'slug' => 'tag-q', 'is_active' => true]);
         $this->admin = User::factory()->create(['role' => 'admin']);
         $this->empleado = User::factory()->create(['role' => 'empleado']);
         $this->cliente = User::factory()->create(['role' => 'cliente']);
@@ -41,6 +46,23 @@ class AdminProductTest extends TestCase
         $this->app->instance(CloudinaryService::class, $mock);
     }
 
+    private function validSpecData(array $overrides = []): array
+    {
+        return array_merge([
+            'brand_id' => $this->brand->id,
+            'reference' => 'REF-'.(++self::$referenceCounter),
+            'case_shape' => 'redonda',
+            'case_material' => 'Acero inoxidable',
+            'case_color' => 'Plateado',
+            'movimiento' => 'automatico',
+            'cristal' => 'zafiro',
+            'diameter_mm' => 42,
+            'thickness_mm' => 12,
+            'water_resistance_atm' => 10,
+            'strap_type' => 'acero',
+        ], $overrides);
+    }
+
     private function validData(array $overrides = []): array
     {
         return array_merge([
@@ -52,7 +74,18 @@ class AdminProductTest extends TestCase
             'descripcion' => 'Reloj test',
             'subcategoria' => 'casual',
             'is_active' => 1,
-        ], $overrides);
+        ], $this->validSpecData(), $overrides);
+    }
+
+    private function validEmployeeData(array $overrides = []): array
+    {
+        return array_merge([
+            'category_id' => $this->category->id,
+            'name' => 'Chronos Test',
+            'slug' => 'chronos-test',
+            'descripcion' => 'Reloj test',
+            'subcategoria' => 'casual',
+        ], $this->validSpecData(), $overrides);
     }
 
     public function test_admin_puede_crear_producto_sin_imagenes(): void
@@ -218,16 +251,14 @@ class AdminProductTest extends TestCase
         ]));
 
         $this->actingAs($this->empleado)
-            ->put(route('admin.products.update', $product), [
-                'category_id' => $this->category->id,
+            ->put(route('admin.products.update', $product), $this->validEmployeeData([
                 'name' => 'Chronos Empleado',
                 'slug' => 'emp-upd',
                 'descripcion' => 'Editado por empleado',
                 'marca' => 'NuevaMarca',
                 'material_pulso' => 'Acero',
-                'movimiento' => 'Cuarzo',
-                'subcategoria' => 'casual',
-            ])
+                'movimiento' => 'cuarzo',
+            ]))
             ->assertRedirect(route('admin.products.index'));
 
         $product->refresh();
@@ -247,16 +278,17 @@ class AdminProductTest extends TestCase
         ]));
 
         // El formulario omite is_active cuando el checkbox queda sin marcar.
+        $data = $this->validData([
+            'name' => 'Chronos Admin',
+            'slug' => 'admin-deact',
+            'precio' => 900000,
+            'stock' => 3,
+            'descripcion' => 'Editado por admin',
+        ]);
+        unset($data['is_active']);
+
         $this->actingAs($this->admin)
-            ->put(route('admin.products.update', $product), [
-                'category_id' => $this->category->id,
-                'name' => 'Chronos Admin',
-                'slug' => 'admin-deact',
-                'precio' => 900000,
-                'stock' => 3,
-                'descripcion' => 'Editado por admin',
-                'subcategoria' => 'casual',
-            ])
+            ->put(route('admin.products.update', $product), $data)
             ->assertRedirect(route('admin.products.index'));
 
         $product->refresh();
@@ -271,13 +303,11 @@ class AdminProductTest extends TestCase
         ]));
 
         $this->actingAs($this->empleado)
-            ->put(route('admin.products.update', $product), [
-                'category_id' => $this->category->id,
+            ->put(route('admin.products.update', $product), $this->validEmployeeData([
                 'name' => 'Chronos Empleado',
                 'slug' => 'emp-deact',
                 'descripcion' => 'Editado por empleado',
-                'subcategoria' => 'casual',
-            ])
+            ]))
             ->assertRedirect(route('admin.products.index'));
 
         $product->refresh();
@@ -295,15 +325,17 @@ class AdminProductTest extends TestCase
 
         $this->actingAs($this->empleado)
             ->from(route('admin.products.edit', $product))
-            ->put(route('admin.products.update', $product), [
-                'category_id' => $this->category->id,
-                'name' => 'Intento forzado',
-                'slug' => 'emp-prot',
-                'precio' => 999,
-                'stock' => 999,
-                'is_active' => 0,
-                'subcategoria' => 'casual',
-            ])
+            ->put(route('admin.products.update', $product), array_merge(
+                $this->validEmployeeData([
+                    'name' => 'Intento forzado',
+                    'slug' => 'emp-prot',
+                ]),
+                [
+                    'precio' => 999,
+                    'stock' => 999,
+                    'is_active' => 0,
+                ],
+            ))
             ->assertSessionHasErrors(['precio', 'stock', 'is_active'])
             ->assertRedirect(route('admin.products.edit', $product));
 
@@ -358,12 +390,12 @@ class AdminProductTest extends TestCase
     public function test_admin_persiste_la_subcategoria_al_crear_y_actualizar(): void
     {
         $this->actingAs($this->admin)
-            ->post(route('admin.products.store'), $this->validData(['subcategoria' => 'elegante']))
+            ->post(route('admin.products.store'), $this->validData(['subcategoria' => 'formal']))
             ->assertRedirect(route('admin.products.index'));
 
         $product = Product::where('slug', 'chronos-test')->first();
         $this->assertNotNull($product);
-        $this->assertSame('elegante', $product->subcategoria);
+        $this->assertSame('formal', $product->subcategoria);
 
         $this->actingAs($this->admin)
             ->put(route('admin.products.update', $product), $this->validData(['subcategoria' => 'deportivo']))
@@ -376,12 +408,12 @@ class AdminProductTest extends TestCase
     {
         $product = Product::create($this->validData(['slug' => 'emp-sub']));
 
-        $payload = [
-            'category_id' => $this->category->id,
+        $payload = $this->validEmployeeData([
             'name' => 'Sub Empleado',
             'slug' => 'emp-sub',
             'descripcion' => 'Editado por empleado',
-        ];
+        ]);
+        unset($payload['subcategoria']);
 
         // Sin subcategoría: la actualización es rechazada.
         $this->actingAs($this->empleado)
@@ -397,7 +429,189 @@ class AdminProductTest extends TestCase
         $this->assertSame('casual', $product->refresh()->subcategoria);
     }
 
-    public function test_el_formulario_de_producto_ofrece_las_tres_subcategorias(): void
+    public function test_admin_persiste_las_especificaciones_estructuradas(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.products.store'), $this->validData([
+                'slug' => 'specs-estructurados',
+                'reference' => 'REF-EST-1',
+                'case_shape' => 'cojin',
+                'case_material' => 'Titanio',
+                'case_color' => 'Gris',
+                'diameter_mm' => 40.5,
+                'thickness_mm' => 11.2,
+                'water_resistance_atm' => 20,
+                'strap_type' => 'caucho',
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $product = Product::where('slug', 'specs-estructurados')->firstOrFail();
+
+        $this->assertSame($this->brand->id, $product->brand_id);
+        $this->assertSame('REF-EST-1', $product->reference);
+        $this->assertSame('cojin', $product->case_shape);
+        $this->assertSame('Titanio', $product->case_material);
+        $this->assertSame('Gris', $product->case_color);
+        $this->assertSame(40.5, $product->diameter_mm);
+        $this->assertSame(11.2, $product->thickness_mm);
+        $this->assertSame(20, $product->water_resistance_atm);
+        $this->assertSame('caucho', $product->strap_type);
+    }
+
+    public function test_admin_persiste_solo_los_specs_informativos_activos_y_con_valor(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.products.store'), $this->validData([
+                'slug' => 'specs-json',
+                'reference' => 'REF-JSON-1',
+                'specs_activos' => [
+                    'calibre' => '1',
+                    'joyas' => '1',
+                    'funciones' => '1',
+                    'pais_origen' => '1',
+                ],
+                'specs' => [
+                    'calibre' => 'NH35',
+                    'joyas' => 24,
+                    'funciones' => 'Fecha y GMT',
+                    'pais_origen' => '',
+                    'edicion_limitada' => 'si',
+                ],
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $product = Product::where('slug', 'specs-json')->firstOrFail();
+
+        $this->assertEquals([
+            'calibre' => 'NH35',
+            'joyas' => 24,
+            'funciones' => 'Fecha y GMT',
+        ], $product->specs);
+        $this->assertArrayNotHasKey('pais_origen', $product->specs);
+        $this->assertArrayNotHasKey('edicion_limitada', $product->specs);
+    }
+
+    public function test_admin_puede_actualizar_y_limpiar_specs_informativos(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'specs-upd',
+            'reference' => 'REF-UPD-1',
+            'specs' => ['calibre' => 'NH35', 'joyas' => 24],
+        ]));
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.products.update', $product), $this->validData([
+                'slug' => 'specs-upd',
+                'reference' => 'REF-UPD-1',
+                'specs_activos' => ['calibre' => '1', 'joyas' => '1'],
+                'specs' => ['calibre' => '4R36', 'joyas' => ''],
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $this->assertSame(['calibre' => '4R36'], $product->refresh()->specs);
+    }
+
+    public function test_la_referencia_es_unica_por_marca(): void
+    {
+        Product::create($this->validData([
+            'slug' => 'ref-existente',
+            'reference' => 'REF-UNICA',
+        ]));
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.products.create'))
+            ->post(route('admin.products.store'), $this->validData([
+                'slug' => 'ref-duplicada',
+                'reference' => 'REF-UNICA',
+            ]))
+            ->assertSessionHasErrors('reference');
+
+        $this->assertDatabaseMissing('products', ['slug' => 'ref-duplicada']);
+
+        $otraMarca = Brand::create([
+            'name' => 'Seiko',
+            'slug' => 'seiko',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.products.store'), $this->validData([
+                'slug' => 'ref-otra-marca',
+                'reference' => 'REF-UNICA',
+                'brand_id' => $otraMarca->id,
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $this->assertDatabaseHas('products', [
+            'slug' => 'ref-otra-marca',
+            'brand_id' => $otraMarca->id,
+            'reference' => 'REF-UNICA',
+        ]);
+    }
+
+    public function test_no_se_puede_asignar_una_marca_inactiva(): void
+    {
+        $this->brand->update(['is_active' => false]);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.products.create'))
+            ->post(route('admin.products.store'), $this->validData([
+                'slug' => 'marca-inactiva',
+                'reference' => 'REF-INACTIVA',
+            ]))
+            ->assertSessionHasErrors('brand_id');
+
+        $this->assertDatabaseMissing('products', ['slug' => 'marca-inactiva']);
+    }
+
+    public function test_se_puede_editar_un_producto_con_marca_inactiva_sin_cambiarla(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'marca-inactiva-edit',
+            'reference' => 'REF-INACTIVA-EDIT',
+        ]));
+
+        $this->brand->update(['is_active' => false]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.products.edit', $product))
+            ->assertOk()
+            ->assertSee('(inactiva)');
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.products.update', $product), $this->validData([
+                'slug' => 'marca-inactiva-edit',
+                'reference' => 'REF-INACTIVA-EDIT',
+                'name' => 'Nombre Actualizado',
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $product->refresh();
+
+        $this->assertSame('Nombre Actualizado', $product->name);
+        $this->assertSame($this->brand->id, $product->brand_id);
+    }
+
+    public function test_las_especificaciones_obligatorias_son_requeridas_al_crear(): void
+    {
+        foreach (['brand_id', 'reference', 'case_shape', 'case_material', 'case_color', 'movimiento', 'cristal'] as $field) {
+            $data = $this->validData([
+                'slug' => 'falta-'.$field,
+                'reference' => 'REF-FALTA-'.$field,
+            ]);
+
+            unset($data[$field]);
+
+            $this->actingAs($this->admin)
+                ->from(route('admin.products.create'))
+                ->post(route('admin.products.store'), $data)
+                ->assertSessionHasErrors($field);
+
+            $this->assertDatabaseMissing('products', ['slug' => 'falta-'.$field]);
+        }
+    }
+
+    public function test_el_formulario_de_producto_ofrece_las_subcategorias_configuradas(): void
     {
         $html = $this->actingAs($this->admin)
             ->get(route('admin.products.create'))
@@ -405,8 +619,16 @@ class AdminProductTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('name="subcategoria"', $html);
+        $this->assertStringContainsString('name="brand_id"', $html);
+        $this->assertStringContainsString('name="reference"', $html);
+        $this->assertStringContainsString('name="case_shape"', $html);
 
-        foreach (['elegante' => 'Elegante', 'casual' => 'Casual', 'deportivo' => 'Deportivo'] as $slug => $label) {
+        foreach (\App\Support\WatchSpecs::keys() as $key) {
+            $this->assertStringContainsString('name="specs['.$key.']"', $html, "El formulario debe ofrecer el spec {$key}");
+            $this->assertStringContainsString('name="specs_activos['.$key.']"', $html, "El formulario debe permitir activar el spec {$key}");
+        }
+
+        foreach (config('tagq.subcategories') as $slug => $label) {
             $this->assertStringContainsString('value="'.$slug.'"', $html);
             $this->assertStringContainsString($label, $html);
         }
