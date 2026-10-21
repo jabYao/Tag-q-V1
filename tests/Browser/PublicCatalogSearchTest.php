@@ -67,7 +67,10 @@ class PublicCatalogSearchTest extends DuskTestCase
                 // la aserción negativa posterior es significativa.
                 ->waitFor(self::card(self::MATCHING_NAME))
                 ->assertPresent(self::card(self::OTHER_NAME))
-                ->type('q', self::SEARCH_TERM)
+                // El catálogo tiene dos inputs `name="q"`: el filtro propio
+                // (`#filter-q`) y el del panel de búsqueda de la navbar. Se
+                // apunta al id estable para no depender del orden del DOM.
+                ->type('#filter-q', self::SEARCH_TERM)
                 ->press('Aplicar filtros')
                 // El término coincide sólo con uno: el otro desaparece del listado.
                 ->waitUntilMissing(self::card(self::OTHER_NAME), 10)
