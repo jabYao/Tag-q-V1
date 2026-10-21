@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Services\OrderNotificationService;
 use App\Services\WompiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -88,6 +89,12 @@ class WompiWebhookController extends Controller
         $status = $wompi->eventStatus($payload);
         $result = $wompi->applyTransactionStatus($order, $status);
 
+        // Solo la transición efectiva a pagado notifica: un evento duplicado o
+        // fuera de orden devuelve 'ignored' y no reenvía correo.
+        if ($result === 'approved') {
+            app(OrderNotificationService::class)->notifyPaymentApproved($order->refresh());
+        }
+
         return response()->json([
             'received' => true,
             'reference' => $reference,
@@ -137,6 +144,12 @@ class WompiWebhookController extends Controller
         }
 
         $result = $wompi->applyRefundStatus($order, $status, $refundId);
+
+        // Solo la transición efectiva a reembolsado notifica: un reembolso
+        // duplicado o ya registrado devuelve 'ignored' y no reenvía correo.
+        if ($result === 'refunded') {
+            app(OrderNotificationService::class)->notifyRefundApproved($order->refresh());
+        }
 
         return response()->json([
             'received' => true,

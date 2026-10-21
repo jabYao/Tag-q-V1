@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\OrderCancellationService;
+use App\Services\OrderNotificationService;
 use App\Services\OrderStatusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,13 @@ use Illuminate\View\View;
  * Wompi sigue siendo la fuente autoritativa de los pagos en línea; la
  * cancelación de contraentrega o sin pago y el reembolso de un pago Wompi se
  * delegan en OrderCancellationService, que restaura el stock una sola vez.
+ *
+ * Cada salida efectiva del flujo dispara su correo transaccional: en
+ * preparación, enviado y entregado al avanzar el estado, cancelado o reembolso
+ * aprobado al completarse la cancelación. El envío está atado a la transición
+ * efectiva (una transición inválida o un pedido ya resuelto devuelve error o no
+ * cambia, así que no reenvía correo) y nunca puede romper ni revertir la
+ * operación.
  */
 class OrderController extends Controller
 {
@@ -101,6 +109,8 @@ class OrderController extends Controller
                 ->withErrors(['status' => $e->getMessage()]);
         }
 
+        $this->notifyStatusChange($order, $data['status']);
+
         return redirect()
             ->route('admin.orders.show', $order)
             ->with('success', 'Estado del pedido actualizado.');
@@ -121,6 +131,15 @@ class OrderController extends Controller
                 ->withErrors(['order' => $e->getMessage()]);
         }
 
+        // Un pago Wompi se resuelve con reembolso, no como cancelación.
+        $notifications = app(OrderNotificationService::class);
+
+        if ((string) $updated->status === 'reembolsado') {
+            $notifications->notifyRefundApproved($updated);
+        } else {
+            $notifications->notifyCancelled($updated);
+        }
+
         return redirect()
             ->route('admin.orders.show', $order)
             ->with('success', (string) $updated->status === 'reembolsado'
@@ -138,15 +157,46 @@ class OrderController extends Controller
         ]);
 
         try {
-            $this->cancellations->refund($order, $data['reason'] ?? null);
+            $updated = $this->cancellations->refund($order, $data['reason'] ?? null);
         } catch (\RuntimeException $e) {
             return redirect()
                 ->route('admin.orders.show', $order)
                 ->withErrors(['order' => $e->getMessage()]);
         }
 
+        app(OrderNotificationService::class)->notifyRefundApproved($updated);
+
         return redirect()
             ->route('admin.orders.show', $order)
             ->with('success', 'Reembolso aprobado por Wompi. El pedido quedó reembolsado.');
+    }
+
+    /**
+     * Envía el correo del estado operativo alcanzado, si tiene uno asociado.
+     *
+     * Se llama solo después de una transición efectiva; el resto de estados no
+     * notifica por este canal (el pago aprobado lo notifica Wompi por webhook).
+     * Un solo estado notifica por cada transición aplicada, así que un pedido ya
+     * resuelto no reenvía correo.
+     */
+    private function notifyStatusChange(Order $order, string $status): void
+    {
+        $notifications = app(OrderNotificationService::class);
+
+        if ($status === 'en_preparacion') {
+            $notifications->notifyInPreparation($order);
+
+            return;
+        }
+
+        if ($status === 'enviado') {
+            $notifications->notifyShipped($order);
+
+            return;
+        }
+
+        if ($status === 'entregado') {
+            $notifications->notifyDelivered($order);
+        }
     }
 }
