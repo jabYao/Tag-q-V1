@@ -12,17 +12,46 @@
         $imagenes = array_values(array_filter($product->imagenes ?? []));
         $imagenesWebp = array_map(fn ($imagen) => CloudinaryUrl::webp($imagen), $imagenes);
         $totalImagenes = count($imagenesWebp);
+        $formatMm = fn ($value) => rtrim(rtrim(number_format((float) $value, 1, '.', ''), '0'), '.');
+
         $especificaciones = array_filter([
-            'Marca' => $product->marca,
-            'Movimiento' => $product->movimiento,
-            'Material del pulso' => $product->material_pulso,
-            'Cristal' => $product->cristal,
-            'Ancho de correa' => $product->ancho_correa,
+            'Marca' => $product->brandName(),
+            'Referencia' => $product->reference,
+            'Movimiento' => $product->movementLabel(),
+            'Forma de caja' => $product->caseShapeLabel(),
+            'Material de caja' => $product->case_material,
+            'Color de caja' => $product->case_color,
+            'Cristal' => $product->crystalLabel(),
+            'Diámetro' => filled($product->diameter_mm) ? $formatMm($product->diameter_mm).' mm' : null,
+            'Grosor' => filled($product->thickness_mm) ? $formatMm($product->thickness_mm).' mm' : null,
+            'Resistencia al agua' => $product->waterResistanceLabel(),
+            'Tipo de correa' => $product->strapTypeLabel(),
+            // Campos legados: se muestran solo mientras el producto viejo no
+            // tenga el dato nuevo equivalente. El dueño los borrará a mano.
+            'Material del pulso' => $product->strap_type ? null : $product->material_pulso,
+            'Ancho de correa' => $product->spec('ancho_correa_mm') ? null : $product->ancho_correa,
         ], fn ($valor) => filled($valor));
+
+        foreach (config('watch_specs.informative_groups', []) as $group) {
+            foreach ($group['fields'] as $key => $field) {
+                $valor = $product->spec($key);
+
+                if (! filled($valor)) {
+                    continue;
+                }
+
+                if (($field['type'] ?? null) === 'select') {
+                    $valor = $field['options'][$valor] ?? $valor;
+                }
+
+                $especificaciones[$field['label']] = $valor;
+            }
+        }
+
         $categoria = $product->category?->name ?? 'Sin categoría';
         $subcategoria = $product->subcategoriaLabel();
         $categoriaCompleta = collect([$categoria, $subcategoria])->filter()->implode(' / ');
-        $marca = $product->marca ?: $categoria;
+        $marca = $product->brandName() ?: $categoria;
 
         // La categoría dejó de ser un eyebrow sobre el H1: la ficha técnica la
         // conserva cuando hay datos que mostrar, sin crear una fila vacía.

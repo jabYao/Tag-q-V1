@@ -25,9 +25,15 @@
             'categoria' => 'Categoría',
             'subcategoria' => 'Subcategoría',
             'marca' => 'Marca',
-            'material_pulso' => 'Material',
+            'strap_type' => 'Correa',
+            'water_resistance_atm' => 'Resistencia al agua',
+            'material_pulso' => 'Material (legado)',
             'cristal' => 'Cristal',
             'movimiento' => 'Movimiento',
+            'diametro_min' => 'Diámetro desde',
+            'diametro_max' => 'Diámetro hasta',
+            'grosor_min' => 'Grosor desde',
+            'grosor_max' => 'Grosor hasta',
             'precio_min' => 'Desde',
             'precio_max' => 'Hasta',
             'disponibilidad' => 'Disponibilidad',
@@ -43,6 +49,12 @@
             $display = match ($key) {
                 'categoria' => $categoryNames[$value] ?? $value,
                 'subcategoria' => $options['subcategoria'][$value] ?? $value,
+                'marca' => $options['marca'][$value] ?? $value,
+                'strap_type' => $options['strap_type'][$value] ?? $value,
+                'water_resistance_atm' => $options['water_resistance_atm'][$value] ?? $value,
+                'cristal' => $options['cristal'][$value] ?? $value,
+                'movimiento' => $options['movimiento'][$value] ?? $value,
+                'diametro_min', 'diametro_max', 'grosor_min', 'grosor_max' => $value.' mm',
                 'precio_min', 'precio_max' => '$ '.number_format((int) $value, 0, ',', '.'),
                 'disponibilidad' => $value === 'disponible' ? 'Disponible' : 'Agotado',
                 default => $value,
@@ -95,7 +107,7 @@
             <div class="max-w-2xl">
                 <h1 class="font-bebas text-[46px] uppercase leading-none tracking-tight text-gray-950 sm:text-[58px]">Catálogo</h1>
                 <p class="mt-3 max-w-xl text-sm leading-relaxed text-gray-600 sm:text-base">
-                    Relojes seleccionados para acompañar tu día. Filtrá por estilo, marca y material para encontrar tu próxima pieza.
+                    Relojes seleccionados para acompañar tu día. Filtrá por estilo, marca, medidas y movimiento para encontrar tu próxima pieza.
                 </p>
             </div>
 
@@ -212,8 +224,8 @@
                             <label for="filter-marca" class="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Marca</label>
                             <select id="filter-marca" name="marca">
                                 <option value="">Todas</option>
-                                @foreach($options['marca'] as $option)
-                                    <option value="{{ $option }}" @selected(($filters['marca'] ?? null) === $option)>{{ $option }}</option>
+                                @foreach($options['marca'] as $value => $label)
+                                    <option value="{{ $value }}" @selected(($filters['marca'] ?? null) === (string) $value)>{{ $label }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -223,11 +235,21 @@
 
                             <div class="mt-3 space-y-3">
                                 <div>
-                                    <label for="filter-material-pulso" class="block text-sm text-gray-600">Material del pulso</label>
-                                    <select id="filter-material-pulso" name="material_pulso">
-                                        <option value="">Todos</option>
-                                        @foreach($options['material_pulso'] as $option)
-                                            <option value="{{ $option }}" @selected(($filters['material_pulso'] ?? null) === $option)>{{ $option }}</option>
+                                    <label for="filter-strap-type" class="block text-sm text-gray-600">Tipo de correa</label>
+                                    <select id="filter-strap-type" name="strap_type">
+                                        <option value="">Todas</option>
+                                        @foreach($options['strap_type'] as $slug => $label)
+                                            <option value="{{ $slug }}" @selected(($filters['strap_type'] ?? null) === $slug)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label for="filter-water-resistance" class="block text-sm text-gray-600">Resistencia al agua</label>
+                                    <select id="filter-water-resistance" name="water_resistance_atm">
+                                        <option value="">Todas</option>
+                                        @foreach($options['water_resistance_atm'] as $atm => $label)
+                                            <option value="{{ $atm }}" @selected((string) ($filters['water_resistance_atm'] ?? null) === (string) $atm)>{{ $label }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -236,8 +258,8 @@
                                     <label for="filter-cristal" class="block text-sm text-gray-600">Cristal</label>
                                     <select id="filter-cristal" name="cristal">
                                         <option value="">Todos</option>
-                                        @foreach($options['cristal'] as $option)
-                                            <option value="{{ $option }}" @selected(($filters['cristal'] ?? null) === $option)>{{ $option }}</option>
+                                        @foreach($options['cristal'] as $slug => $label)
+                                            <option value="{{ $slug }}" @selected(($filters['cristal'] ?? null) === $slug)>{{ $label }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -246,10 +268,72 @@
                                     <label for="filter-movimiento" class="block text-sm text-gray-600">Movimiento</label>
                                     <select id="filter-movimiento" name="movimiento">
                                         <option value="">Todos</option>
-                                        @foreach($options['movimiento'] as $option)
-                                            <option value="{{ $option }}" @selected(($filters['movimiento'] ?? null) === $option)>{{ $option }}</option>
+                                        @foreach($options['movimiento'] as $slug => $label)
+                                            <option value="{{ $slug }}" @selected(($filters['movimiento'] ?? null) === $slug)>{{ $label }}</option>
                                         @endforeach
                                     </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 border-t border-gray-100 pt-5">
+                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Medidas (mm)</p>
+
+                            <div class="mt-3 grid grid-cols-2 gap-3">
+                                <div>
+                                    <label for="filter-diametro-min" class="block text-sm text-gray-600">Diámetro mín.</label>
+                                    <input
+                                        type="number"
+                                        id="filter-diametro-min"
+                                        name="diametro_min"
+                                        value="{{ $filters['diametro_min'] ?? '' }}"
+                                        min="0"
+                                        max="100"
+                                        step="0.1"
+                                        inputmode="decimal"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="filter-diametro-max" class="block text-sm text-gray-600">Diámetro máx.</label>
+                                    <input
+                                        type="number"
+                                        id="filter-diametro-max"
+                                        name="diametro_max"
+                                        value="{{ $filters['diametro_max'] ?? '' }}"
+                                        min="0"
+                                        max="100"
+                                        step="0.1"
+                                        inputmode="decimal"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="filter-grosor-min" class="block text-sm text-gray-600">Grosor mín.</label>
+                                    <input
+                                        type="number"
+                                        id="filter-grosor-min"
+                                        name="grosor_min"
+                                        value="{{ $filters['grosor_min'] ?? '' }}"
+                                        min="0"
+                                        max="100"
+                                        step="0.1"
+                                        inputmode="decimal"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="filter-grosor-max" class="block text-sm text-gray-600">Grosor máx.</label>
+                                    <input
+                                        type="number"
+                                        id="filter-grosor-max"
+                                        name="grosor_max"
+                                        value="{{ $filters['grosor_max'] ?? '' }}"
+                                        min="0"
+                                        max="100"
+                                        step="0.1"
+                                        inputmode="decimal"
+                                    >
                                 </div>
                             </div>
                         </div>
@@ -364,7 +448,7 @@
                                     // reales que la del home: marca y movimiento, sin
                                     // inventar especificaciones.
                                     $atributos = array_filter(
-                                        [$product->marca, $product->movimiento],
+                                        [$product->brandName(), $product->movementLabel()],
                                         fn ($valor) => filled($valor),
                                     );
                                     $estado = match (true) {

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -199,7 +200,7 @@ class PublicCatalogTest extends TestCase
         $this->assertMatchesRegularExpression('/<form[^>]*method="get"/i', $content, 'Debe existir un formulario GET');
         $this->assertStringContainsString(route('catalog.index'), $content, 'El formulario debe apuntar al catálogo');
 
-        foreach (['q', 'categoria', 'subcategoria', 'marca', 'material_pulso', 'cristal', 'movimiento', 'precio_min', 'precio_max', 'disponibilidad', 'orden'] as $field) {
+        foreach (['q', 'categoria', 'subcategoria', 'marca', 'strap_type', 'water_resistance_atm', 'cristal', 'movimiento', 'diametro_min', 'diametro_max', 'grosor_min', 'grosor_max', 'precio_min', 'precio_max', 'disponibilidad', 'orden'] as $field) {
             $this->assertMatchesRegularExpression(
                 '/name="'.preg_quote($field, '/').'"/',
                 $content,
@@ -260,15 +261,123 @@ class PublicCatalogTest extends TestCase
             ->assertDontSee('Caballero Uno');
     }
 
-    public function test_catalogo_incluye_select_de_subcategoria_con_las_tres_opciones(): void
+    public function test_catalogo_filtra_por_marca_nueva_y_por_marca_legada(): void
     {
-        $this->product(['name' => 'Con Sub', 'slug' => 'con-sub', 'subcategoria' => 'elegante']);
+        $brand = Brand::create([
+            'name' => 'Seiko',
+            'slug' => 'seiko',
+            'is_active' => true,
+        ]);
+
+        $this->product(['name' => 'Seiko Nuevo', 'slug' => 'seiko-nuevo', 'brand_id' => $brand->id]);
+        $this->product(['name' => 'Seiko Legado', 'slug' => 'seiko-legado', 'marca' => 'Seiko']);
+        $this->product(['name' => 'Otra Marca', 'slug' => 'otra-marca', 'marca' => 'Otra']);
+
+        $this->get('/catalogo?marca=seiko')
+            ->assertOk()
+            ->assertSee('Seiko Nuevo')
+            ->assertSee('Seiko Legado')
+            ->assertDontSee('Otra Marca');
+    }
+
+    public function test_catalogo_filtra_por_tipo_de_correa_y_resistencia_al_agua(): void
+    {
+        $this->product([
+            'name' => 'Correa Acero',
+            'slug' => 'correa-acero',
+            'strap_type' => 'acero',
+            'water_resistance_atm' => 10,
+        ]);
+        $this->product([
+            'name' => 'Correa Cuero',
+            'slug' => 'correa-cuero',
+            'strap_type' => 'cuero',
+            'water_resistance_atm' => 3,
+        ]);
+
+        $this->get('/catalogo?strap_type=acero')
+            ->assertOk()
+            ->assertSee('Correa Acero')
+            ->assertDontSee('Correa Cuero');
+
+        $this->get('/catalogo?water_resistance_atm=10')
+            ->assertOk()
+            ->assertSee('Correa Acero')
+            ->assertDontSee('Correa Cuero');
+    }
+
+    public function test_catalogo_filtra_por_rango_de_diametro_y_grosor(): void
+    {
+        $this->product([
+            'name' => 'Medida Grande',
+            'slug' => 'medida-grande',
+            'diameter_mm' => 40,
+            'thickness_mm' => 12,
+        ]);
+        $this->product([
+            'name' => 'Medida Chica',
+            'slug' => 'medida-chica',
+            'diameter_mm' => 34,
+            'thickness_mm' => 8,
+        ]);
+        $this->product([
+            'name' => 'Medida Media',
+            'slug' => 'medida-media',
+            'diameter_mm' => 38,
+            'thickness_mm' => 10,
+        ]);
+
+        $this->get('/catalogo?diametro_min=38&diametro_max=42&grosor_min=11&grosor_max=15')
+            ->assertOk()
+            ->assertSee('Medida Grande')
+            ->assertDontSee('Medida Chica')
+            ->assertDontSee('Medida Media');
+
+        // Los extremos del rango son inclusivos.
+        $this->get('/catalogo?diametro_min=40&diametro_max=40')
+            ->assertOk()
+            ->assertSee('Medida Grande')
+            ->assertDontSee('Medida Chica')
+            ->assertDontSee('Medida Media');
+    }
+
+    public function test_catalogo_rechaza_rangos_de_diametro_y_grosor_invertidos(): void
+    {
+        $this->from('/catalogo')
+            ->get('/catalogo?diametro_min=50&diametro_max=40')
+            ->assertRedirect('/catalogo')
+            ->assertSessionHasErrors('diametro_max');
+
+        $this->from('/catalogo')
+            ->get('/catalogo?grosor_min=15&grosor_max=10')
+            ->assertRedirect('/catalogo')
+            ->assertSessionHasErrors('grosor_max');
+    }
+
+    public function test_catalogo_ofrece_las_opciones_de_correa_y_resistencia_desde_config(): void
+    {
+        $content = $this->get('/catalogo')->assertOk()->getContent();
+
+        foreach (config('watch_specs.strap_types') as $slug => $label) {
+            $this->assertStringContainsString('value="'.$slug.'"', $content, "La correa {$label} debe ofrecerse");
+            $this->assertStringContainsString($label, $content, "La etiqueta {$label} debe mostrarse");
+        }
+
+        foreach (config('watch_specs.water_resistance_options') as $atm => $label) {
+            $this->assertStringContainsString('value="'.$atm.'"', $content, "La resistencia {$label} debe ofrecerse");
+            $this->assertStringContainsString($label, $content, "La etiqueta {$label} debe mostrarse");
+        }
+    }
+
+    public function test_catalogo_incluye_select_de_subcategoria_con_las_opciones_configuradas(): void
+    {
+        $this->product(['name' => 'Con Sub', 'slug' => 'con-sub', 'subcategoria' => 'formal']);
 
         $content = $this->get('/catalogo')->assertOk()->getContent();
 
         $this->assertMatchesRegularExpression('/name="subcategoria"/', $content, 'El formulario debe incluir el filtro de subcategoría');
 
-        foreach (['elegante' => 'Elegante', 'casual' => 'Casual', 'deportivo' => 'Deportivo'] as $slug => $label) {
+        foreach (config('tagq.subcategories') as $slug => $label) {
             $this->assertStringContainsString('value="'.$slug.'"', $content, "La subcategoría {$label} debe ofrecerse en el select");
             $this->assertStringContainsString($label, $content, "La etiqueta {$label} debe mostrarse");
         }
@@ -276,20 +385,20 @@ class PublicCatalogTest extends TestCase
 
     public function test_catalogo_filtra_por_subcategoria(): void
     {
-        $this->product(['name' => 'Elegante Uno', 'slug' => 'elegante-uno', 'subcategoria' => 'elegante']);
+        $this->product(['name' => 'Formal Uno', 'slug' => 'formal-uno', 'subcategoria' => 'formal']);
         $this->product(['name' => 'Casual Uno', 'slug' => 'casual-uno', 'subcategoria' => 'casual']);
         $this->product(['name' => 'Deportivo Uno', 'slug' => 'deportivo-uno', 'subcategoria' => 'deportivo']);
 
-        $this->get('/catalogo?subcategoria=elegante')
+        $this->get('/catalogo?subcategoria=formal')
             ->assertOk()
-            ->assertSee('Elegante Uno')
+            ->assertSee('Formal Uno')
             ->assertDontSee('Casual Uno')
             ->assertDontSee('Deportivo Uno');
 
         $this->get('/catalogo?subcategoria=deportivo')
             ->assertOk()
             ->assertSee('Deportivo Uno')
-            ->assertDontSee('Elegante Uno')
+            ->assertDontSee('Formal Uno')
             ->assertDontSee('Casual Uno');
     }
 

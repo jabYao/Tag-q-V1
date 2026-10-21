@@ -31,7 +31,25 @@ class CatalogFilterRequest extends FormRequest
     {
         $normalized = [];
 
-        foreach (['q', 'categoria', 'subcategoria', 'marca', 'material_pulso', 'cristal', 'movimiento', 'disponibilidad', 'orden'] as $key) {
+        foreach ([
+            'q',
+            'categoria',
+            'subcategoria',
+            'marca',
+            'strap_type',
+            'water_resistance_atm',
+            'material_pulso',
+            'cristal',
+            'movimiento',
+            'diametro_min',
+            'diametro_max',
+            'grosor_min',
+            'grosor_max',
+            'precio_min',
+            'precio_max',
+            'disponibilidad',
+            'orden',
+        ] as $key) {
             $value = $this->query($key);
 
             if (is_string($value) && trim($value) === '') {
@@ -49,14 +67,33 @@ class CatalogFilterRequest extends FormRequest
      */
     public function rules(): array
     {
+        // Se aceptan slugs canónicos y etiquetas legadas mientras el dueño
+        // termina de borrar los productos viejos. Los nuevos formularios solo
+        // envían slugs.
+        $crystalValues = array_merge(
+            array_keys(config('watch_specs.crystal_materials', [])),
+            array_values(config('watch_specs.crystal_materials', [])),
+        );
+
+        $movementValues = array_merge(
+            array_keys(config('watch_specs.movement_types', [])),
+            array_values(config('watch_specs.movement_types', [])),
+        );
+
         return [
             'q' => ['nullable', 'string', 'max:255'],
             'categoria' => ['nullable', 'string', 'max:255', 'exists:categories,slug'],
             'subcategoria' => ['nullable', 'string', Rule::in(array_keys(config('tagq.subcategories', [])))],
             'marca' => ['nullable', 'string', 'max:255'],
+            'strap_type' => ['nullable', 'string', Rule::in(array_keys(config('watch_specs.strap_types', [])))],
+            'water_resistance_atm' => ['nullable', 'integer', Rule::in(array_keys(config('watch_specs.water_resistance_options', [])))],
             'material_pulso' => ['nullable', 'string', 'max:255'],
-            'cristal' => ['nullable', 'string', 'max:255'],
-            'movimiento' => ['nullable', 'string', 'max:255'],
+            'cristal' => ['nullable', 'string', Rule::in($crystalValues)],
+            'movimiento' => ['nullable', 'string', Rule::in($movementValues)],
+            'diametro_min' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'diametro_max' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'grosor_min' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'grosor_max' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'precio_min' => ['nullable', 'integer', 'min:0'],
             'precio_max' => ['nullable', 'integer', 'min:0'],
             'disponibilidad' => ['nullable', Rule::in(['todos', 'disponible', 'agotado'])],
@@ -67,9 +104,8 @@ class CatalogFilterRequest extends FormRequest
     /**
      * Reglas que dependen de varios campos a la vez.
      *
-     * Un rango de precio invertido (precio_min > precio_max) no filtra nada
-     * útil: se rechaza con el error estándar de validación en lugar de devolver
-     * un listado ambiguo.
+     * Un rango invertido no filtra nada útil: se rechaza con el error estándar
+     * de validación en lugar de devolver un listado ambiguo.
      *
      * @return array<int, callable>
      */
@@ -77,22 +113,46 @@ class CatalogFilterRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                // Si un extremo ya es inválido, `rules()` lo reporta: no duplicamos mensajes.
-                if ($validator->errors()->has('precio_min') || $validator->errors()->has('precio_max')) {
-                    return;
-                }
+                $this->validateRange(
+                    $validator,
+                    'precio_min',
+                    'precio_max',
+                    'El precio máximo debe ser mayor o igual que el precio mínimo.',
+                );
 
-                $min = $this->input('precio_min');
-                $max = $this->input('precio_max');
+                $this->validateRange(
+                    $validator,
+                    'diametro_min',
+                    'diametro_max',
+                    'El diámetro máximo debe ser mayor o igual que el diámetro mínimo.',
+                );
 
-                if (! is_numeric($min) || ! is_numeric($max)) {
-                    return;
-                }
-
-                if ((int) $min > (int) $max) {
-                    $validator->errors()->add('precio_max', 'El precio máximo debe ser mayor o igual que el precio mínimo.');
-                }
+                $this->validateRange(
+                    $validator,
+                    'grosor_min',
+                    'grosor_max',
+                    'El grosor máximo debe ser mayor o igual que el grosor mínimo.',
+                );
             },
         ];
+    }
+
+    private function validateRange(Validator $validator, string $minKey, string $maxKey, string $message): void
+    {
+        // Si un extremo ya es inválido, `rules()` lo reporta: no duplicamos mensajes.
+        if ($validator->errors()->has($minKey) || $validator->errors()->has($maxKey)) {
+            return;
+        }
+
+        $min = $this->input($minKey);
+        $max = $this->input($maxKey);
+
+        if (! is_numeric($min) || ! is_numeric($max)) {
+            return;
+        }
+
+        if ((float) $min > (float) $max) {
+            $validator->errors()->add($maxKey, $message);
+        }
     }
 }

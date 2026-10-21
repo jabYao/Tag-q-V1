@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -89,6 +90,102 @@ class PublicProductDetailTest extends TestCase
             ->assertSee('data-gallery-thumb-index="0"', false)
             ->assertSee('data-gallery-thumb-index="1"', false)
             ->assertDontSee('data-gallery-single', false);
+    }
+
+    public function test_detalle_renderiza_marca_referencia_y_especificaciones_estructuradas(): void
+    {
+        $brand = Brand::create([
+            'name' => 'Tag Heuer',
+            'slug' => 'tag-heuer',
+            'is_active' => true,
+        ]);
+
+        $this->product([
+            'name' => 'Chronos Nuevo',
+            'slug' => 'chronos-nuevo',
+            'brand_id' => $brand->id,
+            'reference' => 'REF-NUEVO-1',
+            'subcategoria' => 'formal',
+            'movimiento' => 'automatico',
+            'case_shape' => 'cojin',
+            'case_material' => 'Titanio',
+            'case_color' => 'Gris',
+            'cristal' => 'zafiro',
+            'diameter_mm' => 40.5,
+            'thickness_mm' => 11.2,
+            'water_resistance_atm' => 20,
+            'strap_type' => 'caucho',
+        ]);
+
+        $this->get('/catalogo/chronos-nuevo')
+            ->assertOk()
+            ->assertSee('Tag Heuer')
+            ->assertSee('REF-NUEVO-1')
+            ->assertSee('Caballero / Formal')
+            ->assertSee('Automático')
+            ->assertSee('Cojín')
+            ->assertSee('Titanio')
+            ->assertSee('Gris')
+            ->assertSee('Zafiro')
+            ->assertSee('40.5 mm')
+            ->assertSee('11.2 mm')
+            ->assertSee('20 ATM · 200 m')
+            ->assertSee('Caucho');
+    }
+
+    public function test_detalle_renderiza_solo_los_specs_informativos_presentes(): void
+    {
+        $this->product([
+            'name' => 'Con Specs JSON',
+            'slug' => 'con-specs-json',
+            'specs' => [
+                'calibre' => 'NH35',
+                'joyas' => 24,
+                'funciones' => 'Fecha y GMT',
+                'edicion_limitada' => 'si',
+                'pais_origen' => 'Japón',
+                'valvula_helio' => 'si',
+                'iso_6425' => 'si',
+                'resistencia_golpes' => '5.000 G',
+                'rango_temperatura' => '-10 °C a 60 °C',
+            ],
+        ]);
+
+        $this->get('/catalogo/con-specs-json')
+            ->assertOk()
+            ->assertSee('Calibre')
+            ->assertSee('NH35')
+            ->assertSee('Rubíes')
+            ->assertSee('24')
+            ->assertSee('Funciones / complicaciones')
+            ->assertSee('Fecha y GMT')
+            ->assertSee('Edición limitada')
+            ->assertSee('Sí')
+            ->assertSee('País de origen')
+            ->assertSee('Japón')
+            ->assertSee('Válvula de helio')
+            ->assertSee('Certificación ISO 6425 (diver)')
+            ->assertSee('Resistencia a golpes')
+            ->assertSee('5.000 G')
+            ->assertSee('Rango de temperatura')
+            ->assertSee('-10 °C a 60 °C')
+            ->assertDontSee('Acabado')
+            ->assertDontSee('Distancia entre puntas de asas (mm)');
+    }
+
+    public function test_detalle_no_muestra_specs_informativos_ausentes(): void
+    {
+        $this->product([
+            'name' => 'Sin Specs JSON',
+            'slug' => 'sin-specs-json',
+        ]);
+
+        $this->get('/catalogo/sin-specs-json')
+            ->assertOk()
+            ->assertSee('Sin especificaciones')
+            ->assertDontSee('Calibre')
+            ->assertDontSee('País de origen')
+            ->assertDontSee('Edición limitada');
     }
 
     public function test_detalle_con_una_sola_imagen_oculta_el_riel_de_miniaturas(): void
