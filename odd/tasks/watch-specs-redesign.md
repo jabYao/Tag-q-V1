@@ -28,7 +28,7 @@ Branch: `feat/watch-specs-redesign` (local only; no push/PR until the owner auth
 - T3. Add brand admin CRUD: requests, controller, routes, views, navigation. (S6) — done (`7fbd806`).
 - T4. Update product requests, controller, and admin form for the new fields and JSONB specs. (S1, S2, S10, S12, S13) — done (`f9f013b`).
 - T5. Update catalog detail display and filters. (S1, S2, S12, S13) — done (`7aedcf4`).
-- T6. Update seeders, add/update tests, run the full suite. (S8, S9, S14) — done (`6647047`, `7fbd806`, `f9f013b`, `7aedcf4`, `1f341e1`); full suite 531 passed.
+- T6. Update seeders, add/update tests, run the full suite. (S8, S9, S14) — done (`6647047`, `7fbd806`, `f9f013b`, `7aedcf4`, `1f341e1`, `58e3121`); full suite 532 passed.
 
 ## Log
 
@@ -37,6 +37,7 @@ Branch: `feat/watch-specs-redesign` (local only; no push/PR until the owner auth
 - L3 (verbatim, owner constraint): "no crees productos yo los creo"
 - L4 (implementation): Added the four migrations, the canonical taxonomy in `config/watch_specs.php`, the `Brand` and `Product` model changes, brand admin CRUD, product admin spec fields, and catalog filters/detail rendering. Existing products are preserved; new required columns remain nullable until manual cleanup.
 - L5 (taxonomy completion): Added the `resistencia` informative group (`valvula_helio`, `iso_6425`, `resistencia_golpes`, `rango_temperatura`), added `integrado` to strap types, and translated the `joyas` and `lug_to_lug_mm` labels to Spanish.
-- L6 (verification): `php artisan test --compact --stop-on-failure` -> 531 passed. Local commits `6647047`, `7fbd806`, `f9f013b`, `7aedcf4`, `1f341e1`; no push or PR.
+- L6 (verification): `php artisan test --compact --stop-on-failure` -> 532 passed. Local commits `6647047`, `7fbd806`, `f9f013b`, `7aedcf4`, `1f341e1`, `58e3121`; no push or PR.
 - L7 (pending): The `NOT NULL` migration for required spec columns waits for the owner's manual product deletion.
 - L8 (coverage): Added catalog search coverage for the new brand relation, so searching by brand name finds products without a legacy `marca` value.
+- L9 (regression fix): The flat detail table keyed informative specs by label, so duplicate labels (`Color`, `Acabado`) overwrote each other. Renamed them to `Color de esfera`, `Color de correa`, `Acabado de caja`, `Acabado de esfera`, and `Material de correa`, with a regression test covering the four values together.
