@@ -35,68 +35,77 @@
                 }, 4000);
             },
         }"
-        class="bg-gray-900 text-white"
+        class="bg-primary-hover text-white"
     >
-        {{-- Barra de borde a borde: el contenedor ya no usa `mx-auto max-w-7xl`,
-             así el teléfono queda junto al borde derecho real del viewport y no
-             en el borde de una caja centrada de 1280px. El padding horizontal
-             se reduce a 8px (`px-2`) y en móvil los anuncios y el teléfono se
-             apilan en dos líneas, con el teléfono empujado a la derecha por su
-             propio `ml-auto`. --}}
-        <div class="flex w-full flex-col items-center gap-1 px-2 py-2 sm:flex-row sm:gap-8">
-            {{-- Anuncios rotativos: única región viva del top bar. Los dos slots
-                 comparten celda de grid para cruzarse sin saltar de altura. --}}
+        {{-- La barra conserva el fondo de borde a borde, pero su contenido usa
+             el contenedor global `site-container` (90vw): así los anuncios y el
+             teléfono quedan alineados con la navbar, el `<main>` y el pie, en
+             lugar de tocar el borde real del viewport. En móvil los anuncios y
+             el teléfono se apilan en dos líneas, con el teléfono empujado a la
+             derecha por su propio `ml-auto`. --}}
+        <div class="site-container flex flex-col items-center gap-1 py-2 sm:flex-row sm:gap-8">
+            {{-- Anuncios rotativos: única región viva del top bar. La luz queda
+                 fuera de los mensajes para que no herede su fade; los dos slots
+                 comparten celda de grid y se alinean a la izquierda. --}}
             <div
                 data-shipping-announcements
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
-                class="grid w-full justify-items-center sm:flex-1"
+                class="flex w-full min-w-0 items-center gap-2 sm:flex-1"
             >
-                {{-- Mensaje 1: envíos nacionales, junto a la bandera de Colombia
-                     en SVG (determinista en todos los sistemas; el emoji no
-                     renderiza en Windows) con nombre accesible. --}}
-                <p
-                    data-shipping-message="nacional"
-                    x-show="active === 0"
-                    x-transition:enter="transition ease-out duration-300 motion-reduce:transition-none"
-                    x-transition:enter-start="opacity-0 translate-y-1 motion-reduce:translate-y-0"
-                    x-transition:enter-end="opacity-100 translate-y-0"
-                    x-transition:leave="transition ease-in duration-200 motion-reduce:transition-none"
-                    x-transition:leave-start="opacity-100 translate-y-0"
-                    x-transition:leave-end="opacity-0 -translate-y-1 motion-reduce:translate-y-0"
-                    class="col-start-1 row-start-1 flex items-center justify-center gap-2 text-center text-[11px] uppercase tracking-[0.2em] sm:text-xs"
-                >
-                    <svg
-                        data-shipping-flag
-                        role="img"
-                        aria-label="Bandera de Colombia"
-                        focusable="false"
-                        viewBox="0 0 6 4"
-                        class="h-3 w-[18px] shrink-0 rounded-sm sm:h-3.5 sm:w-[21px]"
-                    >
-                        <rect width="6" height="2" fill="#FCD116" />
-                        <rect y="2" width="6" height="1" fill="#003893" />
-                        <rect y="3" width="6" height="1" fill="#CE1126" />
-                    </svg>
-                    <span>REALIZAMOS ENVÍOS A TODA COLOMBIA</span>
-                </p>
+                <span
+                    data-shipping-light
+                    aria-hidden="true"
+                    class="h-3 w-3 shrink-0 rounded-full bg-secondary"
+                ></span>
 
-                {{-- Mensaje 2: contraentrega. --}}
-                <p
-                    data-shipping-message="contraentrega"
-                    x-show="active === 1"
-                    x-cloak
-                    x-transition:enter="transition ease-out duration-300 motion-reduce:transition-none"
-                    x-transition:enter-start="opacity-0 translate-y-1 motion-reduce:translate-y-0"
-                    x-transition:enter-end="opacity-100 translate-y-0"
-                    x-transition:leave="transition ease-in duration-200 motion-reduce:transition-none"
-                    x-transition:leave-start="opacity-100 translate-y-0"
-                    x-transition:leave-end="opacity-0 -translate-y-1 motion-reduce:translate-y-0"
-                    class="col-start-1 row-start-1 flex items-center justify-center gap-2 text-center text-[11px] uppercase tracking-[0.2em] sm:text-xs"
-                >
-                    <span>REALIZAMOS TUS ENVÍOS CONTRAENTREGA</span>
-                </p>
+                <div class="grid min-w-0 flex-1 justify-items-start">
+                    {{-- Mensaje 1: envíos nacionales, junto a la bandera de Colombia
+                         en SVG (determinista en todos los sistemas; el emoji no
+                         renderiza en Windows) con nombre accesible. --}}
+                    <p
+                        data-shipping-message="nacional"
+                        x-show="active === 0"
+                        x-transition:enter="transition ease-out duration-300 motion-reduce:transition-none"
+                        x-transition:enter-start="opacity-0 translate-y-1 motion-reduce:translate-y-0"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-200 motion-reduce:transition-none"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1 motion-reduce:translate-y-0"
+                        class="col-start-1 row-start-1 flex min-w-0 items-center justify-start gap-2 text-left text-[11px] uppercase tracking-[0.2em] sm:text-xs"
+                    >
+                        <svg
+                            data-shipping-flag
+                            role="img"
+                            aria-label="Bandera de Colombia"
+                            focusable="false"
+                            viewBox="0 0 6 4"
+                            class="h-3 w-[18px] shrink-0 rounded-sm sm:h-3.5 sm:w-[21px]"
+                        >
+                            <rect width="6" height="2" fill="#FCD116" />
+                            <rect y="2" width="6" height="1" fill="#003893" />
+                            <rect y="3" width="6" height="1" fill="#CE1126" />
+                        </svg>
+                        <span>REALIZAMOS ENVÍOS A TODA COLOMBIA</span>
+                    </p>
+
+                    {{-- Mensaje 2: contraentrega. --}}
+                    <p
+                        data-shipping-message="contraentrega"
+                        x-show="active === 1"
+                        x-cloak
+                        x-transition:enter="transition ease-out duration-300 motion-reduce:transition-none"
+                        x-transition:enter-start="opacity-0 translate-y-1 motion-reduce:translate-y-0"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-200 motion-reduce:transition-none"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 -translate-y-1 motion-reduce:translate-y-0"
+                        class="col-start-1 row-start-1 flex min-w-0 items-center justify-start gap-2 text-left text-[11px] uppercase tracking-[0.2em] sm:text-xs"
+                    >
+                        <span>REALIZAMOS TUS ENVÍOS CONTRAENTREGA</span>
+                    </p>
+                </div>
             </div>
 
             {{-- Teléfono fijo: fuera de la región viva y sin transición, así es
@@ -105,7 +114,7 @@
                 data-shipping-phone
                 href="tel:+573113059507"
                 aria-label="Llámanos al +57 311 305 9507"
-                class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11px] tracking-[0.15em] text-white/90 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+                class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11px] tracking-[0.15em] text-white/90 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary-hover"
             >
                 <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
@@ -303,10 +312,13 @@
         @storefront-search-area.window="searchAreaActive = !! ($event.detail && $event.detail.active)"
         @cart-added.window="onCartIndicatorAdded()"
         @cart-updated.window="onCartIndicatorUpdated($event)"
-        class="sticky top-0 z-50 border-b border-transparent bg-white px-5 py-4 transition-shadow duration-200 motion-reduce:transition-none sm:px-8 sm:py-5 lg:px-10"
+        class="sticky top-0 z-50 border-b border-transparent bg-primary py-4 text-white transition-shadow duration-200 motion-reduce:transition-none sm:py-5"
         aria-label="Navegación principal"
     >
-        <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        {{-- El fondo de la navbar sigue siendo de borde a borde; el padding
+             horizontal vive ahora en `site-container` (90vw), que es el mismo
+             contenedor del `<main>` y del pie de página. --}}
+        <div class="site-container grid grid-cols-[1fr_auto_1fr] items-center gap-4">
             {{-- Columna izquierda: las categorías primarias en mayúsculas con
                  tracking y un subrayado discreto en hover/focus. En móvil esta
                  misma celda la ocupa el botón que abre el menú, así el control
@@ -331,7 +343,7 @@
                             aria-controls="storefront-tienda-mega-menu"
                             :aria-expanded="megaOpen"
                             @click="openMega()"
-                            class="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-gray-600 underline-offset-8 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                            class="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                         >
                             <span>TIENDA</span>
                             <svg data-nav-icon="chevron-down" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
@@ -357,9 +369,9 @@
                             x-transition:leave="transition ease-in duration-150 motion-reduce:transition-none"
                             x-transition:leave-start="translate-y-0 opacity-100"
                             x-transition:leave-end="-translate-y-2 opacity-0 motion-reduce:-translate-y-0"
-                            class="absolute inset-x-0 top-full z-[60] rounded-none border-b border-gray-200 bg-white px-10 py-8 shadow-xl"
+                            class="absolute inset-x-0 top-full z-[60] rounded-none border-b border-gray-200 bg-white py-8 shadow-xl"
                         >
-                            <div class="mx-auto grid w-full max-w-[1440px] grid-cols-[16rem_minmax(0,1fr)] gap-10">
+                            <div class="site-container grid grid-cols-[16rem_minmax(0,1fr)] gap-10">
                                 <nav aria-labelledby="storefront-tienda-links-title" class="border-r border-gray-100 pr-8">
                                     <h2 id="storefront-tienda-links-title" class="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Explorar</h2>
                                     <ul class="mt-4 flex flex-col gap-1">
@@ -402,13 +414,13 @@
                     <a
                         data-nav-primary-item="damas"
                         href="{{ route('catalog.index', ['categoria' => 'dama']) }}"
-                        class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-gray-600 underline-offset-8 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                        class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >DAMAS</a>
 
                     <a
                         data-nav-primary-item="caballeros"
                         href="{{ route('catalog.index', ['categoria' => 'caballero']) }}"
-                        class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-gray-600 underline-offset-8 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                        class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >CABALLEROS</a>
                 </div>
 
@@ -422,7 +434,7 @@
                     :aria-expanded="mobileOpen"
                     aria-label="Abrir menú"
                     @click="mobileOpen = ! mobileOpen"
-                    class="inline-flex items-center justify-center rounded p-2 text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 lg:hidden"
+                    class="inline-flex items-center justify-center rounded p-2 text-white hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
                 >
                     <svg data-nav-icon="menu" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
                         <line x1="3" y1="6" x2="21" y2="6" />
@@ -432,23 +444,22 @@
                 </button>
             </div>
 
-            {{-- Marca (columna central `auto`): el SVG entregado va
-                 inmediatamente a la izquierda del wordmark exacto `Tag Q` y el
-                 grupo queda centrado en el viewport porque las dos columnas
-                 laterales comparten el mismo `1fr`. La imagen es decorativa
-                 (`alt=""` y `aria-hidden="true"`) porque el wordmark contiguo
-                 ya nombra la marca. El SVG entregado ya trae relleno negro
-                 intenso (#000000) con una sombra suave en la parte baja
-                 (filtro `feDropShadow` interno), así que se renderiza sin
-                 filtros de Tailwind: cualquier filtro extra apagaría la
-                 sombra. El wordmark contiguo lleva Jost 500
-                 (`font-jost`), tracking amplio y tamaño responsive
-                 (30px móvil · 56px desde `lg`), sin cambiar el destino ni el
-                 nombre accesible de la marca. --}}
+            {{-- Marca (columna central `auto`): el SVG va inmediatamente a la
+                 izquierda del wordmark exacto `Tag Q` y el grupo queda centrado
+                 en el viewport porque las dos columnas laterales comparten el
+                 mismo `1fr`. La imagen es decorativa (`alt=""` y
+                 `aria-hidden="true"`) porque el wordmark contiguo ya nombra la
+                 marca. El asset público ya trae relleno blanco (#ffffff) con la
+                 sombra suave inferior original (`feDropShadow`), así que se
+                 renderiza sin filtros de Tailwind: invertirlo acá apagaría esa
+                 sombra. El wordmark contiguo lleva Jost 500 (`font-jost`),
+                 tracking amplio y tamaño responsive (30px móvil · 56px desde
+                 `lg`), sin cambiar el destino ni el nombre accesible de la
+                 marca. --}}
             <a
                 data-nav-brand
                 href="{{ route('home') }}"
-                class="inline-flex items-center justify-self-center gap-[27px] whitespace-nowrap px-2 font-serif text-xl font-semibold tracking-[0.12em] text-gray-900 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-4 sm:text-2xl"
+                class="inline-flex items-center justify-self-center gap-[27px] whitespace-nowrap px-2 font-serif text-xl font-semibold tracking-[0.12em] text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-primary sm:text-2xl"
             ><img
                     data-nav-brand-mark
                     src="{{ asset('images/tag-q-logo.svg') }}"
@@ -476,7 +487,7 @@
                     aria-controls="storefront-search-panel"
                     :aria-expanded="searchOpen"
                     @click="openSearch()"
-                    class="inline-flex items-center justify-center rounded p-2 text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                    class="inline-flex items-center justify-center rounded p-2 text-white hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
                     <svg data-nav-icon="search" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
                         <circle cx="11" cy="11" r="8" />
@@ -500,7 +511,7 @@
                         aria-haspopup="true"
                         :aria-expanded="open"
                         @click="open = ! open"
-                        class="inline-flex items-center justify-center rounded p-2 text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                        class="inline-flex items-center justify-center rounded p-2 text-white hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >
                         <svg data-nav-icon="user" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -544,7 +555,7 @@
                     title="Bolsa"
                     aria-controls="cart-drawer-panel"
                     @click.prevent="window.matchMedia('(min-width: 768px)').matches ? window.dispatchEvent(new CustomEvent('cart-drawer-open')) : window.location.assign($el.href)"
-                    class="relative inline-flex items-center justify-center rounded p-2 text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                    class="relative inline-flex items-center justify-center rounded p-2 text-white hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
                     <svg data-nav-icon="bag" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
                         <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
@@ -568,7 +579,7 @@
             data-nav-mobile-panel
             x-show="mobileOpen"
             x-cloak
-            class="mt-3 flex flex-col gap-1 border-t border-gray-200 pt-3 lg:hidden"
+            class="site-container mt-3 flex flex-col gap-1 border-t border-white/20 pt-3 lg:hidden"
         >
             {{-- En móvil Tienda alterna (tap) el mismo panel a ancho completo;
                  el hover no existe en táctil. `Ver todo` sigue llevando al
@@ -579,7 +590,7 @@
                 aria-controls="storefront-tienda-mega-menu-mobile"
                 :aria-expanded="megaOpen"
                 @click="megaOpen = ! megaOpen"
-                class="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm font-medium uppercase tracking-[0.15em] text-gray-600 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100"
+                class="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10"
             >
                 <span>TIENDA</span>
                 <svg data-nav-icon="chevron-down" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
@@ -600,12 +611,12 @@
                     <livewire:storefront.featured-products-menu lazy="on-load" />
                 </div>
             </div>
-            <a data-nav-mobile-item="damas" href="{{ route('catalog.index', ['categoria' => 'dama']) }}" class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-gray-600 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">DAMAS</a>
-            <a data-nav-mobile-item="caballeros" href="{{ route('catalog.index', ['categoria' => 'caballero']) }}" class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-gray-600 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">CABALLEROS</a>
-            <a data-nav-mobile-child="ver-todo" href="{{ route('catalog.index') }}" class="rounded px-3 py-2 pl-6 text-sm text-gray-500 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Ver todo</a>
-            <a data-nav-mobile-child="ninos" href="{{ route('catalog.index', ['categoria' => 'ninos']) }}" class="rounded px-3 py-2 pl-6 text-sm text-gray-500 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Niños</a>
+            <a data-nav-mobile-item="damas" href="{{ route('catalog.index', ['categoria' => 'dama']) }}" class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">DAMAS</a>
+            <a data-nav-mobile-item="caballeros" href="{{ route('catalog.index', ['categoria' => 'caballero']) }}" class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">CABALLEROS</a>
+            <a data-nav-mobile-child="ver-todo" href="{{ route('catalog.index') }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Ver todo</a>
+            <a data-nav-mobile-child="ninos" href="{{ route('catalog.index', ['categoria' => 'ninos']) }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Niños</a>
             @foreach(config('tagq.subcategories', []) as $slug => $label)
-                <a data-nav-mobile-child="{{ $slug }}" href="{{ route('catalog.index', ['subcategoria' => $slug]) }}" class="rounded px-3 py-2 pl-6 text-sm text-gray-500 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">{{ $label }}</a>
+                <a data-nav-mobile-child="{{ $slug }}" href="{{ route('catalog.index', ['subcategoria' => $slug]) }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">{{ $label }}</a>
             @endforeach
         </div>
 
@@ -693,14 +704,13 @@
             }
         })();
     </script>
-    {{-- Contenedor único del storefront: `1600px` con el mismo padding del
-         navbar. Las páginas que necesitan una medida de lectura más corta
-         (checkout, legales, detalle) acotan su contenido dentro. `main-class`
-         queda para las dos excepciones: el home a sangre y el catálogo, que
-         suelta el centrado para pegar los filtros al gutter.
+    {{-- Contenedor global del storefront: `site-container` mide 90vw y se
+         centra sin max-width fijo. Las páginas con fondo a sangre (home,
+         checkout, detalle) lo conservan en su `main-class` y usan la misma
+         clase en su bloque interno; el catálogo también lo usa directamente.
          `main-attributes` conserva los atributos de marcado que vivían en el
          <main> de la página (debe incluir su espacio inicial). --}}
-    <main class="@yield('main-class', 'mx-auto w-full max-w-[1600px] px-5 py-8 sm:px-8 lg:px-10')"@yield('main-attributes')>
+    <main class="@yield('main-class', 'site-container py-8')"@yield('main-attributes')>
         @yield('content')
     </main>
     {{-- Pie de página compartido del storefront: presente en todas las páginas
@@ -724,7 +734,7 @@
          tamaño responsive (30px móvil · 56px desde `lg`), conservando el SVG a
          su izquierda y el enlace real al home. --}}
     <footer data-storefront-footer class="border-t border-white/10 bg-[#00052c] text-white">
-        <div class="mx-auto w-full max-w-[1440px] px-5 py-12 sm:px-8 lg:px-10">
+        <div class="site-container py-12">
             <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
                 {{-- Bloque de marca: logotipo, wordmark, una descripción breve
                      del negocio para compradores colombianos y, debajo, los
@@ -739,7 +749,7 @@
                             src="{{ asset('images/tag-q-logo.svg') }}"
                             alt=""
                             aria-hidden="true"
-                            class="h-8 w-auto shrink-0 brightness-0 invert"
+                            class="h-8 w-auto shrink-0"
                         /><span class="font-jost text-[40px] font-medium leading-none tracking-[0.1em]">Tag Q</span></a>
                     <p class="mt-4 max-w-xs text-sm leading-relaxed text-gray-300">
                         Relojes de pulso para hombre y mujer, seleccionados para lucir todos los días. Compra en línea con envíos a toda Colombia.

@@ -141,9 +141,10 @@ class LegalPagesTest extends TestCase
 
         $this->assertStringContainsString('data-footer-brand', $html);
         $this->assertStringContainsString('data-footer-brand-mark', $html);
-        $this->assertStringContainsString('h-8 w-auto shrink-0 brightness-0 invert', $html);
+        // El asset ya se sirve blanco: el pie no necesita invertirlo por CSS.
+        $this->assertStringContainsString('h-8 w-auto shrink-0"', $html);
         $this->assertStringContainsString('font-jost text-[40px]', $html);
-        $this->assertStringContainsString('brightness-0 invert', $html);
+        $this->assertStringNotContainsString('brightness-0 invert', $html);
         $this->assertStringContainsString('Tag Q', $html);
         $this->assertStringContainsString('&copy; '.date('Y').' Tag Q. Todos los derechos reservados.', $html);
     }

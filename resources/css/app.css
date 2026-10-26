@@ -12,7 +12,7 @@
  * (@import debe preceder a cualquier regla) y Vite, además, sube todo `@import`
  * al inicio del bundle en `finalizeCss` (`hoistAtRules`).
  */
-@import url('https://fonts.bunny.net/css2?family=Outfit:wght@300&family=Bebas+Neue&display=swap&subset=latin');
+@import url('https://fonts.bunny.net/css2?family=Outfit:wght@300&family=Bebas+Neue&family=Space+Grotesk:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap&subset=latin');
 @import 'tailwindcss';
 @import './admin.css';
 @import 'swiper/css';
@@ -48,6 +48,82 @@
      * es lo que hace que Tailwind genere la utilidad reutilizable `font-jost`.
      */
     --font-jost: 'Jost', ui-sans-serif, system-ui, sans-serif;
+
+    /*
+     * Apex Horology — tokens del sistema de diseño (DESIGN.md).
+     *
+     * Se declaran como tokens del tema para que Tailwind genere las utilidades
+     * (`font-display`, `bg-primary`, `border-border-soft`, etc.) y el checkout
+     * no dependa de valores hexadecimales sueltos.
+     */
+    --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Work Sans', ui-sans-serif, system-ui, sans-serif;
+
+    --color-primary: #008b8b;
+    --color-primary-hover: #007373;
+    --color-accent: #f26b3a;
+    --color-accent-hover: #e05a29;
+    --color-secondary: #f26b3a;
+    --color-secondary-hover: #e05a29;
+    --color-surface: #ffffff;
+    --color-surface-subtle: #f8fafc;
+    --color-surface-muted: #f1f5f9;
+    --color-border-soft: #e2e8f0;
+    --color-ink: #000000;
+    --color-ink-soft: #475569;
+    --color-ink-muted: #94a3b8;
+    --color-error: #ba1a1a;
+}
+
+/*
+ * Contenedor global del storefront: 90% del ancho del viewport, centrado.
+ * No lleva max-width fijo. Las secciones a sangre (hero, franjas de color)
+ * mantienen su fondo completo; su contenido interno usa esta misma clase
+ * para alinear con la grilla global.
+ */
+@utility site-container {
+    width: 90vw;
+    margin-inline: auto;
+}
+
+/*
+ * Luz de estado del top bar.
+ *
+ * Indicador decorativo (`aria-hidden`) fijo a la izquierda de los anuncios.
+ * Mientras los textos rotan con su propio fade, la luz parpadea como una
+ * piloto: se enciende con halo naranja y se apaga por completo, sin cambiar
+ * el ancho reservado para que el texto no se mueva. Con movimiento reducido
+ * queda encendida, sin animación.
+ */
+@keyframes shipping-light-blink {
+    0%,
+    28% {
+        opacity: 1;
+        box-shadow: 0 0 0 2px rgba(242, 107, 58, 0.22), 0 0 12px rgba(242, 107, 58, 0.85);
+    }
+
+    50%,
+    78% {
+        opacity: 0;
+        box-shadow: none;
+    }
+
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 0 2px rgba(242, 107, 58, 0.22), 0 0 12px rgba(242, 107, 58, 0.85);
+    }
+}
+
+[data-shipping-light] {
+    animation: shipping-light-blink 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-shipping-light] {
+        animation: none;
+        opacity: 1;
+        box-shadow: 0 0 0 2px rgba(242, 107, 58, 0.22), 0 0 12px rgba(242, 107, 58, 0.85);
+    }
 }
 
 /*
@@ -263,14 +339,16 @@
  * Carrusel del hero del home (`data-home-hero-slider`).
  *
  * El CSS de Swiper resuelve flechas y puntos con variables heredadas. Como las
- * imágenes del hero son oscuras, aquí se pintan en blanco y se reduce el tamaño
- * de las flechas para que no tapen el texto superpuesto. El resto del aspecto
- * (velo, disposición del texto, alturas) vive en las utilidades del Blade.
+ * imágenes del hero son oscuras, las flechas y los puntos inactivos se pintan
+ * en blanco; el punto activo usa el naranja de acento de Apex Horology. Se
+ * reduce el tamaño de las flechas para que no tapen el texto superpuesto. El
+ * resto del aspecto (velo, disposición del texto, alturas) vive en las
+ * utilidades del Blade.
  */
 [data-home-hero-slider] {
     --swiper-navigation-color: #ffffff;
     --swiper-navigation-size: 32px;
-    --swiper-pagination-color: #ffffff;
+    --swiper-pagination-color: #f26b3a;
     --swiper-pagination-bullet-inactive-color: #ffffff;
     --swiper-pagination-bullet-inactive-opacity: 0.45;
 }
@@ -391,10 +469,10 @@
 
 [data-product-detail] .pd-shell {
     position: relative;
-    width: 100%;
-    max-width: 1440px;
+    width: 90vw;
+    max-width: none;
     margin-inline: auto;
-    padding: 18px clamp(20px, 2.8vw, 40px) 56px;
+    padding: 18px 0 56px;
 }
 
 [data-product-detail] .pd-utility {
@@ -999,7 +1077,7 @@
 
 @media (max-width: 640px) {
     [data-product-detail] .pd-shell {
-        padding: 14px 18px 36px;
+        padding: 14px 0 36px;
     }
 
     [data-product-detail] .pd-utility {

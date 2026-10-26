@@ -3,14 +3,14 @@
 
 @section('title', config('app.name', 'Tag q').' — Catálogo')
 
-{{-- El catálogo suelta el contenedor centrado para que la columna de filtros
-     arranque en el gutter de la ventana, a la misma altura que el logo del
-     navbar (`px-5 sm:px-8 lg:px-10`). La grilla de productos conserva su propio
-     tope (`lg:max-w-[1400px]`) para que las tres tarjetas no se estiren en
-     pantallas anchas. --}}
-@section('main-class', 'w-full px-5 py-8 sm:px-8 lg:px-10')
+{{-- El catálogo usa el contenedor global del storefront (`site-container`,
+     90vw) para que el rail de filtros arranque en el mismo margen que el
+     resto de páginas. La grilla de productos conserva su propio tope
+     (`lg:max-w-[1400px]`) para que las tarjetas no se estiren en pantallas
+     anchas. --}}
+@section('main-class', 'site-container py-8')
 
-{{-- Dentro del ancho completo, la columna de filtros queda sticky en
+{{-- Dentro del contenedor, la columna de filtros queda sticky en
      escritorio; en móvil se abre con el botón "Filtros" (Alpine) y la regla
      `[data-catalog-filters][data-open='false']` la oculta sin parpadeos. --}}
 

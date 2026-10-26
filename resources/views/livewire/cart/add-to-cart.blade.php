@@ -16,7 +16,7 @@
 >
     @error('cart')
         <p @class([
-            'text-sm text-red-200' => $isCompact,
+            'rounded border border-error/20 bg-white px-2 py-1 text-sm text-error' => $isCompact,
             'text-sm text-red-700' => ! $isCompact && ! $isEditorial,
             'pd-message pd-message--error' => $isEditorial,
         ]) role="alert">{{ $message }}</p>
@@ -24,7 +24,7 @@
 
     @if($addedMessage !== '')
         <p @class([
-            'text-sm text-green-200' => $isCompact,
+            'rounded border border-primary/20 bg-white px-2 py-1 text-sm text-primary' => $isCompact,
             'text-sm text-green-700' => ! $isCompact && ! $isEditorial,
             'pd-message pd-message--success' => $isEditorial,
         ]) role="status">{{ $addedMessage }}</p>
@@ -42,7 +42,7 @@
                 @disabled(! $available)
                 aria-label="{{ $available ? 'Agregar '.($product?->name ?? 'este producto').' al carrito' : ($product?->name ?? 'Este producto').' no disponible' }}"
                 title="Agregar al carrito"
-                class="inline-flex h-8 w-8 items-center justify-center bg-white text-xl leading-none text-black shadow-sm hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                class="inline-flex h-10 w-10 items-center justify-center rounded border border-border-soft bg-white text-lg leading-none text-ink transition-colors hover:border-primary hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-border-soft disabled:bg-surface-muted disabled:text-ink-muted"
             >
                 <span data-add-to-cart-compact-plus aria-hidden="true">+</span>
             </button>

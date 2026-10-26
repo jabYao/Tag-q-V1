@@ -13,14 +13,31 @@
     <script type="text/javascript" src="https://checkout.wompi.co/widget.js"></script>
 @endpush
 
+{{-- El checkout usa la superficie técnica del sistema (DESIGN.md): fondo
+     `surface-subtle` a sangre, contenedor global de 90vw y una grilla de 12
+     columnas que reparte formulario (7) y resumen (5) en escritorio. --}}
+@section('main-class', 'w-full bg-surface-subtle')
+
 @section('content')
-    {{-- El formulario de checkout conserva un ancho de lectura acotado dentro
-         del contenedor global: campos a 1500px de ancho no son usables. --}}
-    <div class="mx-auto w-full max-w-4xl">
-        <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-bold">Finalizar compra</h1>
-            <a href="{{ route('cart.index') }}" class="text-sm text-blue-700 hover:underline">&larr; Volver al carrito</a>
-        </div>
+    <div class="site-container py-10 lg:py-14">
+        <header class="mb-8 flex flex-col gap-4 border-b border-border-soft pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">
+                    Compra segura
+                </p>
+                <h1 class="mt-2 font-display text-[32px] font-bold leading-[36px] tracking-[-0.01em] text-ink sm:text-[48px] sm:leading-[52px] sm:tracking-[-0.02em]">
+                    Finalizar compra
+                </h1>
+            </div>
+
+            <a
+                href="{{ route('cart.index') }}"
+                class="inline-flex items-center gap-2 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary transition-colors hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-subtle"
+            >
+                <span aria-hidden="true">&larr;</span>
+                Volver al carrito
+            </a>
+        </header>
 
         @livewire('checkout.checkout-form')
     </div>

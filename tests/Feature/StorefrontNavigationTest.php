@@ -492,6 +492,56 @@ class StorefrontNavigationTest extends TestCase
         $this->assertFalse($phone->hasAttribute('x-transition'), 'El teléfono no se anima ni rota');
     }
 
+    public function test_el_top_bar_alinea_los_anuncios_y_agrega_una_luz_secundaria_que_parpadea(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        // La luz es el primer elemento de los anuncios: queda fija a la
+        // izquierda y fuera de los slots que rotan, así no hereda su fade.
+        $light = $xpath->query('//*[@data-shipping-announcements]/*[1][@data-shipping-light]')->item(0);
+
+        $this->assertInstanceOf(\DOMElement::class, $light, 'La luz es el primer elemento de los anuncios');
+        $this->assertSame('true', $light->getAttribute('aria-hidden'), 'La luz es decorativa para lectores de pantalla');
+
+        $lightClasses = preg_split('/\s+/', trim((string) $light->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        foreach (['h-3', 'w-3', 'shrink-0', 'rounded-full', 'bg-secondary'] as $class) {
+            $this->assertContains($class, $lightClasses, "La luz aplica {$class}");
+        }
+
+        $this->assertSame(
+            0,
+            $xpath->query('//*[@data-shipping-message]//*[@data-shipping-light]')->length,
+            'La luz no vive dentro de los mensajes que rotan'
+        );
+
+        foreach (['nacional', 'contraentrega'] as $slot) {
+            $message = $xpath->query('//*[@data-shipping-message="'.$slot.'"]')->item(0);
+
+            $this->assertInstanceOf(\DOMElement::class, $message, "El slot {$slot} existe");
+
+            $classes = preg_split('/\s+/', trim((string) $message->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+            $this->assertContains('justify-start', $classes, "El slot {$slot} se alinea a la izquierda");
+            $this->assertContains('text-left', $classes, "El slot {$slot} alinea su texto a la izquierda");
+            $this->assertNotContains('justify-center', $classes, "El slot {$slot} ya no se centra");
+            $this->assertNotContains('text-center', $classes, "El slot {$slot} ya no centra su texto");
+        }
+
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertStringContainsString('--color-secondary: #f26b3a;', $css, 'El token secondary está disponible');
+        $this->assertStringContainsString('@keyframes shipping-light-blink', $css, 'La luz tiene su propia animación');
+        $this->assertStringContainsString('[data-shipping-light]', $css, 'La animación se ancla al hook de la luz');
+        $this->assertMatchesRegularExpression(
+            '/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\[data-shipping-light\]\s*\{[^}]*animation:\s*none;/s',
+            $css,
+            'La luz respeta el movimiento reducido'
+        );
+    }
+
     public function test_el_top_bar_ensancha_el_espaciado_entre_letras_de_los_anuncios(): void
     {
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
@@ -510,15 +560,15 @@ class StorefrontNavigationTest extends TestCase
         }
     }
 
-    public function test_el_top_bar_ocupa_todo_el_ancho_y_pega_el_telefono_a_la_derecha(): void
+    public function test_el_top_bar_alinea_su_contenido_con_el_contenedor_global_y_pega_el_telefono_a_la_derecha(): void
     {
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
         $xpath = $this->xpathDe($html);
 
-        // El contenedor de layout es el padre directo de los anuncios; dejar de
-        // limitar el ancho con `max-w-7xl` y centrar con `mx-auto` es lo que
-        // permite que la barra llegue al borde derecho real del viewport.
+        // El contenedor de layout es el padre directo de los anuncios. Ahora
+        // usa `site-container` (90vw, centrado), igual que el `<main>` y el
+        // pie: el contenido deja de tocar el borde real del viewport.
         $announcements = $xpath->query('//*[@data-shipping-announcements]')->item(0);
         $this->assertNotNull($announcements, 'El bloque de anuncios existe');
 
@@ -532,22 +582,49 @@ class StorefrontNavigationTest extends TestCase
 
         $classes = preg_split('/\s+/', trim((string) $layout->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
 
-        $this->assertNotContains('mx-auto', $classes, 'El layout ya no centra la barra con auto-márgenes');
-        $this->assertNotContains('max-w-7xl', $classes, 'El layout ya no limita el ancho a 7xl');
-        $this->assertContains('w-full', $classes, 'El layout ocupa todo el ancho disponible');
-        $this->assertContains('px-2', $classes, 'El layout usa un padding horizontal pequeño (~8px)');
-        $this->assertNotContains('px-4', $classes, 'El layout ya no usa el padding horizontal ancho anterior');
+        $this->assertContains('site-container', $classes, 'El layout usa el contenedor global del storefront (90vw)');
+        $this->assertNotContains('mx-auto', $classes, 'El centrado lo aporta `site-container`, no un auto-margen suelto');
+        $this->assertNotContains('max-w-7xl', $classes, 'El layout no limita el ancho a 7xl');
+        $this->assertNotContains('w-full', $classes, 'El layout ya no ocupa todo el ancho: se acota a 90vw');
+        $this->assertNotContains('px-2', $classes, 'El aire lateral lo aporta `site-container`, no un padding propio');
+        $this->assertNotContains('px-4', $classes, 'El layout no usa el padding horizontal ancho anterior');
         $this->assertContains('flex-col', $classes, 'En móvil los anuncios y el teléfono se apilan en dos líneas');
 
-        // El teléfono persistente queda alineado a la derecha también en móvil:
-        // su propia línea con auto-margen izquierdo lo empuja contra el borde.
+        // El teléfono persistente queda alineado a la derecha del contenedor
+        // también en móvil: su propia línea con auto-margen izquierdo lo empuja
+        // contra el borde interior de la barra.
         $phone = $xpath->query('//*[@data-shipping-topbar]//a[@data-shipping-phone]')->item(0);
         $this->assertNotNull($phone, 'El teléfono persistente existe');
 
         $phoneClasses = preg_split('/\s+/', trim((string) $phone->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
 
-        $this->assertContains('ml-auto', $phoneClasses, 'El teléfono se alinea a la derecha del viewport');
+        $this->assertContains('ml-auto', $phoneClasses, 'El teléfono se alinea a la derecha del contenedor');
         $this->assertContains('shrink-0', $phoneClasses, 'El teléfono conserva su tamaño sin comprimirse');
+    }
+
+    public function test_el_top_bar_y_la_navbar_usan_los_colores_primarios_de_la_marca(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $topbar = $xpath->query('//*[@data-shipping-topbar]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $topbar, 'El top bar existe');
+
+        $topbarClasses = preg_split('/\s+/', trim((string) $topbar->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('bg-primary-hover', $topbarClasses, 'El top bar usa el teal oscuro de marca');
+        $this->assertContains('text-white', $topbarClasses, 'El texto del top bar contrasta con su fondo');
+        $this->assertNotContains('bg-gray-900', $topbarClasses, 'El top bar ya no usa el fondo gris anterior');
+
+        $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $nav, 'La navbar existe');
+
+        $navClasses = preg_split('/\s+/', trim((string) $nav->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('bg-primary', $navClasses, 'La navbar usa el teal primario de marca');
+        $this->assertContains('text-white', $navClasses, 'El texto base de la navbar es blanco');
+        $this->assertNotContains('bg-white', $navClasses, 'La navbar ya no usa el fondo blanco anterior');
     }
 
     public function test_el_top_bar_con_el_telefono_se_repite_igual_en_todo_el_shell(): void
@@ -785,12 +862,14 @@ class StorefrontNavigationTest extends TestCase
         $this->assertSame('', $mark->getAttribute('alt'), 'La imagen es decorativa');
         $this->assertSame('true', $mark->getAttribute('aria-hidden'), 'La imagen queda fuera del árbol accesible');
 
-        // El SVG ya trae relleno negro intenso (#000000) con sombra inferior
+        // El asset público trae relleno blanco (#ffffff) con su sombra inferior
         // propia (feDropShadow), así que la navbar lo renderiza sin filtros de
-        // Tailwind: `brightness-0` y `opacity-70` apagarían la sombra.
+        // Tailwind: `brightness-0` e `invert` volverían a pintarlo y `opacity-70`
+        // apagaría la sombra.
         $markClasses = preg_split('/\s+/', trim((string) $mark->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
-        $this->assertNotContains('brightness-0', $markClasses, 'El SVG ya es negro: no se oscurece con filtros de Tailwind');
-        $this->assertNotContains('opacity-70', $markClasses, 'El SVG ya es negro: no se atenúa con filtros de Tailwind');
+        $this->assertNotContains('brightness-0', $markClasses, 'El SVG ya es blanco: no se recolorea con filtros de Tailwind');
+        $this->assertNotContains('invert', $markClasses, 'El SVG ya es blanco: no se invierte con filtros de Tailwind');
+        $this->assertNotContains('opacity-70', $markClasses, 'El SVG ya es blanco: no se atenúa con filtros de Tailwind');
 
         // Altura responsive del logo pedida por el usuario: 28px en móvil
         // (`h-7`) y 56px desde el breakpoint `sm` (`sm:h-14`, Tailwind
@@ -815,7 +894,7 @@ class StorefrontNavigationTest extends TestCase
         $this->assertFalse($intercalado, 'No hay nada entre el SVG y el wordmark Tag Q');
     }
 
-    public function test_el_logo_publico_existe_y_conserva_el_svg_entregado(): void
+    public function test_el_logo_publico_existe_y_se_sirve_en_blanco(): void
     {
         $path = public_path('images/tag-q-logo.svg');
 
@@ -825,17 +904,26 @@ class StorefrontNavigationTest extends TestCase
 
         $this->assertStringContainsString('<svg', $svg, 'El asset es un SVG');
         $this->assertStringContainsString('viewBox="508 226 252 357"', $svg, 'El asset conserva el viewBox del SVG editado (alto extendido para la sombra)');
-        $this->assertStringContainsString('#000000', $svg, 'El asset trae el relleno negro intenso pedido');
+        $this->assertStringContainsString('fill="#ffffff"', $svg, 'El asset se sirve con relleno blanco para lucir sobre el navbar y el pie');
+        $this->assertStringNotContainsString('fill="#000000"', $svg, 'La marca ya no se sirve en negro');
         $this->assertStringContainsString('<feDropShadow', $svg, 'El asset trae la sombra suave de la parte baja');
 
-        // Copia byte a byte del archivo entregado en la raíz del proyecto. La
-        // comparación solo aplica cuando ese original está presente.
+        // El original entregado en la raíz del proyecto se conserva intacto: el
+        // asset público solo cambia el relleno. La comparación se hace sobre la
+        // geometría del trazo, no byte a byte, porque el color sí difiere.
         if (is_file(base_path('logo.svg'))) {
+            $entregado = (string) file_get_contents(base_path('logo.svg'));
+
+            preg_match('/<path[^>]*\bd="([^"]+)"/', $entregado, $trazoEntregado);
+            preg_match('/<path[^>]*\bd="([^"]+)"/', $svg, $trazoPublico);
+
+            $this->assertNotSame('', $trazoEntregado[1] ?? '', 'El entregado expone el trazo de la marca');
             $this->assertSame(
-                file_get_contents(base_path('logo.svg')),
-                $svg,
-                'El asset público es una copia byte a byte del SVG entregado'
+                $trazoEntregado[1] ?? '',
+                $trazoPublico[1] ?? '',
+                'El asset público conserva la geometría exacta del SVG entregado'
             );
+            $this->assertStringContainsString('fill="#000000"', $entregado, 'El original entregado no se modifica');
         }
     }
 
@@ -943,26 +1031,41 @@ class StorefrontNavigationTest extends TestCase
         );
     }
 
-    public function test_el_encabezado_usa_un_padding_amplio_y_la_marca_tipografia_de_logo(): void
+    public function test_el_encabezado_alinea_su_contenido_con_el_contenedor_global_y_la_marca_tipografia_de_logo(): void
     {
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
         $xpath = $this->xpathDe($html);
 
-        // Padding responsive ampliado del encabezado (T9): más aire horizontal y
-        // vertical en móvil, tablet y escritorio, sin tocar la estructura.
+        // El fondo de la navbar sigue a sangre, pero su contenido se alinea con
+        // el mismo contenedor global (90vw) del `<main>` y del pie: el padding
+        // horizontal ya no vive en el `<nav>` sino en esa fila.
         $nav = $xpath->query('//*[@data-storefront-nav]')->item(0);
         $this->assertNotNull($nav, 'El encabezado expone su hook');
 
         $navClasses = preg_split('/\s+/', trim((string) $nav->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
 
-        foreach (['px-5', 'py-4', 'sm:px-8', 'sm:py-5', 'lg:px-10'] as $class) {
-            $this->assertContains($class, $navClasses, "El encabezado aplica el padding {$class}");
+        foreach (['py-4', 'sm:py-5'] as $class) {
+            $this->assertContains($class, $navClasses, "El encabezado conserva el padding vertical {$class}");
         }
 
-        foreach (['px-4', 'py-3', 'sm:px-6'] as $class) {
-            $this->assertNotContains($class, $navClasses, "El encabezado ya no usa el padding anterior {$class}");
+        foreach (['px-4', 'py-3', 'sm:px-6', 'px-5', 'sm:px-8', 'lg:px-10'] as $class) {
+            $this->assertNotContains($class, $navClasses, "El encabezado ya no aplica padding horizontal propio ({$class})");
         }
+
+        $row = null;
+        foreach ($nav->childNodes as $child) {
+            if ($child instanceof \DOMElement) {
+                $row = $child;
+                break;
+            }
+        }
+
+        $this->assertInstanceOf(\DOMElement::class, $row, 'La navbar tiene su fila de contenido');
+
+        $rowClasses = preg_split('/\s+/', trim((string) $row->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('site-container', $rowClasses, 'La fila de la navbar usa el contenedor global (90vw)');
 
         // La marca se ve como un logotipo: serif del sistema, tamaño responsive
         // mayor, peso semibold y tracking contenido. Sin fuentes externas.

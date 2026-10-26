@@ -1029,8 +1029,8 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringNotContainsString('data-home-hero-eyebrow', $main);
         $this->assertStringNotContainsString('TAG Q · DEPORTIVOS', $main);
         $this->assertStringContainsString('data-home-hero-actions', $main);
-        $this->assertSame(3, substr_count($main, 'text-[60px]'), 'Todos los titulares del hero usan 60px');
-        $this->assertGreaterThanOrEqual(3, substr_count($main, 'font-bebas'), 'Los títulos posteriores al hero usan Bebas Neue');
+        $this->assertSame(3, substr_count($main, 'lg:text-[72px]'), 'Todos los titulares del hero usan el tamaño display de Apex en escritorio');
+        $this->assertGreaterThanOrEqual(3, substr_count($main, 'font-display'), 'La portada usa Space Grotesk (font-display) en sus títulos');
         $this->assertStringNotContainsString('Explora el catálogo por tipo de pieza.', $main);
         $this->assertStringNotContainsString('Las últimas piezas activas del catálogo.', $main);
         $this->assertStringNotContainsString('Un vistazo a las piezas del catálogo.', $main);
@@ -1375,16 +1375,25 @@ class StorefrontHomeTest extends TestCase
         $this->assertTrue($body->hasAttribute('data-home-body'), 'El resto del home va en su propio contenedor');
         $this->assertSame(1, $xpath->query('//*[@data-home-body]')->length, 'Debe existir un único contenedor');
 
-        // El contenedor va a ancho completo como la navbar (pedido del dueño):
-        // sin tope `max-w-6xl` ni centrado, solo el mismo padding lateral.
+        // El contenedor va a ancho completo como la navbar (pedido del dueño),
+        // pero su contenido interno usa el `site-container` global (90vw): la
+        // franja de fondo llega a los bordes y el texto no queda pegado a ellos.
         $classes = $this->classesOf($body);
 
-        foreach (['px-5', 'sm:px-8', 'lg:px-10', 'py-8'] as $class) {
-            $this->assertContains($class, $classes, "El contenedor del resto debe conservar {$class}");
+        $this->assertContains('py-8', $classes, 'El contenedor del resto conserva el ritmo vertical py-8');
+
+        foreach (['px-5', 'sm:px-8', 'lg:px-10'] as $class) {
+            $this->assertNotContains($class, $classes, "El contenedor del resto ya no lleva padding lateral propio ({$class})");
         }
 
         $this->assertNotContains('max-w-6xl', $classes, 'El resto del home ya no se acota con max-w-6xl');
         $this->assertNotContains('mx-auto', $classes, 'El resto del home ya no se centra con mx-auto');
+
+        $this->assertGreaterThanOrEqual(
+            1,
+            $xpath->query('.//*[contains(concat(" ", normalize-space(@class), " "), " site-container ")]', $body)->length,
+            'El contenido del resto del home se alinea con el contenedor global (90vw)',
+        );
 
         // Dentro quedan las categorías, los productos y el cierre…
         foreach (['data-home-categories', 'data-home-products', 'data-home-closing'] as $marker) {
@@ -1399,40 +1408,45 @@ class StorefrontHomeTest extends TestCase
         $this->assertSame(0, $xpath->query('.//*[@data-home-hero]', $body)->length);
     }
 
-    public function test_el_contenedor_acotado_por_defecto_sigue_vigente_fuera_del_home(): void
+    public function test_el_contenedor_global_del_storefront_sigue_vigente_fuera_del_home(): void
     {
-        // El contenedor único del shell sigue vigente en el resto del
-        // storefront; catálogo y home son las dos excepciones (rail de filtros
-        // y hero a sangre, respectivamente).
+        // El contenedor global del shell (`site-container`, 90vw) sigue vigente
+        // en el resto del storefront; el home y el catálogo lo aplican dentro de
+        // su franja o `<main>` correspondiente.
         foreach ([route('cart.index'), route('legal.privacy')] as $url) {
             $html = $this->get($url)->assertOk()->getContent();
 
             preg_match('/<main\b[^>]*class="([^"]*)"/', $html, $matches);
             $classes = array_values(array_filter(preg_split('/\s+/', trim($matches[1] ?? ''))));
 
-            foreach (['max-w-[1600px]', 'mx-auto', 'px-5', 'py-8', 'sm:px-8', 'lg:px-10'] as $class) {
+            foreach (['site-container', 'py-8'] as $class) {
                 $this->assertContains($class, $classes, "{$url} debe usar el contenedor global del storefront ({$class})");
+            }
+
+            foreach (['max-w-[1600px]', 'px-5', 'sm:px-8', 'lg:px-10'] as $class) {
+                $this->assertNotContains($class, $classes, "{$url} ya no acota ni rellena su <main> a mano ({$class})");
             }
         }
     }
 
-    public function test_el_catalogo_pega_los_filtros_al_gutter_de_la_ventana(): void
+    public function test_el_catalogo_alinea_su_rail_con_el_contenedor_global(): void
     {
-        // El catálogo suelta el contenedor centrado para que la columna de
-        // filtros arranque en el gutter, a la misma altura que el logo del
-        // navbar. La grilla de productos conserva un tope propio para que las
-        // tres tarjetas no se estiren en pantallas anchas.
+        // El catálogo usa el contenedor global (90vw), así la columna de filtros
+        // arranca alineada con el logo de la navbar y con el pie. La grilla de
+        // productos conserva un tope propio para que las tres tarjetas no se
+        // estiren en pantallas anchas.
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
         preg_match('/<main\b[^>]*class="([^"]*)"/', $html, $matches);
         $classes = array_values(array_filter(preg_split('/\s+/', trim($matches[1] ?? ''))));
 
-        foreach (['w-full', 'px-5', 'py-8', 'sm:px-8', 'lg:px-10'] as $class) {
-            $this->assertContains($class, $classes, "El catálogo debe ir a todo el ancho ({$class})");
+        foreach (['site-container', 'py-8'] as $class) {
+            $this->assertContains($class, $classes, "El catálogo debe usar el contenedor global ({$class})");
         }
 
-        $this->assertNotContains('max-w-[1600px]', $classes, 'El catálogo no debe quedar centrado en el contenedor');
-        $this->assertNotContains('mx-auto', $classes, 'El catálogo no debe centrar su <main>');
+        foreach (['w-full', 'max-w-[1600px]', 'mx-auto', 'px-5', 'sm:px-8', 'lg:px-10'] as $class) {
+            $this->assertNotContains($class, $classes, "El catálogo ya no resuelve su ancho a mano ({$class})");
+        }
 
         $this->assertMatchesRegularExpression(
             '/aria-label="Productos del catálogo"[^>]*lg:max-w-\[1400px\]/',
