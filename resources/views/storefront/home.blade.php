@@ -46,6 +46,47 @@
          inicializa en `resources/js/app.js` (fuera de este `<main>`) leyendo
          `data-home-hero-slider` y `data-home-hero-autoplay`; sin él, el marcado
          muestra igual la primera imagen con su texto encima. --}}
+    {{-- Franja entre la navbar y el hero (pedido del dueño). No pinta fondo:
+         deja ver el fondo del documento y mide el alto de la navbar, que la
+         cabecera publica en `--storefront-nav-h`. El hero descuenta esa misma
+         altura de su `min-height`, así cabecera + franja + hero siguen cerrando
+         en el borde del viewport.
+
+         Contenido: a la izquierda, el destacado del producto en una pastilla
+         cuadrada con el borde del sistema (`border-border-soft` + fondo blanco,
+         el mismo borde de las tarjetas del checkout); el nombre del modelo va en
+         negrita y la configuración (`SOLAR + MULTIBANDA`) más delgada y en gris.
+         A la derecha, fuera de la pastilla, la telemetría de coordenadas:
+         `COORD:` en gris, la coordenada en negrita y el corchete de estado en el
+         naranja `secondary` del sistema. Los separadores `//` y `|` quedan
+         fuera del árbol accesible; el texto sí se anuncia. En pantallas
+         angostas la coordenada se oculta para que la franja conserve el alto de
+         la navbar. --}}
+    <div data-home-hero-spacer class="bg-transparent">
+        <div class="site-container flex flex-col gap-2 py-2 2xl:flex-row 2xl:items-center 2xl:justify-between 2xl:gap-6">
+            <p
+                data-home-hero-highlight
+                class="inline-flex w-fit flex-wrap items-center gap-2 rounded-[5px] border-2 border-border-soft bg-surface-muted p-3 font-display text-[15px] uppercase leading-none tracking-[0.15em] text-ink"
+            >
+                <span data-home-hero-pulse aria-hidden="true"></span>
+                <span class="font-black">DESTACADO</span>
+                <span aria-hidden="true" class="font-medium text-ink-muted">//</span>
+                <span class="font-black">G-SHOCK GW-M5610U</span>
+                <span aria-hidden="true" class="font-medium text-ink-muted">|</span>
+                <span class="font-medium text-ink-muted">SOLAR + MULTIBANDA</span>
+            </p>
+
+            <p
+                data-home-hero-telemetry
+                class="hidden flex-wrap items-center gap-3 font-display text-[15px] uppercase leading-none tracking-[0.15em] md:flex"
+            >
+                <span class="font-medium text-ink-soft">COORD:</span>
+                <span class="font-bold text-ink">4°38'52.0"N 74°06'05.0"W</span>
+                <span class="font-semibold text-secondary">[LIVE SATELLITE LOCK]</span>
+            </p>
+        </div>
+    </div>
+
     <section
         data-home-hero
         data-home-hero-viewport

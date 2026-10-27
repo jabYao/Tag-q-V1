@@ -1299,16 +1299,16 @@ class StorefrontHomeTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | Hero a sangre, pegado a la navbar y con el alto restante del viewport (T5)
+    | Hero a sangre, separado de la navbar por la barra transparente (T5)
     |--------------------------------------------------------------------------
     |
     | El hero sale del contenedor de la página sin tocar el shell compartido: el
-    | home redefine `main-class` como `w-full`, el hero queda como primer
-    | elemento de `<main>` (sin margen superior ni redondeo, por lo que toca la
-    | navbar) y el resto del contenido conserva su contenedor acotado. Su alto
-    | es `100dvh - cabecera`, calculado en CSS con la variable
-    | `--storefront-header-h` que publica `resources/js/app.js` desde la altura
-    | real de la cabecera (top bar de envíos + navbar).
+    | home redefine `main-class` como `w-full` y el hero queda después de una
+    | barra transparente (`data-home-hero-spacer`) que mide el alto de la navbar
+    | y no pinta fondo. Su alto es `100dvh - cabecera - navbar`, calculado en CSS
+    | con las variables `--storefront-header-h` y `--storefront-nav-h` que
+    | publica `resources/js/app.js` desde la altura real de la cabecera (top bar
+    | de envíos + navbar) y de la navbar sola.
     */
 
     public function test_el_home_saca_el_hero_del_contenedor_de_la_pagina(): void
@@ -1326,7 +1326,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertNotContains('py-8', $classes, 'El home no debe conservar el padding vertical del contenedor');
     }
 
-    public function test_el_hero_es_el_primer_elemento_del_main_y_va_pegado_a_la_navbar(): void
+    public function test_el_hero_va_despues_de_la_barra_transparente_que_lo_separa_de_la_navbar(): void
     {
         $this->product($this->category());
 
@@ -1338,9 +1338,16 @@ class StorefrontHomeTest extends TestCase
         $children = $this->elementChildren($main);
         $this->assertNotEmpty($children, 'El <main> del home debe tener contenido');
 
-        $hero = $children[0];
+        // La franja abre el `<main>` del home: mide el alto de la navbar y no
+        // pinta fondo, así la foto del hero no toca la cabecera.
+        $spacer = $children[0];
 
-        $this->assertTrue($hero->hasAttribute('data-home-hero'), 'El hero debe ser el primer elemento de <main>');
+        $this->assertTrue($spacer->hasAttribute('data-home-hero-spacer'), 'La franja abre el <main> del home');
+        $this->assertContains('bg-transparent', $this->classesOf($spacer), 'La franja no pinta fondo');
+
+        $hero = $children[1];
+
+        $this->assertTrue($hero->hasAttribute('data-home-hero'), 'El hero va inmediatamente después de la barra');
         $this->assertTrue($hero->hasAttribute('data-home-hero-viewport'), 'El hero debe medir el viewport restante');
         $this->assertTrue($hero->hasAttribute('data-home-hero-slider'), 'El hero sigue siendo el carrusel del home');
 
@@ -1368,9 +1375,9 @@ class StorefrontHomeTest extends TestCase
         $main = $document->getElementsByTagName('main')->item(0);
         $children = $this->elementChildren($main);
 
-        $this->assertCount(2, $children, 'El <main> del home debe contener el hero y el contenedor del resto');
+        $this->assertCount(3, $children, 'El <main> del home debe contener la barra transparente, el hero y el contenedor del resto');
 
-        $body = $children[1];
+        $body = $children[2];
 
         $this->assertTrue($body->hasAttribute('data-home-body'), 'El resto del home va en su propio contenedor');
         $this->assertSame(1, $xpath->query('//*[@data-home-body]')->length, 'Debe existir un único contenedor');
@@ -1493,6 +1500,161 @@ class StorefrontHomeTest extends TestCase
         // Se vuelve a medir si la cabecera cambia de alto después del primer
         // pintado, sin esperar a un resize de la ventana.
         $this->assertStringContainsString('ResizeObserver', $js, 'app.js debe re-medir la cabecera con ResizeObserver');
+
+        // La barra transparente entre la navbar y el hero mide el alto de la
+        // navbar sola, y el hero descuenta esa misma altura para seguir cerrando
+        // en el borde del viewport.
+        $this->assertStringContainsString('--storefront-nav-h', $css, 'El CSS debe usar el alto de la navbar sola');
+        $this->assertStringContainsString('[data-home-hero-spacer]', $css, 'El CSS debe dimensionar la barra transparente');
+        $this->assertStringContainsString('min-height: var(--storefront-nav-h, 0px)', $css, 'La franja mide el alto de la navbar');
+        $this->assertMatchesRegularExpression(
+            '/\[data-home-hero-viewport\]\s*\{[^}]*100dvh - var\(--storefront-header-h, 0px\) - var\(--storefront-nav-h, 0px\)/s',
+            $css,
+            'El hero descuenta la cabecera y la barra transparente de su alto mínimo',
+        );
+        $this->assertMatchesRegularExpression(
+            '/setProperty\(\s*[\'\"]--storefront-nav-h[\'\"]/',
+            $js,
+            'app.js debe publicar --storefront-nav-h en el documento',
+        );
+    }
+
+    public function test_la_franja_del_hero_muestra_el_destacado_y_la_telemetria(): void
+    {
+        $this->product($this->category());
+
+        $document = $this->documentOf($this->get('/')->assertOk()->getContent());
+        $xpath = new \DOMXPath($document);
+
+        // Pastilla cuadrada del destacado: borde del sistema (el mismo de las
+        // tarjetas del checkout) y fondo blanco, sin esquinas redondeadas.
+        $pill = $xpath->query('//*[@data-home-hero-highlight]')->item(0);
+        $this->assertNotNull($pill, 'La franja muestra el destacado del producto');
+
+        $pillClasses = $this->classesOf($pill);
+
+        $this->assertContains('border-border-soft', $pillClasses, 'La pastilla usa el borde del sistema (checkout)');
+        $this->assertContains('border-2', $pillClasses, 'El borde es de 2px');
+        $this->assertContains('rounded-[5px]', $pillClasses, 'La pastilla usa un radio de 5px');
+        $this->assertContains('bg-surface-muted', $pillClasses, 'La pastilla usa el gris suave del sistema');
+        $this->assertContains('p-3', $pillClasses, 'La pastilla aplica el paso 3 de Tailwind (12px) en los cuatro lados');
+        $this->assertNotContains('rounded-none', $pillClasses, 'La pastilla ya no es de esquina viva');
+        $this->assertNotContains('rounded-full', $pillClasses, 'La pastilla no es de extremos redondeados');
+        $this->assertContains('text-[15px]', $pillClasses, 'El texto de la pastilla va a 15px');
+
+        $texto = preg_replace('/\s+/', ' ', trim($pill->textContent));
+
+        $this->assertSame(
+            'DESTACADO // G-SHOCK GW-M5610U | SOLAR + MULTIBANDA',
+            $texto,
+            'La pastilla conserva el texto pedido, en ese orden'
+        );
+
+        // Las dos primeras partes en negrita; la última, más delgada y en gris.
+        $parts = [];
+        foreach ($pill->getElementsByTagName('span') as $span) {
+            $parts[trim($span->textContent)] = $span;
+        }
+
+        $this->assertArrayHasKey('DESTACADO', $parts, 'La pastilla abre con DESTACADO');
+        $this->assertContains('font-black', $this->classesOf($parts['DESTACADO']), 'DESTACADO va en peso 900');
+
+        $this->assertArrayHasKey('G-SHOCK GW-M5610U', $parts, 'La pastilla nombra el modelo');
+        $this->assertContains('font-black', $this->classesOf($parts['G-SHOCK GW-M5610U']), 'El modelo va en peso 900');
+
+        $this->assertArrayHasKey('SOLAR + MULTIBANDA', $parts, 'La pastilla cierra con la configuración');
+
+        $configuracionClasses = $this->classesOf($parts['SOLAR + MULTIBANDA']);
+
+        $this->assertContains('font-medium', $configuracionClasses, 'La configuración no va en negrita');
+        $this->assertNotContains('font-black', $configuracionClasses, 'La configuración es más delgada que el destacado');
+        $this->assertContains('text-ink-muted', $configuracionClasses, 'La configuración va en gris');
+
+        // Telemetría: fuera de la pastilla, `COORD:` en gris, la coordenada en
+        // negrita y el corchete en el naranja `secondary` del sistema.
+        $telemetry = $xpath->query('//*[@data-home-hero-telemetry]')->item(0);
+        $this->assertNotNull($telemetry, 'La franja muestra la telemetría de coordenadas');
+        $this->assertContains('text-[15px]', $this->classesOf($telemetry), 'El texto de la telemetría va a 15px');
+        $this->assertSame(
+            0,
+            $xpath->query('ancestor::*[@data-home-hero-highlight]', $telemetry)->length,
+            'La telemetría vive fuera de la pastilla'
+        );
+
+        $telemetryParts = [];
+        foreach ($telemetry->getElementsByTagName('span') as $span) {
+            $telemetryParts[trim($span->textContent)] = $span;
+        }
+
+        $this->assertArrayHasKey('COORD:', $telemetryParts, 'La telemetría rotula COORD:');
+        $this->assertContains('text-ink-soft', $this->classesOf($telemetryParts['COORD:']), 'COORD: va en gris');
+
+        $coordenada = '4°38\'52.0"N 74°06\'05.0"W';
+
+        $this->assertArrayHasKey($coordenada, $telemetryParts, 'La telemetría muestra la coordenada pedida');
+        $this->assertContains('font-bold', $this->classesOf($telemetryParts[$coordenada]), 'La coordenada va en negrita');
+        $this->assertContains('text-ink', $this->classesOf($telemetryParts[$coordenada]), 'La coordenada va en tinta, no en gris');
+
+        $this->assertArrayHasKey('[LIVE SATELLITE LOCK]', $telemetryParts, 'La telemetría cierra con el estado del satélite');
+        $this->assertContains(
+            'text-secondary',
+            $this->classesOf($telemetryParts['[LIVE SATELLITE LOCK]']),
+            'El corchete usa el color secondary del sistema'
+        );
+    }
+
+    public function test_la_pastilla_del_destacado_lleva_un_punto_vivo_con_pulso_de_radar(): void
+    {
+        $this->product($this->category());
+
+        $document = $this->documentOf($this->get('/')->assertOk()->getContent());
+        $xpath = new \DOMXPath($document);
+
+        $pill = $xpath->query('//*[@data-home-hero-highlight]')->item(0);
+        $this->assertNotNull($pill, 'La pastilla del destacado existe');
+
+        $pulse = $xpath->query('.//*[@data-home-hero-pulse]', $pill)->item(0);
+        $this->assertNotNull($pulse, 'El punto vivo vive dentro de la pastilla');
+        $this->assertSame('true', $pulse->getAttribute('aria-hidden'), 'El punto es decorativo');
+        $this->assertSame('', trim($pulse->textContent), 'El punto no agrega texto a la pastilla');
+
+        // Es el primer elemento: el círculo abre la pastilla, a la izquierda.
+        $first = null;
+        foreach ($pill->childNodes as $child) {
+            if ($child instanceof \DOMElement) {
+                $first = $child;
+                break;
+            }
+        }
+
+        $this->assertTrue($first === $pulse, 'El círculo queda antes del texto, a la izquierda');
+
+        // La animación radar vive en la hoja: un solo círculo que nace como un
+        // punto, crece y se apaga; con movimiento reducido queda un punto fijo.
+        $css = (string) file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertStringContainsString('[data-home-hero-pulse] {', $css, 'La hoja define la señal');
+        $this->assertStringContainsString('@keyframes home-hero-signal', $css, 'La hoja define la animación de la señal');
+        $this->assertStringContainsString('animation: home-hero-signal 1.3s ease-out infinite', $css, 'La señal late cada 1.3s');
+
+        // Un solo elemento: el círculo es el propio nodo, sin anillos extra.
+        $this->assertStringNotContainsString('[data-home-hero-pulse]::before', $css, 'La señal no usa anillos adicionales');
+        $this->assertStringNotContainsString('[data-home-hero-pulse]::after', $css, 'La señal no usa anillos adicionales');
+        $this->assertMatchesRegularExpression(
+            '/@keyframes home-hero-signal \{[^}]*0% \{[^}]*transform: scale\(0\)/s',
+            $css,
+            'La señal nace en escala cero',
+        );
+        $this->assertMatchesRegularExpression(
+            '/@keyframes home-hero-signal \{.*?10% \{\s*opacity: 0\.9/s',
+            $css,
+            'A los 10% ya es un punto visible',
+        );
+        $this->assertMatchesRegularExpression(
+            '/@media \(prefers-reduced-motion: reduce\) \{[^}]*\[data-home-hero-pulse\] \{[^}]*animation: none/s',
+            $css,
+            'La señal se detiene con movimiento reducido',
+        );
     }
 
     /**

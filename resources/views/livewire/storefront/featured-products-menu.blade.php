@@ -8,6 +8,12 @@
     link to the existing catalog detail route. No product data is invented: with
     no active products the component shows an honest empty state.
 
+    Estilo del sistema (DESIGN.md): tarjetas con hairline `border-border-soft`,
+    radio `rounded`, superficie `surface`; categoría en `label-caps` (Space
+    Grotesk 11/600, tracking 0.15em) apagada; nombre en Work Sans 15px; precio en
+    cifras tabulares. El realce al pasar el puntero usa `primary`, no un gris
+    genérico.
+
     Test hooks:
     - `data-nav-featured-products` container.
     - `data-nav-featured-product` each product card link.
@@ -18,7 +24,7 @@
 @use('App\Support\CloudinaryUrl')
 <div data-nav-featured-products>
     @if($products->isEmpty())
-        <p class="rounded-xl bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+        <p class="rounded border border-border-soft bg-surface-subtle px-4 py-6 text-center font-body text-[13px] leading-5 text-ink-soft">
             Pronto tendremos nuevos relojes disponibles.
         </p>
     @else
@@ -29,9 +35,9 @@
                     <a
                         data-nav-featured-product
                         href="{{ route('catalog.show', $product) }}"
-                        class="group flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
+                        class="group flex h-full flex-col overflow-hidden rounded border border-border-soft bg-surface transition-colors hover:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                     >
-                        <div class="relative aspect-square w-full overflow-hidden bg-gray-100">
+                        <div class="relative aspect-square w-full overflow-hidden bg-surface-muted">
                             @if($imagen)
                                 <img
                                     data-nav-featured-image
@@ -41,14 +47,14 @@
                                     class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                                 >
                             @else
-                                <div class="flex h-full w-full items-center justify-center text-sm text-gray-400">Sin imagen</div>
+                                <div class="flex h-full w-full items-center justify-center font-display text-[11px] uppercase tracking-[0.15em] text-ink-muted">Sin imagen</div>
                             @endif
                         </div>
 
                         <div class="flex flex-1 flex-col gap-1 p-3">
-                            <span class="text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-gray-400">{{ $product->category?->name ?? 'Sin categoría' }}</span>
-                            <h3 data-nav-featured-name class="text-sm font-semibold leading-snug text-gray-900">{{ $product->name }}</h3>
-                            <p data-nav-featured-price class="mt-auto pt-2 text-sm font-bold text-gray-900">$ {{ number_format($product->precio, 0, ',', '.') }} COP</p>
+                            <span class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-muted">{{ $product->category?->name ?? 'Sin categoría' }}</span>
+                            <h3 data-nav-featured-name class="font-body text-[15px] leading-6 text-ink">{{ $product->name }}</h3>
+                            <p data-nav-featured-price class="mt-auto pt-2 font-display text-[15px] font-bold tabular-nums text-ink">$ {{ number_format($product->precio, 0, ',', '.') }} COP</p>
                         </div>
                     </a>
                 </li>

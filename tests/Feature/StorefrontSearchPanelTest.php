@@ -582,9 +582,12 @@ class StorefrontSearchPanelTest extends TestCase
         $fieldClasses = preg_split('/\s+/', trim((string) $field->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
         $this->assertNotSame(
             [],
-            array_intersect(['rounded-full', 'rounded-xl'], $fieldClasses),
-            'El contenedor del campo es redondeado'
+            array_intersect(['rounded', 'rounded-sm'], $fieldClasses),
+            'El contenedor del campo usa el radio del sistema (DESIGN.md)'
         );
+        $this->assertContains('border-border-soft', $fieldClasses, 'El campo usa el hairline del sistema');
+        $this->assertContains('bg-surface-subtle', $fieldClasses, 'El campo usa la superficie sutil del sistema');
+        $this->assertContains('focus-within:border-primary', $fieldClasses, 'El foco del campo usa el primary del sistema');
 
         // Pestañas como control segmentado con contenedor estable (T19: solo
         // existen a partir de la segunda letra, así que se inspecciona el
@@ -600,9 +603,11 @@ class StorefrontSearchPanelTest extends TestCase
         $tabsClasses = preg_split('/\s+/', trim((string) $tabs->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
         $this->assertNotSame(
             [],
-            array_intersect(['rounded-full', 'rounded-xl'], $tabsClasses),
-            'El control segmentado de pestañas está redondeado'
+            array_intersect(['rounded', 'rounded-sm'], $tabsClasses),
+            'El control segmentado de pestañas usa el radio del sistema'
         );
+        $this->assertContains('border-border-soft', $tabsClasses, 'Las pestañas usan el hairline del sistema');
+        $this->assertContains('bg-surface-muted', $tabsClasses, 'El riel de pestañas usa la superficie apagada del sistema');
 
         // La lista de sugerencias solo existe con consulta, y expone su hook.
         Livewire::test(SearchPanel::class)

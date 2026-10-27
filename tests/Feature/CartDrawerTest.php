@@ -89,7 +89,7 @@ class CartDrawerTest extends TestCase
             ->html();
 
         $this->assertStringContainsString('data-cart-drawer-empty class="flex h-full flex-col"', $html);
-        $this->assertStringContainsString('data-cart-drawer-empty-action class="-mx-5 -mb-5 border-t border-gray-200 px-5 pt-5"', $html);
+        $this->assertStringContainsString('data-cart-drawer-empty-action class="-mx-5 -mb-5 border-t border-border-soft px-5 pt-5"', $html);
         $this->assertStringContainsString('data-cart-drawer-catalog-link', $html);
     }
 
@@ -237,7 +237,7 @@ class CartDrawerTest extends TestCase
     |--------------------------------------------------------------------------
     */
 
-    public function test_drawer_muestra_menos_izquierda_valor_y_mas_derecha_con_eliminar_en_negro(): void
+    public function test_drawer_muestra_menos_izquierda_valor_y_mas_derecha_con_eliminar_solo_texto(): void
     {
         $product = $this->product(['name' => 'Chronos Acero', 'stock' => 5]);
         $this->cart()->addToSession($product->id, 2);
@@ -257,10 +257,12 @@ class CartDrawerTest extends TestCase
             $html
         );
 
-        // «Eliminar» es texto negro sin fondo de color (text-only).
+        // «Eliminar» es texto con la tipografía de etiqueta del sistema, sin
+        // fondo de color (text-only) y apagado hasta el hover.
         $this->assertStringContainsString('data-cart-drawer-remove', $html);
-        $this->assertMatchesRegularExpression('/data-cart-drawer-remove[^>]*text-black/', $html);
-        $this->assertDoesNotMatchRegularExpression('/data-cart-drawer-remove[^>]*bg-/', $html);
+        $this->assertMatchesRegularExpression('/data-cart-drawer-remove[^>]*text-ink-muted/', $html);
+        $this->assertMatchesRegularExpression('/data-cart-drawer-remove[^>]*font-display/', $html);
+        $this->assertDoesNotMatchRegularExpression('/data-cart-drawer-remove[^>]*bg-accent/', $html);
     }
 
     public function test_drawer_incrementa_y_persiste_para_invitado_y_cliente(): void
@@ -459,7 +461,9 @@ class CartDrawerTest extends TestCase
 
         $this->assertNotFalse($bagStart, 'La bolsa de la navbar debe seguir existiendo');
 
-        $bag = substr($html, $bagStart, 400);
+        // El bloque de la bolsa creció (globo con conteo y aria-label dinámico),
+        // así que se toma una ventana más amplia del marcado.
+        $bag = substr($html, $bagStart, 900);
 
         $this->assertStringContainsString('href="'.route('cart.index').'"', $bag);
         $this->assertStringContainsString("cart-drawer-open", $bag);

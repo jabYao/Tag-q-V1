@@ -127,6 +127,62 @@
 }
 
 /*
+ * Señal de radar de la pastilla del destacado (`data-home-hero-pulse`).
+ *
+ * Adaptación del código que pasó el dueño: un solo círculo que nace como un
+ * punto mínimo, crece y se apaga, y se queda invisible antes de repetir. No hay
+ * punto sólido permanente ni dos anillos: el propio elemento es la señal.
+ * Comparte el naranja `secondary` de la telemetría (`[LIVE SATELLITE LOCK]`).
+ *
+ * Única diferencia con el original: 20px de caja en lugar de 28px, para que la
+ * señal no infle el alto de la pastilla (texto de 15px + padding de 12px). El
+ * ancho y el alto están en un solo lugar si se quieren volver a 28px.
+ * Con movimiento reducido queda un punto fijo chico en vez de desaparecer.
+ */
+[data-home-hero-pulse] {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background-color: var(--color-secondary, #f26b3a);
+    opacity: 0;
+    animation: home-hero-signal 1.3s ease-out infinite;
+}
+
+@keyframes home-hero-signal {
+    0% {
+        opacity: 0;
+        transform: scale(0);
+    }
+
+    /* Nace como un punto. */
+    10% {
+        opacity: 0.9;
+        transform: scale(0.15);
+    }
+
+    /* Crece hasta el tamaño de la caja y se apaga. */
+    85% {
+        opacity: 0;
+        transform: scale(1);
+    }
+
+    /* Vacío antes de repetir. */
+    100% {
+        opacity: 0;
+        transform: scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-home-hero-pulse] {
+        opacity: 1;
+        transform: scale(0.3);
+        animation: none;
+    }
+}
+
+/*
  * Subrayado progresivo de la navegación primaria: la línea crece de izquierda
  * a derecha en lugar de aparecer completa de golpe.
  */
@@ -354,15 +410,35 @@
 }
 
 /*
+ * Barra entre la cabecera y el hero del home.
+ *
+ * Pedido del dueño: la foto del hero no debe tocar la navbar, y dentro de la
+ * franja viven el destacado del producto y la telemetría de coordenadas. La
+ * barra no pinta fondo (deja ver el fondo del `<body>`) y mide el alto de la
+ * navbar, que la cabecera publica en `--storefront-nav-h`. Es `min-height` y no
+ * `height` para que el contenido nunca se recorte en pantallas angostas; en
+ * escritorio el contenido cabe en una línea y la franja mide exactamente lo
+ * mismo que la navbar. Sin valores en px: si la navbar cambia de alto
+ * (breakpoint, zoom, tipografía) la barra la sigue sin ajustes a mano.
+ */
+[data-home-hero-spacer] {
+    display: flex;
+    align-items: center;
+    min-height: var(--storefront-nav-h, 0px);
+}
+
+/*
  * Alto del hero del home (`data-home-hero-viewport`).
  *
  * El hero ya no vive dentro del contenedor: ocupa todo el ancho y debe cubrir
  * exactamente el espacio que queda bajo la cabecera (top bar de envíos +
- * navbar), sin dejar hueco con ella. La altura real de la cabecera la publica
- * `resources/js/app.js` en `--storefront-header-h` sobre <html>; si el script
- * aún no corrió, el respaldo es `0px`. El suelo de `26rem` evita que un
- * viewport corto (móvil apaisado, teclado abierto) recorte el texto y las
- * acciones superpuestos.
+ * navbar) menos la barra transparente que ahora los separa, para que el bloque
+ * cabecera + barra + hero siga cerrando justo en el borde del viewport y no
+ * aparezca un scroll de más. La altura real de la cabecera la publica
+ * `resources/js/app.js` en `--storefront-header-h` y `--storefront-nav-h` sobre
+ * <html>; si el script aún no corrió, el respaldo es `0px`. El suelo de `26rem`
+ * evita que un viewport corto (móvil apaisado, teclado abierto) recorte el texto
+ * y las acciones superpuestos.
  *
  * Reglas sin capa (`@layer`) a propósito: Swiper define `.swiper` con
  * `position: relative` y, al ser CSS propio, gana sobre las utilidades de
@@ -370,7 +446,10 @@
  * de una clase `absolute` en el Blade.
  */
 [data-home-hero-viewport] {
-    min-height: max(calc(100dvh - var(--storefront-header-h, 0px)), 26rem);
+    min-height: max(
+        calc(100dvh - var(--storefront-header-h, 0px) - var(--storefront-nav-h, 0px)),
+        26rem
+    );
 }
 
 [data-home-hero-viewport] .swiper {

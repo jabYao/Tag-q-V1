@@ -123,18 +123,18 @@
             </a>
         </div>
     </div>
-    {{-- Presencia del carrito para el punto de la bolsa. Se resuelve en el
+    {{-- Presencia del carrito para el globo de la bolsa. Se resuelve en el
          servidor con `CartService` (la misma fuente de verdad que todo el
          carrito): invitado → sesión; cliente autenticado → carts/cart_items.
-         `lines()` ya omite productos inactivos o eliminados, así que el punto
-         aparece exactamente cuando hay al menos una línea activa. Es solo
-         estado inicial; sin recarga lo actualizan los eventos ya existentes
-         `cart-added` y `cart-updated`. --}}
+         `lines()` ya omite productos inactivos o eliminados, así que el número
+         cuenta exactamente las líneas activas. Es solo estado inicial; sin
+         recarga lo actualiza el evento ya existente `cart-updated`, que ahora
+         lleva el conteo en todos sus emisores. --}}
     @php
         $storefrontCartUser = auth()->user();
-        $storefrontCartHasItems = app(\App\Services\CartService::class)
+        $storefrontCartCount = app(\App\Services\CartService::class)
             ->lines($storefrontCartUser instanceof \App\Models\User ? $storefrontCartUser : null)
-            ->isNotEmpty();
+            ->count();
     @endphp
     {{-- Navegación pública del storefront.
          Menú primario exacto: Damas · Caballeros · Tienda. Damas y Caballeros
@@ -180,11 +180,10 @@
         data-storefront-nav
         :data-stuck="stuck ? 'true' : 'false'"
         x-data="{
-            // Punto de presencia de la bolsa: se siembra con el estado real del
-            // carrito calculado en el servidor y se actualiza sin recargar con
-            // los eventos ya existentes `cart-added` (agregado exitoso) y
-            // `cart-updated` (mutaciones del drawer, que incluye `count`).
-            cartHasItems: @js($storefrontCartHasItems),
+            // Globo de la bolsa: número de líneas activas. Se siembra con el
+            // estado real calculado en el servidor y lo mantiene sin recargar
+            // el evento ya existente `cart-updated`, que lleva el conteo real.
+            cartCount: @js($storefrontCartCount),
             mobileOpen: false,
             searchOpen: false,
             // Mega menú de Tienda: estado compartido entre el disparador de
@@ -281,17 +280,13 @@
                 clearTimeout(this.megaCloseTimer);
                 this.megaOpen = false;
             },
-            // Un agregado exitoso siempre deja al menos una línea activa.
-            onCartIndicatorAdded() {
-                this.cartHasItems = true;
-            },
-            // `cart-updated` trae el conteo real cuando lo emite el drawer. Otros
-            // emisores (p. ej. checkout) lo emiten sin `count`: en ese caso no se
-            // inventa un estado, porque ese evento no implica una línea nueva.
+            // Un agregado exitoso deja al menos una línea activa. El globo usa
+            // el conteo que trae `cart-updated`; sin `count` no se inventa un
+            // número, porque ese evento no implica una línea nueva.
             onCartIndicatorUpdated(event) {
                 const detail = event.detail || {};
                 if (typeof detail.count === 'number') {
-                    this.cartHasItems = detail.count > 0;
+                    this.cartCount = detail.count;
                 }
             },
             destroy() {
@@ -310,7 +305,6 @@
         }"
         @keydown.escape.window="closeSearch(); mobileOpen = false; closeMega()"
         @storefront-search-area.window="searchAreaActive = !! ($event.detail && $event.detail.active)"
-        @cart-added.window="onCartIndicatorAdded()"
         @cart-updated.window="onCartIndicatorUpdated($event)"
         class="sticky top-0 z-50 border-b border-transparent bg-primary py-4 text-white transition-shadow duration-200 motion-reduce:transition-none sm:py-5"
         aria-label="Navegación principal"
@@ -343,7 +337,7 @@
                             aria-controls="storefront-tienda-mega-menu"
                             :aria-expanded="megaOpen"
                             @click="openMega()"
-                            class="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            class="flex items-center gap-1 rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                         >
                             <span>TIENDA</span>
                             <svg data-nav-icon="chevron-down" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
@@ -369,24 +363,24 @@
                             x-transition:leave="transition ease-in duration-150 motion-reduce:transition-none"
                             x-transition:leave-start="translate-y-0 opacity-100"
                             x-transition:leave-end="-translate-y-2 opacity-0 motion-reduce:-translate-y-0"
-                            class="absolute inset-x-0 top-full z-[60] rounded-none border-b border-gray-200 bg-white py-8 shadow-xl"
+                            class="absolute inset-x-0 top-full z-[60] border-b border-border-soft bg-surface py-8 shadow-xl"
                         >
                             <div class="site-container grid grid-cols-[16rem_minmax(0,1fr)] gap-10">
-                                <nav aria-labelledby="storefront-tienda-links-title" class="border-r border-gray-100 pr-8">
-                                    <h2 id="storefront-tienda-links-title" class="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Explorar</h2>
+                                <nav aria-labelledby="storefront-tienda-links-title" class="border-r border-border-soft pr-8">
+                                    <h2 id="storefront-tienda-links-title" class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-muted">Explorar</h2>
                                     <ul class="mt-4 flex flex-col gap-1">
                                         <li>
                                             <a
                                                 data-nav-submenu-item="ver-todo"
                                                 href="{{ route('catalog.index') }}"
-                                                class="block rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100"
+                                                class="block rounded px-3 py-2 font-body text-[15px] leading-6 text-ink-soft transition-colors hover:bg-surface-muted hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                             >Ver todo</a>
                                         </li>
                                         <li>
                                             <a
                                                 data-nav-submenu-item="ninos"
                                                 href="{{ route('catalog.index', ['categoria' => 'ninos']) }}"
-                                                class="block rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100"
+                                                class="block rounded px-3 py-2 font-body text-[15px] leading-6 text-ink-soft transition-colors hover:bg-surface-muted hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                             >Niños</a>
                                         </li>
                                         @foreach(config('tagq.subcategories', []) as $slug => $label)
@@ -394,7 +388,7 @@
                                                 <a
                                                     data-nav-submenu-item="{{ $slug }}"
                                                     href="{{ route('catalog.index', ['subcategoria' => $slug]) }}"
-                                                    class="block rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100"
+                                                    class="block rounded px-3 py-2 font-body text-[15px] leading-6 text-ink-soft transition-colors hover:bg-surface-muted hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                                 >{{ $label }}</a>
                                             </li>
                                         @endforeach
@@ -402,7 +396,7 @@
                                 </nav>
 
                                 <section aria-labelledby="storefront-tienda-featured-title" class="min-w-0">
-                                    <h2 id="storefront-tienda-featured-title" class="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Destacados</h2>
+                                    <h2 id="storefront-tienda-featured-title" class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-muted">Destacados</h2>
                                     <div data-nav-featured-slot class="mt-4">
                                         <livewire:storefront.featured-products-menu lazy="on-load" />
                                     </div>
@@ -414,13 +408,13 @@
                     <a
                         data-nav-primary-item="damas"
                         href="{{ route('catalog.index', ['categoria' => 'dama']) }}"
-                        class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                        class="rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >DAMAS</a>
 
                     <a
                         data-nav-primary-item="caballeros"
                         href="{{ route('catalog.index', ['categoria' => 'caballero']) }}"
-                        class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                        class="rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 underline-offset-8 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >CABALLEROS</a>
                 </div>
 
@@ -544,14 +538,19 @@
 
                 {{-- Bolsa: abre el resumen lateral en desktop, incluso cuando está
                      vacío; en móvil conserva la navegación a la página completa.
-                     Lleva un punto negro decorativo (`aria-hidden`) que aparece
-                     —también en la carga inicial— cuando el carrito tiene al
-                     menos una línea activa. El nombre accesible de la bolsa
-                     sigue en `aria-label`/`title`; el punto no aporta texto. --}}
+                     Lleva un globo con el número de líneas activas del carrito,
+                     en el naranja `secondary` del sistema y tipografía de
+                     etiqueta; aparece también en la carga inicial, porque el
+                     conteo se resuelve en el servidor. El globo es decorativo
+                     (`aria-hidden`) y el nombre accesible de la bolsa suma el
+                     conteo con `x-bind:aria-label`, para que un lector de
+                     pantalla anuncie "Bolsa, 2 artículos" sin inventar texto
+                     visible. --}}
                 <a
                     data-nav-utility="bag"
                     href="{{ route('cart.index') }}"
                     aria-label="Bolsa"
+                    x-bind:aria-label="cartCount > 0 ? 'Bolsa, ' + cartCount + (cartCount === 1 ? ' artículo' : ' artículos') : 'Bolsa'"
                     title="Bolsa"
                     aria-controls="cart-drawer-panel"
                     @click.prevent="window.matchMedia('(min-width: 768px)').matches ? window.dispatchEvent(new CustomEvent('cart-drawer-open')) : window.location.assign($el.href)"
@@ -565,10 +564,11 @@
                     <span
                         data-nav-cart-indicator
                         aria-hidden="true"
-                        x-show="cartHasItems"
-                        style="{{ $storefrontCartHasItems ? '' : 'display: none;' }}"
-                        class="pointer-events-none absolute right-1 top-1 h-2 w-2 rounded-full bg-black"
-                    ></span>
+                        x-show="cartCount"
+                        x-text="cartCount"
+                        style="{{ $storefrontCartCount > 0 ? '' : 'display: none;' }}"
+                        class="pointer-events-none absolute -right-1 -top-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-secondary px-1 font-display text-[10px] font-semibold leading-none tracking-normal text-white"
+                    >{{ $storefrontCartCount > 0 ? $storefrontCartCount : '' }}</span>
                 </a>
             </div>
         </div>
@@ -590,7 +590,7 @@
                 aria-controls="storefront-tienda-mega-menu-mobile"
                 :aria-expanded="megaOpen"
                 @click="megaOpen = ! megaOpen"
-                class="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10"
+                class="flex w-full items-center justify-between rounded px-3 py-2 text-left font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10"
             >
                 <span>TIENDA</span>
                 <svg data-nav-icon="chevron-down" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
@@ -605,14 +605,14 @@
                 data-nav-mobile-mega-panel
                 x-show="megaOpen"
                 x-cloak
-                class="mt-1 rounded border border-gray-200 bg-white p-4 shadow-sm"
+                class="mt-1 rounded border border-border-soft bg-surface p-4 shadow-sm"
             >
                 <div data-nav-mobile-featured>
                     <livewire:storefront.featured-products-menu lazy="on-load" />
                 </div>
             </div>
-            <a data-nav-mobile-item="damas" href="{{ route('catalog.index', ['categoria' => 'dama']) }}" class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">DAMAS</a>
-            <a data-nav-mobile-item="caballeros" href="{{ route('catalog.index', ['categoria' => 'caballero']) }}" class="rounded px-3 py-2 text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">CABALLEROS</a>
+            <a data-nav-mobile-item="damas" href="{{ route('catalog.index', ['categoria' => 'dama']) }}" class="rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">DAMAS</a>
+            <a data-nav-mobile-item="caballeros" href="{{ route('catalog.index', ['categoria' => 'caballero']) }}" class="rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">CABALLEROS</a>
             <a data-nav-mobile-child="ver-todo" href="{{ route('catalog.index') }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Ver todo</a>
             <a data-nav-mobile-child="ninos" href="{{ route('catalog.index', ['categoria' => 'ninos']) }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Niños</a>
             @foreach(config('tagq.subcategories', []) as $slug => $label)
@@ -688,7 +688,9 @@
          el primer frame del hero pueda calcular su `min-height`, evitando el
          salto que producía el fallback de 0px mientras cargaba app.js. La
          navbar es sticky, así que la altura se mide sumando el top bar y la
-         navbar, no con `getBoundingClientRect().bottom + scrollY`. --}}
+         navbar, no con `getBoundingClientRect().bottom + scrollY`. Publica
+         también el alto de la navbar sola (`--storefront-nav-h`), que es el que
+         mide la barra transparente que separa la cabecera del hero. --}}
     <script data-storefront-header-height-bootstrap>
         (() => {
             const nav = document.querySelector('[data-storefront-nav]');
@@ -700,6 +702,10 @@
                 document.documentElement.style.setProperty(
                     '--storefront-header-h',
                     `${height}px`,
+                );
+                document.documentElement.style.setProperty(
+                    '--storefront-nav-h',
+                    `${nav.offsetHeight}px`,
                 );
             }
         })();
@@ -999,10 +1005,13 @@
             role="dialog"
             aria-modal="true"
             aria-labelledby="cart-drawer-title"
-            class="fixed inset-y-0 right-0 z-[70] hidden w-full max-w-md flex-col bg-white shadow-xl md:flex"
+            class="fixed inset-y-0 right-0 z-[70] hidden w-full max-w-md flex-col bg-surface shadow-xl md:flex"
         >
-            <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-                <h2 id="cart-drawer-title" class="text-lg font-semibold text-gray-900">Tu carrito</h2>
+            <div class="flex items-start justify-between gap-4 border-b border-border-soft px-5 py-4">
+                <div>
+                    <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">Compra</p>
+                    <h2 id="cart-drawer-title" class="mt-1 font-display text-[20px] font-semibold leading-[26px] text-ink">Tu carrito</h2>
+                </div>
                 <button
                     type="button"
                     data-cart-drawer-close
@@ -1010,7 +1019,7 @@
                     aria-label="Cerrar carrito"
                     title="Cerrar carrito"
                     @click="closeDrawer()"
-                    class="inline-flex items-center justify-center rounded p-2 text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900"
+                    class="inline-flex items-center justify-center rounded border border-transparent p-2 text-ink-soft transition-colors hover:border-border-soft hover:bg-surface-muted hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                     <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
                         <line x1="6" y1="6" x2="18" y2="18" />

@@ -23,6 +23,9 @@ import ScrollTrigger from 'gsap/ScrollTrigger';
  * Se recalcula al cargar y al redimensionar; las páginas sin navbar (panel de
  * administración) no hacen nada. El script es `type="module"`, así que ya corre
  * con el DOM listo.
+ *
+ * Publica además el alto de la navbar sola (`--storefront-nav-h`): la barra
+ * transparente que separa la cabecera del hero del home mide exactamente eso.
  */
 function publishStorefrontHeaderHeight() {
     const nav = document.querySelector('[data-storefront-nav]');
@@ -35,6 +38,7 @@ function publishStorefrontHeaderHeight() {
     const height = (topbar ? topbar.offsetHeight : 0) + nav.offsetHeight;
 
     document.documentElement.style.setProperty('--storefront-header-h', `${height}px`);
+    document.documentElement.style.setProperty('--storefront-nav-h', `${nav.offsetHeight}px`);
 }
 
 publishStorefrontHeaderHeight();

@@ -737,6 +737,11 @@ class StorefrontNavigationTest extends TestCase
             $classes = preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
 
             $this->assertContains('uppercase', $classes, "El primario {$item} aplica mayúsculas de estilo");
+            $this->assertContains(
+                'font-display',
+                $classes,
+                "El primario {$item} usa Space Grotesk (token --font-display de DESIGN.md)"
+            );
             $this->assertNotEmpty(
                 array_filter($classes, fn (string $class): bool => str_starts_with($class, 'tracking-')),
                 "El primario {$item} ensancha el espaciado entre letras"
@@ -979,6 +984,7 @@ class StorefrontNavigationTest extends TestCase
             $this->assertContains('text-sm', $classes, "El ítem móvil {$item} usa el tamaño mayor");
             $this->assertNotContains('text-xs', $classes, "El ítem móvil {$item} ya no usa el tamaño anterior");
             $this->assertContains('uppercase', $classes, "El ítem móvil {$item} conserva las mayúsculas");
+            $this->assertContains('font-display', $classes, "El ítem móvil {$item} usa Space Grotesk, igual que el de escritorio");
         }
     }
 
@@ -1159,22 +1165,67 @@ class StorefrontNavigationTest extends TestCase
     |--------------------------------------------------------------------------
     */
 
-    public function test_la_bolsa_no_muestra_el_punto_con_el_carrito_vacio(): void
+    public function test_la_bolsa_no_muestra_el_globo_con_el_carrito_vacio(): void
     {
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
         $indicator = $this->indicadorDeBolsa($html);
 
-        // Decorativo: no aporta nombre accesible ni texto.
-        $this->assertStringContainsString('aria-hidden="true"', $indicator, 'El punto es decorativo');
-        $this->assertStringContainsString('x-show="cartHasItems"', $indicator, 'El punto queda controlado por Alpine');
-        $this->assertStringContainsString('display: none', $indicator, 'Sin líneas activas el punto queda oculto ya en la carga inicial');
+        // Decorativo: no aporta nombre accesible ni texto visible.
+        $this->assertStringContainsString('aria-hidden="true"', $indicator, 'El globo es decorativo');
+        $this->assertStringContainsString('x-show="cartCount"', $indicator, 'El globo queda controlado por Alpine');
+        $this->assertStringContainsString('display: none', $indicator, 'Sin líneas activas el globo queda oculto ya en la carga inicial');
 
-        // El nombre accesible de la bolsa se conserva intacto.
+        // El nombre accesible de la bolsa se conserva intacto y suma el conteo
+        // solo cuando hay líneas.
         $bag = $this->xpathDe($html)->query('//*[@data-nav-utility="bag"]')->item(0);
         $this->assertNotNull($bag, 'La bolsa sigue existiendo');
         $this->assertSame('Bolsa', $bag->getAttribute('aria-label'), 'La bolsa conserva su aria-label');
         $this->assertSame('Bolsa', $bag->getAttribute('title'), 'La bolsa conserva su title');
+        $this->assertStringContainsString(
+            "cartCount > 0 ? 'Bolsa, ' + cartCount",
+            (string) $bag->getAttribute('x-bind:aria-label'),
+            'Con líneas, el nombre accesible anuncia el conteo'
+        );
+    }
+
+    public function test_el_globo_de_la_bolsa_muestra_el_numero_de_lineas_en_secondary(): void
+    {
+        $uno = $this->product(['name' => 'Uno', 'slug' => 'globo-uno']);
+        $dos = $this->product(['name' => 'Dos', 'slug' => 'globo-dos']);
+        app(CartService::class)->addToSession($uno->id, 1);
+        app(CartService::class)->addToSession($dos->id, 2);
+
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+        $indicator = $this->indicadorDeBolsa($html);
+
+        // Número visible ya en la carga inicial (el conteo se resuelve en el
+        // servidor) y comportamiento reactivo por Alpine.
+        $this->assertMatchesRegularExpression('/>\s*2\s*</', $this->globoCompleto($html), 'El globo pinta el conteo');
+        $this->assertStringContainsString('x-text="cartCount"', $indicator, 'El número se mantiene sin recargar');
+
+        // Estilo pedido: naranja secondary con numeración blanca, y tamaño
+        // suficiente para sostener el número.
+        $this->assertStringContainsString('bg-secondary', $indicator, 'El globo usa el secundario del sistema');
+        $this->assertStringContainsString('text-white', $indicator, 'La numeración es blanca');
+        $this->assertStringContainsString('rounded-full', $indicator, 'El globo es circular');
+        $this->assertStringContainsString('min-w-[18px]', $indicator, 'El globo reserva ancho para el número');
+        $this->assertStringContainsString('h-[18px]', $indicator, 'El globo creció de tamaño');
+        $this->assertStringContainsString('font-display', $indicator, 'La numeración usa la tipografía de etiqueta');
+    }
+
+    /**
+     * Etiqueta de apertura y contenido del globo de la bolsa.
+     */
+    private function globoCompleto(string $html): string
+    {
+        $start = strpos($html, 'data-nav-cart-indicator');
+        $this->assertNotFalse($start, 'La bolsa expone su globo');
+
+        $end = strpos($html, '</span>', $start);
+        $this->assertNotFalse($end, 'El globo se cierra');
+
+        return substr($html, $start, $end - $start + 7);
     }
 
     public function test_la_bolsa_muestra_el_punto_con_el_carrito_de_invitado(): void
@@ -1208,12 +1259,14 @@ class StorefrontNavigationTest extends TestCase
 
     public function test_la_navbar_reacciona_a_los_eventos_de_carrito_sin_recargar(): void
     {
-        // Actualización reactiva: el layout escucha los eventos ya existentes y
-        // ajusta el punto sin recargar ni consultar una API propia.
+        // Actualización reactiva: el layout escucha el evento ya existente
+        // `cart-updated`, que ahora lleva el conteo real en todos sus emisores,
+        // y ajusta el número del globo sin recargar ni consultar una API propia.
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('@cart-added.window="onCartIndicatorAdded()"', $html);
         $this->assertStringContainsString('@cart-updated.window="onCartIndicatorUpdated($event)"', $html);
+        $this->assertStringContainsString('this.cartCount = detail.count', $html);
+        $this->assertStringContainsString('cartCount:', $html, 'El conteo se siembra desde el servidor en el estado de Alpine');
     }
 
     /**
@@ -1316,10 +1369,18 @@ class StorefrontNavigationTest extends TestCase
 
             $this->assertNotNull($node, "El ítem móvil {$item} existe");
             $this->assertSame($esperado, trim($node->textContent), "El ítem móvil {$item} se muestra en mayúsculas");
+
+            $mobileClasses = preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
             $this->assertContains(
                 'uppercase',
-                preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY),
+                $mobileClasses,
                 "El ítem móvil {$item} aplica mayúsculas de estilo"
+            );
+            $this->assertContains(
+                'font-display',
+                $mobileClasses,
+                "El ítem móvil {$item} usa Space Grotesk (token --font-display de DESIGN.md)"
             );
         }
     }

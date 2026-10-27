@@ -99,7 +99,11 @@ class AddToCart extends Component
 
         $this->quantity = 1;
         $this->addedMessage = 'Producto agregado al carrito.';
-        $this->dispatch('cart-updated');
+
+        // Lleva el conteo real de líneas activas: es el número que pinta el
+        // globo de la bolsa en la navbar. `CartService::lines()` omite
+        // productos inactivos o eliminados, la misma verdad que el drawer.
+        $this->dispatch('cart-updated', count: $cart->lines($user instanceof User ? $user : null)->count());
 
         // Apertura del panel lateral SOLO tras un agregado exitoso: el evento
         // lleva la URL real del carrito para que el layout abra el drawer en
