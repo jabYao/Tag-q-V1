@@ -1,32 +1,53 @@
-*.log
+# --- Sistema operativo ---
 .DS_Store
+Thumbs.db
+
+# --- Entorno y secretos ---
 .env
-.env.backup
-.env.production
+.env.*
+!.env.example
+/auth.json
+
+# --- Editores e IDEs ---
 .phpactor.json
-.phpunit.result.cache
-/junit.xml
-/junit-*.xml
 /.codex
-/.cursor/
+/.cursor
 /.idea
 /.nova
-/.phpunit.cache
 /.vscode
 /.zed
-/auth.json
-/node_modules
-/public/build
-/public/fonts-manifest.dev.json
-/public/hot
-/public/storage
-/storage/*.key
-/storage/pail
-/vendor
 _ide_helper.php
 Homestead.json
 Homestead.yaml
-Thumbs.db
-# Local Pi runtime state
+
+# --- Laravel: dependencias y artefactos de ejecución ---
+/vendor
+/storage/*.key
+/storage/pail
+/public/build
+/public/hot
+/public/storage
+/public/fonts-manifest.dev.json
+*.log
+
+# --- Node ---
+/node_modules
+
+# --- Pruebas ---
+.phpunit.result.cache
+/.phpunit.cache
+/junit.xml
+/junit-*.xml
+
+# --- Herramientas locales de IA y diseño (no forman parte de la app) ---
 .atl/
 .codegraph/
+.agents/
+.impeccable/
+.taste-skill/
+skills-lock.json
+
+# --- Material de referencia local (mockups y especificaciones del dueño) ---
+/propuestas/
+/docs/referencias/
+/especificaciones-reloj.md
