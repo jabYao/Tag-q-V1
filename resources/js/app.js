@@ -249,6 +249,57 @@ function initHomeHeroSlider(section) {
 document.querySelectorAll('[data-home-hero-slider]').forEach((section) => initHomeHeroSlider(section));
 
 /**
+ * Carrusel de favoritos (`data-home-favorites`).
+ *
+ * Muestra cinco tarjetas a la vez en escritorio y avanza de una en una, así
+ * cada posición queda llena aunque el total no sea múltiplo de cinco. En móvil
+ * deja ver un pedazo de la siguiente ficha para invitar al gesto; en tablet
+ * muestra dos y en portátil, tres. Sin autoplay: el visitante decide cuándo
+ * moverse. La paginación se puede pulsar y las flechas tienen nombre accesible.
+ *
+ * Con `prefers-reduced-motion: reduce` la velocidad del desplazamiento es cero
+ * desde el arranque, y se actualiza si la preferencia cambia con la página
+ * abierta. El contenido no se oculta sin JavaScript.
+ */
+function initHomeFavoritesSlider(section) {
+    const container = section.querySelector('[data-home-favorites-swiper]');
+
+    if (!container) {
+        return;
+    }
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    const swiper = new Swiper(container, {
+        modules: [Navigation, Pagination],
+        slidesPerView: 1.15,
+        slidesPerGroup: 1,
+        spaceBetween: 16,
+        speed: prefersReducedMotion() ? 0 : 300,
+        watchOverflow: true,
+        navigation: {
+            prevEl: section.querySelector('[data-home-favorites-prev]'),
+            nextEl: section.querySelector('[data-home-favorites-next]'),
+        },
+        pagination: {
+            el: section.querySelector('[data-home-favorites-pagination]'),
+            clickable: true,
+        },
+        breakpoints: {
+            640: { slidesPerView: 2, spaceBetween: 20 },
+            1024: { slidesPerView: 3, spaceBetween: 20 },
+            1280: { slidesPerView: 5, spaceBetween: 24 },
+        },
+    });
+
+    reducedMotion.addEventListener('change', (event) => {
+        swiper.params.speed = event.matches ? 0 : 300;
+    });
+}
+
+document.querySelectorAll('[data-home-favorites]').forEach((section) => initHomeFavoritesSlider(section));
+
+/**
  * Animaciones del home posterior al hero (GSAP + ScrollTrigger).
  *
  * El hero queda fuera a propósito: conserva su carrusel Swiper propio y nada

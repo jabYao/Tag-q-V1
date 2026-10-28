@@ -38,8 +38,10 @@
         ];
     @endphp
 
-    {{-- Portada editorial del home: hero + categorías reales + productos
-         recientes + cierre. Solo datos existentes del catálogo y utilidades
+    {{-- Portada editorial del home: hero + productos recientes + cierre.
+         La franja de categorías se retiró por pedido del dueño: productos
+         recientes es el primer bloque después del hero. Solo datos existentes
+         del catálogo y utilidades
          estáticas de Tailwind. El hero es un carrusel de Swiper a todo el ancho
          con las tres imágenes confirmadas de Cloudinary, y el texto y las
          acciones van superpuestos sobre un velo oscuro. El carrusel se
@@ -226,75 +228,6 @@
         @endphp
 
         <div class="site-container">
-            {{-- Categorías existentes: cada una enlaza al filtro real del catálogo
-                 (`categoria`, el parámetro que valida CatalogFilterRequest).
-                 Las categorías con imagen asignada muestran su foto de Cloudinary
-                 (`tag-q/banner`); las demás conservan la tarjeta simple. --}}
-            @if($categories->isNotEmpty())
-                <section data-home-categories aria-label="Categorías" class="mb-14">
-                    {{-- `data-home-reveal` entra al scroll; `data-home-hover` realza el
-                         hover acotado (ver `resources/css/app.css`). --}}
-                    <div data-home-reveal class="mb-7 flex flex-col items-start gap-4 border-b border-border-soft pb-5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-                        <div>
-                            <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">Explorar</p>
-                            <h2 class="mt-2 font-display text-[32px] font-bold uppercase leading-[36px] tracking-[-0.01em] text-ink sm:text-[40px] sm:leading-[44px] lg:text-[48px] lg:leading-[52px] lg:tracking-[-0.02em]">Categorías</h2>
-                        </div>
-                        <a
-                            data-home-hover
-                            href="{{ route('catalog.index') }}"
-                            class="group inline-flex h-12 items-center gap-2 rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        >
-                            Ver todo
-                            <span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">&rarr;</span>
-                        </a>
-                    </div>
-
-                    {{-- `data-home-stagger`: sus hijos `data-home-reveal` entran escalonados. --}}
-                    <div data-home-stagger class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
-                        @foreach($categories as $category)
-                            @if(isset($categoryImages[$category->slug]))
-                                <a
-                                    data-home-reveal
-                                    data-home-reveal-media
-                                    data-home-hover
-                                    href="{{ route('catalog.index', ['categoria' => $category->slug]) }}"
-                                    class="group relative block aspect-[3/4] overflow-hidden rounded-lg border border-border-soft bg-surface-subtle transition-colors hover:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                >
-                                    {{-- Imagen de la categoría: cubre todo el div. El zoom
-                                         leve del hover y el de entrada los aportan
-                                         `[data-home-hover]` y `data-home-reveal-media`
-                                         (ver `resources/css/app.css`). --}}
-                                    <img
-                                        data-category-image="{{ $category->slug }}"
-                                        src="{{ CloudinaryUrl::webp($categoryImages[$category->slug]) }}"
-                                        alt="{{ $categoryAlts[$category->slug] ?? $category->name }}"
-                                        loading="lazy"
-                                        class="absolute inset-0 h-full w-full object-cover"
-                                    >
-
-                                    {{-- Rótulo abajo, en label-caps y con fondo semitransparente. --}}
-                                    <span
-                                        data-category-label="{{ $category->slug }}"
-                                        class="absolute inset-x-0 bottom-0 bg-black/55 px-5 py-3.5 text-center font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-white backdrop-blur-sm"
-                                    >{{ $category->name }}</span>
-                                </a>
-                            @else
-                                <a
-                                    data-home-reveal
-                                    data-home-hover
-                                    href="{{ route('catalog.index', ['categoria' => $category->slug]) }}"
-                                    class="group relative flex aspect-[3/4] flex-col justify-between overflow-hidden rounded-lg border border-border-soft bg-surface-subtle p-5 transition-colors hover:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                >
-                                    <span class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">Categoría</span>
-                                    <span class="font-display text-[24px] font-bold uppercase leading-[28px] tracking-[-0.01em] text-ink">{{ $category->name }}</span>
-                                    <span aria-hidden="true" class="inline-flex h-10 w-10 items-center justify-center rounded border border-border-soft bg-white text-ink transition-colors group-hover:border-primary group-hover:text-primary">&rarr;</span>
-                                </a>
-                            @endif
-                        @endforeach
-                    </div>
-                </section>
-            @endif
-
             <section data-home-products aria-label="Productos recientes" class="mb-14">
                 <div data-home-reveal class="mb-7 flex flex-col items-start gap-4 border-b border-border-soft pb-5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
                     <div>
@@ -324,108 +257,11 @@
                     <div data-home-products-grid class="w-full">
                         <div data-home-stagger class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         @foreach($products as $product)
-                            @php
-                                $imagenes = $product->imagenes ?? [];
-                                $imagen = $imagenes[0] ?? null;
-                                // Solo atributos reales del producto, sin inventar especificaciones.
-                                // El material del pulso ya no se muestra en el home.
-                                $atributos = array_filter(
-                                    [$product->marca, $product->movimiento],
-                                    fn ($valor) => filled($valor),
-                                );
-
-                                // Insignia de estado con reglas honestas y temporales: sin
-                                // un campo real de descuento no se anuncia ninguna oferta.
-                                // `Agotado` manda siempre; `Nuevo` solo si es reciente.
-                                $estado = match (true) {
-                                    ! $product->is_active || $product->stock <= 0 => 'Agotado',
-                                    $product->created_at !== null
-                                        && $product->created_at->gte(now()->subDays(30)) => 'Nuevo',
-                                    default => null,
-                                };
-                            @endphp
-
-                            {{-- Tarjeta en dos bloques: arriba solo la imagen (con su
-                                 insignia de estado), abajo toda la información del
-                                 producto. La imagen ya no lleva velo oscuro ni texto
-                                 encima; la acción de la bolsa aparece sobre la imagen
-                                 al pasar el puntero o al recibir el foco. --}}
-                            <article
-                                data-home-card
-                                data-catalog-item
-                                data-home-reveal
-                                data-home-hover
-                                data-product-name="{{ $product->name }}"
-                                class="group relative flex flex-col overflow-hidden rounded-lg border border-border-soft bg-white transition-colors hover:border-primary hover:shadow-[0_4px_20px_-2px_rgba(0,139,139,0.08)]"
-                            >
-                                {{-- Imagen del producto con su propia proporción.
-                                     `overflow-hidden` recorta el zoom leve de entrada y
-                                     el del hover, y `data-home-reveal-media` declara
-                                     el marco cuya imagen hace el zoom de entrada. --}}
-                                <div data-home-card-media data-home-reveal-media class="relative aspect-[3/4] overflow-hidden bg-surface-subtle">
-                                    @if($imagen)
-                                        <img src="{{ CloudinaryUrl::webp($imagen) }}" alt="{{ $product->name }}" loading="lazy" class="h-full w-full object-cover">
-                                    @else
-                                        <div class="flex h-full w-full items-center justify-center font-body text-sm text-ink-muted">Sin imagen</div>
-                                    @endif
-
-                                    {{-- Insignia de estado en lugar de la categoría:
-                                         honesta y temporal, sin descuentos inventados.
-                                         Es lo único informativo que queda sobre la
-                                         imagen. --}}
-                                    @if($estado !== null)
-                                        <span
-                                            data-home-card-stock
-                                            @class([
-                                                'pointer-events-none absolute left-4 top-4 z-[2] rounded border px-2.5 py-1 font-display text-[10px] font-semibold uppercase tracking-[0.15em] backdrop-blur-sm',
-                                                'border-ink/10 bg-ink/80 text-white' => $estado === 'Agotado',
-                                                'border-accent/30 bg-accent/10 text-accent' => $estado !== 'Agotado',
-                                            ])
-                                        >{{ $estado }}</span>
-                                    @endif
-
-                                    {{-- Acción compacta de la bolsa: sobre la imagen,
-                                         transparente y oculta hasta que el puntero
-                                         entra en la tarjeta o el botón recibe el foco
-                                         (`focus-within`), para seguir siendo accesible
-                                         por teclado. El contenedor no captura clics;
-                                         solo el botón interno los recibe. --}}
-                                    <div
-                                        data-home-card-action
-                                        class="pointer-events-none absolute inset-x-0 bottom-4 z-[2] flex justify-end px-4 opacity-0 transition duration-200 max-sm:opacity-100 group-hover:opacity-100 focus-within:opacity-100 motion-reduce:transition-none"
-                                    >
-                                        <div class="pointer-events-auto">
-                                            @livewire('cart.add-to-cart', ['product' => $product, 'variant' => 'compact'], key('home-'.$product->id))
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {{-- Enlace estirado al detalle: cubre toda la tarjeta
-                                     (imagen e información) y deja el botón de la bolsa
-                                     fuera de su interior, para no anidar controles
-                                     dentro de un enlace. --}}
-                                <a
-                                    href="{{ route('catalog.show', $product) }}"
-                                    class="absolute inset-0 z-[1] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                >
-                                    <span class="sr-only">{{ $product->name }}</span>
-                                </a>
-
-                                {{-- Bloque de información bajo la imagen: fondo
-                                     transparente y sin borde propios; el color de
-                                     fondo lo aporta la tarjeta. --}}
-                                <div class="flex flex-1 flex-col gap-2.5 bg-transparent px-5 py-5">
-                                    <h3 class="font-display text-[18px] font-semibold leading-[24px] tracking-[-0.01em] text-ink">{{ $product->name }}</h3>
-
-                                    @if($atributos !== [])
-                                        <p data-home-card-specs class="font-display text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-soft">{{ implode(' · ', $atributos) }}</p>
-                                    @endif
-
-                                    <p data-home-card-price class="mt-auto pt-2 font-display text-[14px] font-bold tracking-[0.05em] tabular-nums text-ink">
-                                        $ {{ number_format($product->precio, 0, ',', '.') }} COP
-                                    </p>
-                                </div>
-                            </article>
+                            @include('storefront.partials.product-card', [
+                                'product' => $product,
+                                'cardAttribute' => 'data-home-card',
+                                'wireKeyPrefix' => 'home',
+                            ])
                         @endforeach
                         </div>
                     </div>
@@ -566,6 +402,74 @@
                                 </span>
                             </a>
                         @endforeach
+                    </div>
+                </section>
+            @endif
+
+            {{-- Favoritos: cierre del home, justo antes del footer. La consulta
+                 ordena por unidades vendidas en pedidos consolidados y limita a
+                 ocho; el carrusel muestra cinco a la vez en escritorio. Los
+                 productos sin ventas solo completan el cupo cuando el catálogo
+                 no llega a ocho, nunca se inventan fichas. --}}
+            @if($favoriteProducts->isNotEmpty())
+                <section data-home-favorites aria-labelledby="home-favorites-title" class="mb-20">
+                    <div data-home-reveal class="mb-7 flex flex-col gap-5 border-b border-border-soft pb-5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+                        <div>
+                            <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">Favoritos</p>
+                            <h2 id="home-favorites-title" class="mt-2 font-display text-[32px] font-bold uppercase leading-[36px] tracking-[-0.01em] text-ink sm:text-[40px] sm:leading-[44px] lg:text-[48px] lg:leading-[52px] lg:tracking-[-0.02em]">Los más vendidos</h2>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3">
+                            <a
+                                data-home-hover
+                                href="{{ route('catalog.index') }}"
+                                class="group inline-flex h-12 items-center gap-2 rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >
+                                Ver todos
+                                <span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+                            </a>
+
+                            <div class="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    data-home-favorites-prev
+                                    aria-label="Favoritos anteriores"
+                                    class="inline-flex h-11 w-11 items-center justify-center rounded border border-border-soft bg-white text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                >
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                        <path d="M19 12H5m0 0 6-6m-6 6 6 6" />
+                                    </svg>
+                                </button>
+                                <button
+                                    type="button"
+                                    data-home-favorites-next
+                                    aria-label="Más favoritos"
+                                    class="inline-flex h-11 w-11 items-center justify-center rounded border border-border-soft bg-white text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                >
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                        <path d="M5 12h14m0 0-6-6m6 6-6 6" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="relative">
+                        <div class="swiper" data-home-favorites-swiper>
+                            <div class="swiper-wrapper">
+                                @foreach($favoriteProducts as $favoriteProduct)
+                                    <div class="swiper-slide h-auto">
+                                        @include('storefront.partials.product-card', [
+                                            'product' => $favoriteProduct,
+                                            'cardAttribute' => 'data-favorite-card',
+                                            'wireKeyPrefix' => 'favorite',
+                                        ])
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div data-home-favorites-pagination class="mt-6 flex justify-center"></div>
                     </div>
                 </section>
             @endif

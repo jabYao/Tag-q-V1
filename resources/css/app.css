@@ -496,6 +496,67 @@
 }
 
 /*
+ * Carrusel de favoritos: las diapositivas toman la altura de la tarjeta más
+ * alta (el texto puede variar) y la paginación usa barras cortas en lugar de
+ * puntos, para no repetir el lenguaje visual del hero. Las flechas heredan el
+ * borde del sistema y se apagan cuando Swiper llega a un extremo.
+ */
+[data-home-favorites-swiper] .swiper-slide {
+    height: auto;
+}
+
+[data-home-favorites-pagination] {
+    position: static;
+    gap: 0.5rem;
+}
+
+[data-home-favorites-pagination] .swiper-pagination-bullet {
+    width: 1.5rem;
+    height: 2px;
+    margin: 0 !important;
+    border-radius: 9999px;
+    background: var(--color-ink-muted);
+    opacity: 1;
+    transition: background-color 200ms ease;
+}
+
+[data-home-favorites-pagination] .swiper-pagination-bullet-active {
+    background: var(--color-accent);
+}
+
+[data-home-favorites-prev].swiper-button-disabled,
+[data-home-favorites-next].swiper-button-disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/*
+ * La tarjeta de favoritos es más angosta que la de recientes: cinco caben en
+ * la misma fila. Referencia, precio y CTA se ajustan para conservar una sola
+ * línea de lectura sin tocar el tamaño de la tarjeta de cuatro columnas.
+ */
+[data-favorite-card] [data-home-card-meta] {
+    gap: 0.375rem;
+}
+
+[data-favorite-card] [data-home-card-reference] {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+}
+
+[data-favorite-card] [data-home-card-price] {
+    font-size: 14px;
+    letter-spacing: 0.02em;
+}
+
+[data-favorite-card] [data-home-card-action] button {
+    padding-inline: 0.5rem;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+}
+
+/*
  * Movimiento reducido: la portada queda quieta. Los reveals ni siquiera llegan
  * a ejecutarse (el JS sale antes de tocar nada), y aquí se apagan además los
  * realces de hover y los desplazamientos que pudieran quedar vivos. El hero

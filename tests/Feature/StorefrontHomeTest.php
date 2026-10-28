@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
 use DOMDocument;
@@ -86,12 +88,60 @@ class StorefrontHomeTest extends TestCase
     }
 
     /**
+     * Pedido con una sola línea, para alimentar el ranking real de ventas.
+     *
+     * Solo los estados consolidados (`pagado`, `en_preparacion`, `enviado`,
+     * `entregado`) deben contar en "los más vendidos"; los demás se prueban
+     * creando pedidos con esos estados.
+     */
+    private function sell(Product $product, int $quantity = 1, string $status = 'pagado'): Order
+    {
+        $this->sequence++;
+
+        $order = Order::create([
+            'code' => 'TAG-FAV-'.str_pad((string) $this->sequence, 4, '0', STR_PAD_LEFT),
+            'user_id' => null,
+            'status' => $status,
+            'total' => $product->precio * $quantity,
+            'shipping_cost' => 0,
+            'payment_method' => 'wompi',
+            'shipping_address' => null,
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => $quantity,
+            'price' => $product->precio,
+        ]);
+
+        return $order;
+    }
+
+    /**
+     * Nombres de las tarjetas del carrusel de favoritos, en orden.
+     *
+     * @return array<int, string>
+     */
+    private function favoriteCardNames(string $html): array
+    {
+        $xpath = new \DOMXPath($this->documentOf($html));
+        $names = [];
+
+        foreach ($xpath->query('//*[@data-favorite-card]') as $card) {
+            $names[] = $card->getAttribute('data-product-name');
+        }
+
+        return $names;
+    }
+
+    /**
      * Href del enlace de marca del shell compartido, localizado por su texto.
      */
     private function brandLinkHref(string $html): ?string
     {
         $previous = libxml_use_internal_errors(true);
-        $document = new DOMDocument();
+        $document = new DOMDocument;
         $document->loadHTML($html);
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
@@ -126,10 +176,10 @@ class StorefrontHomeTest extends TestCase
     /**
      * Documento HTML del home, con los errores de libxml silenciados.
      */
-    private function documentOf(string $html): \DOMDocument
+    private function documentOf(string $html): DOMDocument
     {
         $previous = libxml_use_internal_errors(true);
-        $document = new DOMDocument();
+        $document = new DOMDocument;
         $document->loadHTML($html);
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
@@ -342,117 +392,59 @@ class StorefrontHomeTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | Categorías enlazadas al filtro real del catálogo
+    | Categorías fuera del home (pedido del dueño)
     |--------------------------------------------------------------------------
+    |
+    | La franja de categorías se retiró del home: después del hero el primer
+    | bloque es "Productos recientes". El catálogo conserva sus filtros por
+    | categoría y la galería bento sigue usando fotos de categorías reales.
     */
 
-    public function test_el_home_enlaza_las_categorias_al_filtro_real_del_catalogo(): void
-    {
-        $this->category('Caballero', 'caballero-home');
-        $this->category('Dama', 'dama-home');
-
-        $this->get('/')->assertOk()
-            ->assertSee('Caballero')
-            ->assertSee('Dama')
-            ->assertSee('href="'.route('catalog.index', ['categoria' => 'caballero-home']).'"', false)
-            ->assertSee('href="'.route('catalog.index', ['categoria' => 'dama-home']).'"', false);
-    }
-
-    public function test_el_home_no_inventa_categorias_si_no_existen(): void
-    {
-        $this->get('/')->assertOk()
-            ->assertDontSee('Categorías');
-    }
-
-    public function test_el_home_muestra_la_imagen_de_cloudinary_de_cada_categoria(): void
+    public function test_el_home_ya_no_renderiza_la_seccion_de_categorias(): void
     {
         $this->category('Caballero', 'caballero');
         $this->category('Dama', 'dama');
-        $this->category('Niños', 'ninos');
+        $this->product($this->category('Accesorios', 'accesorios'));
 
-        $response = $this->get('/')->assertOk();
-
-        foreach (self::CATEGORY_IMAGES as $slug => $imageUrl) {
-            $response->assertSee($this->webpSrc($imageUrl), false);
-        }
+        $this->get('/')->assertOk()
+            ->assertDontSee('data-home-categories', false)
+            ->assertDontSee('data-category-image', false)
+            ->assertDontSee('data-category-label', false);
     }
 
-    /**
-     * Las tarjetas de categoría con imagen son más altas que anchas
-     * (`aspect-[3/4]`), la foto cubre todo el div (`object-cover`) y el
-     * nombre se superpone abajo, en mayúsculas y con fondo semitransparente.
-     */
-    public function test_el_home_muestra_la_imagen_completa_y_el_nombre_encima_en_mayusculas(): void
+    public function test_productos_recientes_es_el_primer_bloque_despues_del_hero(): void
     {
-        $this->category('Caballero', 'caballero');
-        $this->category('Dama', 'dama');
+        $this->product($this->category());
 
-        $html = $this->get('/')->assertOk()->getContent();
-        $document = $this->documentOf($html);
+        $document = $this->documentOf($this->get('/')->assertOk()->getContent());
+        $xpath = new \DOMXPath($document);
 
-        $images = [];
-        foreach ($document->getElementsByTagName('img') as $img) {
-            if (str_contains($img->getAttribute('data-category-image'), 'caballero')
-                || str_contains($img->getAttribute('data-category-image'), 'dama')) {
-                $images[] = $img;
-            }
-        }
+        $hero = $xpath->query('//*[@data-home-hero]')->item(0);
+        $body = $xpath->query('//*[@data-home-body]')->item(0);
+        $products = $xpath->query('//*[@data-home-products]')->item(0);
 
-        $this->assertCount(2, $images, 'Debe haber una imagen por categoría con imagen asignada');
+        $this->assertNotNull($hero, 'El hero existe');
+        $this->assertNotNull($body, 'El cuerpo del home existe');
+        $this->assertNotNull($products, 'La sección de productos recientes existe');
 
-        foreach ($images as $img) {
-            $this->assertStringContainsString(
-                'object-cover',
-                $img->getAttribute('class'),
-                'La imagen de categoría debe cubrir todo el div'
-            );
+        // El cuerpo no contiene la franja de categorías y su primer <section>
+        // es productos recientes: no hay otro bloque entre el hero y él.
+        $this->assertSame(0, $xpath->query('.//*[@data-home-categories]', $body)->length);
 
-            $card = $img->parentNode;
-            $cardClass = $card instanceof \DOMElement ? $card->getAttribute('class') : '';
-            $this->assertStringContainsString(
-                'aspect-[3/4]',
-                $cardClass,
-                'La tarjeta de categoría debe ser más alta que ancha'
-            );
+        $firstSection = $xpath->query('.//section', $body)->item(0);
+        $this->assertNotNull($firstSection, 'El cuerpo del home tiene secciones');
+        $this->assertTrue(
+            $firstSection->hasAttribute('data-home-products'),
+            'Productos recientes es el primer bloque del cuerpo',
+        );
 
-            $label = null;
-            foreach ($card->childNodes as $child) {
-                if ($child instanceof \DOMElement
-                    && $child->hasAttribute('data-category-label')) {
-                    $label = $child;
-                    break;
-                }
-            }
-
-            $this->assertNotNull($label, 'El nombre de la categoría debe superponerse sobre la imagen');
-            $this->assertStringContainsString(
-                'uppercase',
-                $label->getAttribute('class'),
-                'El nombre de la categoría debe mostrarse en mayúsculas'
-            );
-            $this->assertStringContainsString(
-                'bottom-0',
-                $label->getAttribute('class'),
-                'El rótulo debe ubicarse en la parte de abajo de la imagen'
-            );
-            $this->assertMatchesRegularExpression(
-                '/bg-black\/[0-9]+/',
-                $label->getAttribute('class'),
-                'El rótulo debe llevar un fondo semitransparente'
-            );
-            $this->assertNotSame('', trim($label->textContent), 'El rótulo no puede quedar vacío');
-        }
-    }
-
-    public function test_el_home_no_muestra_imagenes_de_categorias_sin_imagen_asignada(): void
-    {
-        $this->category('Otra', 'otra');
-
-        $this->get('/')
-            ->assertOk()
-            ->assertDontSee(self::CATEGORY_IMAGES['caballero'], false)
-            ->assertDontSee(self::CATEGORY_IMAGES['dama'], false)
-            ->assertDontSee(self::CATEGORY_IMAGES['ninos'], false);
+        // El hero va antes que el cuerpo del home y queda fuera de él.
+        $this->assertSame(0, $xpath->query('.//*[@data-home-hero]', $body)->length);
+        $this->assertSame(
+            1,
+            $xpath->query('//*[@data-home-hero]/following::*[@data-home-body]')->length,
+            'El hero va antes que el cuerpo del home',
+        );
     }
 
     /*
@@ -473,15 +465,30 @@ class StorefrontHomeTest extends TestCase
             ]);
         }
 
-        $response = $this->get('/')->assertOk();
+        $html = $this->get('/')->assertOk()->getContent();
+        $xpath = new \DOMXPath($this->documentOf($html));
+        $recent = $xpath->query('//*[@data-home-products]')->item(0);
 
-        // Los cuatro más recientes entran; el más antiguo queda fuera.
-        foreach (array_slice($products, 1) as $product) {
-            $response->assertSee($product->name);
-            $response->assertSee('href="'.route('catalog.show', $product).'"', false);
+        $this->assertNotNull($recent, 'La sección de productos recientes existe');
+
+        $recentNames = [];
+        foreach ($xpath->query('.//*[@data-home-card]', $recent) as $card) {
+            $recentNames[] = $card->getAttribute('data-product-name');
         }
 
-        $response->assertDontSee($products[0]->name);
+        // Los cuatro más recientes entran; el más antiguo queda fuera de esta
+        // sección. Puede seguir apareciendo en favoritos, donde el ranking es
+        // por ventas y no por fecha.
+        foreach (array_slice($products, 1) as $product) {
+            $this->assertContains($product->name, $recentNames);
+            $this->assertSame(
+                1,
+                $xpath->query('.//a[@href="'.route('catalog.show', $product).'"]', $recent)->length,
+                "El producto {$product->name} enlaza a su detalle desde recientes",
+            );
+        }
+
+        $this->assertNotContains($products[0]->name, $recentNames, 'El más antiguo no entra en recientes');
     }
 
     public function test_el_home_excluye_productos_inactivos(): void
@@ -805,7 +812,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertSame('Agotado', $this->cardBadge($response->getContent(), 'Pulso Agotado'));
     }
 
-    public function test_las_tarjetas_del_home_ofrecen_la_accion_compacta_de_bolsa(): void
+    public function test_las_tarjetas_del_home_ofrecen_un_unico_boton_naranja_de_bolsa(): void
     {
         $category = $this->category();
 
@@ -822,18 +829,22 @@ class StorefrontHomeTest extends TestCase
 
         $response = $this->get('/')->assertOk();
 
-        // Producto disponible: acción compacta con nombre accesible y sin selector.
+        // Producto disponible: un único botón naranja a lo ancho, con nombre
+        // accesible y sin selector de cantidad.
         $available = $this->cardHtml($response->getContent(), 'Pulso Compacto');
         $this->assertStringContainsString('data-variant="compact"', $available);
         $this->assertStringContainsString('data-add-to-cart="true"', $available);
         $this->assertStringContainsString('aria-label="Agregar Pulso Compacto al carrito"', $available);
-        $this->assertStringContainsString('data-add-to-cart-compact-plus', $available);
-        $this->assertStringContainsString('bg-white', $available);
+        $this->assertStringContainsString('Agregar a la bolsa', $available);
+        $this->assertStringContainsString('bg-accent', $available);
+        $this->assertStringContainsString('w-full', $available);
+        $this->assertSame(1, substr_count($available, '<button'), 'La tarjeta ofrece un único botón');
+        $this->assertStringNotContainsString('data-add-to-cart-compact-plus', $available);
         $this->assertStringNotContainsString('data-nav-icon="bag"', $available);
         $this->assertStringNotContainsString('wire:model="quantity"', $available);
         $this->assertStringNotContainsString('type="number"', $available);
 
-        // Agotado: el mismo control queda deshabilitado y lo anuncia.
+        // Agotado: el mismo botón queda deshabilitado y lo anuncia.
         $soldOut = $this->cardHtml($response->getContent(), 'Pulso Sin Stock');
         $this->assertStringContainsString('data-variant="compact"', $soldOut);
         $this->assertStringContainsString('data-add-to-cart="false"', $soldOut);
@@ -847,15 +858,14 @@ class StorefrontHomeTest extends TestCase
     |--------------------------------------------------------------------------
     */
 
-    public function test_el_home_muestra_un_estado_vacio_neutro_conservando_las_categorias(): void
+    public function test_el_home_muestra_un_estado_vacio_neutro_sin_tarjetas_inventadas(): void
     {
         $this->category('Caballero', 'caballero-home');
 
         $response = $this->get('/')->assertOk();
 
         $response->assertSee('Aún no hay productos disponibles por el momento.');
-        $response->assertSee('Caballero');
-        $response->assertSee('href="'.route('catalog.index', ['categoria' => 'caballero-home']).'"', false);
+        $response->assertDontSee('data-home-categories', false);
 
         // Sin productos no hay tarjetas ni placeholders inventados.
         $response->assertDontSee('data-catalog-item', false);
@@ -864,10 +874,11 @@ class StorefrontHomeTest extends TestCase
         $response->assertDontSee('Agotado');
     }
 
-    public function test_el_home_responde_sin_categorias_ni_productos(): void
+    public function test_el_home_responde_sin_datos_del_catalogo(): void
     {
         $this->get('/')->assertOk()
             ->assertSee('Aún no hay productos disponibles por el momento.')
+            ->assertDontSee('data-home-categories', false)
             ->assertDontSee('Categorías');
     }
 
@@ -877,10 +888,10 @@ class StorefrontHomeTest extends TestCase
     |--------------------------------------------------------------------------
     |
     | El home debe leerse como una portada de tienda de relojes de pulso:
-    | hero de introducción, categorías, productos recientes y un cierre con
-    | accesos a los flujos existentes. Sin scripts en el marcado ni promesas
-    | comerciales inventadas: los datos salen del catálogo real y la
-    | presentación se resuelve con utilidades de Tailwind y el CSS del tema.
+    | hero de introducción, productos recientes y un cierre con accesos a los
+    | flujos existentes. Sin scripts en el marcado ni promesas comerciales
+    | inventadas: los datos salen del catálogo real y la presentación se
+    | resuelve con utilidades de Tailwind y el CSS del tema.
     */
 
     public function test_el_home_presenta_un_hero_editorial_y_secciones_distintas(): void
@@ -891,7 +902,6 @@ class StorefrontHomeTest extends TestCase
 
         $response->assertSee('data-home-hero', false)
             ->assertSee('data-home-hero-actions', false)
-            ->assertSee('data-home-categories', false)
             ->assertSee('data-home-products', false)
             ->assertSee('data-home-closing', false);
 
@@ -912,8 +922,12 @@ class StorefrontHomeTest extends TestCase
             'precio' => 1290000,
             'stock' => 2,
             'marca' => 'Marca Existente',
+            'reference' => 'TQ-4410',
             'material_pulso' => 'Acero inoxidable',
             'movimiento' => 'Automático',
+            'cristal' => 'zafiro',
+            'water_resistance_atm' => 5,
+            'diameter_mm' => 40.5,
             'imagenes' => ['https://cdn.example.com/pulso-editorial.jpg'],
         ]);
 
@@ -928,12 +942,35 @@ class StorefrontHomeTest extends TestCase
 
         $card = $this->cardHtml($response->getContent(), 'Pulso Editorial');
 
-        // Solo datos reales del producto: nombre, atributos, precio COP e insignia.
+        // Solo datos reales del producto: nombre, marca, referencia, ficha
+        // técnica, precio COP e insignia de estado.
         $this->assertStringContainsString('Pulso Editorial', $card);
         $this->assertStringContainsString('Marca Existente', $card);
-        $this->assertStringContainsString('Automático', $card);
+        $this->assertStringContainsString('REF. TQ-4410', $card);
         $this->assertStringContainsString('https://cdn.example.com/pulso-editorial.jpg', $card);
         $this->assertStringContainsString('$ 1.290.000 COP', $card);
+
+        // Ficha corta con valores reales del reloj, sin etiquetas de grilla.
+        foreach (['Automático', 'Zafiro', '5 ATM · 50 m'] as $value) {
+            $this->assertStringContainsString($value, $card, "La ficha muestra el valor real {$value}");
+        }
+
+        // El diámetro real va sobre la foto, como en la referencia del dueño.
+        $this->assertStringContainsString('data-home-card-diameter', $card);
+        $this->assertStringContainsString('40,5 mm', $card);
+
+        // La foto es vertical (3:4), llena el ancho útil de la tarjeta y se
+        // recorta con `object-cover`; no lleva borde interno.
+        $this->assertStringContainsString('aspect-[3/4]', $card);
+        $this->assertStringContainsString('object-cover', $card);
+        $this->assertStringNotContainsString('h-52', $card);
+        $this->assertStringNotContainsString('object-contain', $card);
+        $this->assertStringNotContainsString('border-border-soft', $card);
+
+        // Marco negro delgado (1 px) y un único botón naranja a lo ancho.
+        $this->assertStringContainsString('border-ink', $card);
+        $this->assertStringNotContainsString('border-2', $card);
+        $this->assertSame(1, substr_count($card, '<button'), 'La tarjeta ofrece un único botón');
 
         // La tarjeta del home ya no muestra el material del pulso ni la categoría.
         $this->assertStringNotContainsString('Acero inoxidable', $card);
@@ -945,6 +982,23 @@ class StorefrontHomeTest extends TestCase
         $response->assertDontSee('Disponible: 2');
     }
 
+    public function test_las_tarjetas_del_home_muestran_la_descripcion_real_del_producto(): void
+    {
+        $category = $this->category();
+
+        $this->product($category, [
+            'name' => 'Pulso Descrito',
+            'slug' => 'pulso-descrito',
+            'descripcion' => 'Reloj automático con esfera azul y correa de cuero.',
+        ]);
+
+        $card = $this->cardHtml($this->get('/')->assertOk()->getContent(), 'Pulso Descrito');
+
+        $this->assertStringContainsString('data-home-card-description', $card);
+        $this->assertStringContainsString('Reloj automático con esfera azul y correa de cuero.', $card);
+        $this->assertStringContainsString('line-clamp-2', $card);
+    }
+
     public function test_el_home_sin_productos_conserva_las_secciones_sin_tarjetas_inventadas(): void
     {
         $this->category('Caballero', 'caballero-home');
@@ -952,11 +1006,11 @@ class StorefrontHomeTest extends TestCase
         $response = $this->get('/')->assertOk();
 
         $response->assertSee('data-home-hero', false)
-            ->assertSee('data-home-categories', false)
             ->assertSee('data-home-products', false)
             ->assertSee('data-home-closing', false)
             ->assertSee('Aún no hay productos disponibles por el momento.')
-            ->assertDontSee('data-home-card', false);
+            ->assertDontSee('data-home-card', false)
+            ->assertDontSee('data-home-favorites', false);
     }
 
     public function test_las_tarjetas_del_home_sin_atributos_opcionales_solo_muestran_datos_reales(): void
@@ -979,8 +1033,10 @@ class StorefrontHomeTest extends TestCase
             ->assertSee('$ 99.000 COP')
             ->assertSee('Sin imagen')
             ->assertSee('Agotado')
-            // Sin atributos reales no se rellena la línea de especificaciones.
-            ->assertDontSee('data-home-card-specs', false);
+            // Sin atributos reales no se rellena la línea de especificaciones
+            // ni se inventa una descripción.
+            ->assertDontSee('data-home-card-specs', false)
+            ->assertDontSee('data-home-card-description', false);
     }
 
     public function test_el_home_muestra_el_carrusel_del_hero_con_las_tres_imagenes_de_cloudinary(): void
@@ -1142,10 +1198,10 @@ class StorefrontHomeTest extends TestCase
             $this->assertStringNotContainsString($hook, $hero, "El hero no debe recibir {$hook}");
         }
 
-        // Contenedores con entrada escalonada: categorías, productos, cierre y
-        // galería bento.
+        // Contenedores con entrada escalonada: productos, cierre y galería
+        // bento. La franja de categorías ya no existe en el home.
         $this->assertGreaterThanOrEqual(
-            4,
+            3,
             $xpath->query('//*[@data-home-stagger]')->length,
             'Cada bloque posterior al hero debe entrar escalonado',
         );
@@ -1163,18 +1219,6 @@ class StorefrontHomeTest extends TestCase
                 $xpath->query('.//*[@data-home-reveal-media]', $card)->length,
                 'La tarjeta declara el marco de imagen que hace zoom',
             );
-        }
-
-        // Tarjetas de categoría con foto: los mismos ganchos en su enlace.
-        $categoryImages = $xpath->query('//*[@data-category-image]');
-        $this->assertSame(2, $categoryImages->length, 'Caballero y Dama tienen imagen asignada');
-
-        foreach ($categoryImages as $image) {
-            $card = $image->parentNode;
-            $this->assertInstanceOf(\DOMElement::class, $card);
-            $this->assertTrue($card->hasAttribute('data-home-reveal'));
-            $this->assertTrue($card->hasAttribute('data-home-reveal-media'));
-            $this->assertTrue($card->hasAttribute('data-home-hover'));
         }
 
         // Fichas de la galería bento: revelado, zoom y hover.
@@ -1197,7 +1241,7 @@ class StorefrontHomeTest extends TestCase
         );
 
         // Los títulos posteriores al hero entran con reveal.
-        foreach (['data-home-categories', 'data-home-products', 'data-home-gallery'] as $section) {
+        foreach (['data-home-products', 'data-home-gallery'] as $section) {
             $node = $xpath->query('//*[@'.$section.']')->item(0);
             $this->assertNotNull($node, "El home renderiza {$section}");
             $this->assertGreaterThan(
@@ -1246,7 +1290,7 @@ class StorefrontHomeTest extends TestCase
         }
 
         // El contenido posterior al hero sigue en el HTML, no solo en el JS.
-        foreach (['Categorías', 'Productos recientes', 'Explora toda la colección', 'La colección en imágenes'] as $copy) {
+        foreach (['Productos recientes', 'Explora toda la colección', 'La colección en imágenes'] as $copy) {
             $this->assertStringContainsString($copy, $html, "El home sirve \"{$copy}\" desde el servidor");
         }
     }
@@ -1402,8 +1446,8 @@ class StorefrontHomeTest extends TestCase
             'El contenido del resto del home se alinea con el contenedor global (90vw)',
         );
 
-        // Dentro quedan las categorías, los productos y el cierre…
-        foreach (['data-home-categories', 'data-home-products', 'data-home-closing'] as $marker) {
+        // Dentro quedan los productos y el cierre…
+        foreach (['data-home-products', 'data-home-closing'] as $marker) {
             $this->assertSame(
                 1,
                 $xpath->query('.//*[@'.$marker.']', $body)->length,
@@ -1941,5 +1985,188 @@ class StorefrontHomeTest extends TestCase
         foreach (['data-home-hero-curtain', 'runCurtain', 'animate('] as $snippet) {
             $this->assertStringNotContainsString($snippet, $js, "app.js ya no contiene {$snippet}");
         }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Favoritos: los más vendidos antes del footer
+    |--------------------------------------------------------------------------
+    |
+    | El home cierra con un carrusel de ocho productos como máximo, ordenado por
+    | unidades vendidas en pedidos consolidados. Se muestran cinco tarjetas a la
+    | vez en escritorio y el carrusel se apoya en Swiper, ya presente en el
+    | proyecto. Sin ventas suficientes se muestran los productos reales que haya:
+    | nunca se inventan fichas para completar el número.
+    */
+
+    public function test_los_favoritos_muestran_los_ocho_mas_vendidos_antes_del_footer(): void
+    {
+        $category = $this->category();
+
+        $products = [];
+        foreach (range(1, 10) as $position) {
+            $products[$position] = $this->product($category, [
+                'name' => "Favorito {$position}",
+                'slug' => "favorito-{$position}",
+                'imagenes' => ["https://cdn.example.com/favorito-{$position}.jpg"],
+            ]);
+        }
+
+        // Ventas decrecientes: el orden esperado es Favorito 1..8. Los dos
+        // últimos quedan fuera por el límite de ocho, no por falta de datos.
+        foreach (range(1, 10) as $position) {
+            $this->sell($products[$position], 11 - $position);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $this->assertSame(
+            array_map(fn (int $position): string => "Favorito {$position}", range(1, 8)),
+            $this->favoriteCardNames($html),
+            'El carrusel ordena por unidades vendidas y se queda con ocho',
+        );
+
+        // La sección existe una sola vez y va después de la galería y antes del
+        // footer del shell compartido.
+        $favoritesPosition = strpos($html, 'data-home-favorites');
+        $footerPosition = strpos($html, 'data-storefront-footer');
+
+        $this->assertNotFalse($favoritesPosition, 'El home renderiza la sección de favoritos');
+        $this->assertNotFalse($footerPosition, 'El shell compartido renderiza su footer');
+        $this->assertLessThan($footerPosition, $favoritesPosition, 'Favoritos va antes del footer');
+
+        $galleryPosition = strpos($html, 'data-home-gallery');
+        if ($galleryPosition !== false) {
+            $this->assertGreaterThan($galleryPosition, $favoritesPosition, 'Favoritos va después de la galería');
+        }
+
+        $document = $this->documentOf($html);
+        $xpath = new \DOMXPath($document);
+        $section = $xpath->query('//*[@data-home-favorites]')->item(0);
+
+        $this->assertNotNull($section, 'La sección de favoritos existe');
+        $this->assertSame('Favoritos', trim($xpath->query('.//p', $section)->item(0)?->textContent ?? ''));
+        $this->assertStringContainsString('Los más vendidos', $section->textContent);
+
+        foreach ([
+            'data-home-favorites-swiper',
+            'data-home-favorites-prev',
+            'data-home-favorites-next',
+            'data-home-favorites-pagination',
+        ] as $marker) {
+            $this->assertSame(
+                1,
+                $xpath->query('.//*[@'.$marker.']', $section)->length,
+                "El carrusel de favoritos declara {$marker}",
+            );
+        }
+
+        $this->assertSame(8, $xpath->query('.//*[@data-favorite-card]', $section)->length);
+        $this->assertSame(8, $xpath->query('.//*[contains(concat(" ", normalize-space(@class), " "), " swiper-slide ")]', $section)->length);
+        $this->assertSame(8, substr_count($document->saveHTML($section), 'data-variant="compact"'), 'Cada favorito conserva su botón de bolsa');
+
+        $firstCard = $xpath->query('.//*[@data-favorite-card]', $section)->item(0);
+        $this->assertNotNull($firstCard);
+        $this->assertSame(route('catalog.show', $products[1]), $xpath->query('.//a[@data-card-link]', $firstCard)->item(0)?->getAttribute('href'));
+    }
+
+    public function test_los_favoritos_solo_cuentan_pedidos_consolidados_y_omiten_inactivos(): void
+    {
+        $category = $this->category();
+
+        $paid = $this->product($category, ['name' => 'Venta Pagada', 'slug' => 'venta-pagada']);
+        $preparing = $this->product($category, ['name' => 'Venta Preparacion', 'slug' => 'venta-preparacion']);
+        $shipped = $this->product($category, ['name' => 'Venta Enviada', 'slug' => 'venta-enviada']);
+        $delivered = $this->product($category, ['name' => 'Venta Entregada', 'slug' => 'venta-entregada']);
+
+        $this->sell($paid, 1, 'pagado');
+        $this->sell($preparing, 2, 'en_preparacion');
+        $this->sell($shipped, 3, 'enviado');
+        $this->sell($delivered, 4, 'entregado');
+
+        // Pedidos que no representan una venta consolidada. Si se colaran,
+        // "No Consolidado" sería el primero con 50 unidades pendientes.
+        $notCounted = $this->product($category, ['name' => 'No Consolidado', 'slug' => 'no-consolidado']);
+        $this->sell($notCounted, 50, 'pendiente_de_pago');
+        $this->sell($notCounted, 40, 'cancelado');
+        $this->sell($notCounted, 30, 'reembolsado');
+
+        // Un inactivo con muchas ventas tampoco entra ni ocupa un lugar.
+        $inactive = $this->product($category, [
+            'name' => 'Inactivo Vendido',
+            'slug' => 'inactivo-vendido',
+            'is_active' => false,
+        ]);
+        $this->sell($inactive, 100, 'entregado');
+
+        // Cuatro activos sin ventas completan los ocho lugares reales.
+        foreach (range(1, 4) as $position) {
+            $this->product($category, [
+                'name' => "Relleno {$position}",
+                'slug' => "relleno-{$position}",
+            ]);
+        }
+
+        $names = $this->favoriteCardNames($this->get('/')->assertOk()->getContent());
+
+        $this->assertSame(
+            ['Venta Entregada', 'Venta Enviada', 'Venta Preparacion', 'Venta Pagada'],
+            array_slice($names, 0, 4),
+            'Solo los estados consolidados suman unidades, de mayor a menor',
+        );
+        $this->assertCount(8, $names, 'Los activos sin ventas completan el límite sin inventar productos');
+        $this->assertNotContains('No Consolidado', $names, 'Pendiente, cancelado y reembolsado no cuentan como venta');
+        $this->assertNotContains('Inactivo Vendido', $names, 'Un producto inactivo nunca aparece');
+    }
+
+    public function test_los_favoritos_muestran_menos_de_ocho_si_el_catalogo_no_llega(): void
+    {
+        $category = $this->category();
+
+        foreach (range(1, 3) as $position) {
+            $this->product($category, [
+                'name' => "Favorito Real {$position}",
+                'slug' => "favorito-real-{$position}",
+            ]);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $names = $this->favoriteCardNames($html);
+
+        $this->assertCount(3, $names, 'No se rellenan fichas inexistentes');
+        sort($names);
+        $this->assertSame(
+            ['Favorito Real 1', 'Favorito Real 2', 'Favorito Real 3'],
+            $names,
+            'El carrusel muestra exactamente los productos reales disponibles',
+        );
+        $this->assertStringContainsString('data-home-favorites', $html);
+    }
+
+    public function test_el_carrusel_de_favoritos_muestra_cinco_en_escritorio_y_respeta_movimiento_reducido(): void
+    {
+        $js = file_get_contents(base_path('resources/js/app.js'));
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertNotFalse($js);
+        $this->assertNotFalse($css);
+
+        foreach ([
+            'data-home-favorites-swiper',
+            'data-home-favorites-prev',
+            'data-home-favorites-next',
+            'data-home-favorites-pagination',
+        ] as $marker) {
+            $this->assertStringContainsString($marker, $js, "app.js inicializa {$marker}");
+        }
+
+        $this->assertMatchesRegularExpression(
+            '/1280:\s*\{[^}]*slidesPerView:\s*5/s',
+            $js,
+            'En escritorio el carrusel muestra cinco tarjetas',
+        );
+        $this->assertStringContainsString('prefersReducedMotion() ? 0 : 300', $js);
+        $this->assertStringContainsString('[data-home-favorites-pagination]', $css);
+        $this->assertStringContainsString('swiper-button-disabled', $css);
     }
 }
