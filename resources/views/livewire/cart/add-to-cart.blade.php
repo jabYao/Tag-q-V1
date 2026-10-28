@@ -9,7 +9,7 @@
     data-add-to-cart="{{ $available ? 'true' : 'false' }}"
     data-variant="{{ $variant }}"
     @class([
-        'flex flex-col items-end gap-1' => $isCompact,
+        'flex w-full flex-col gap-1' => $isCompact,
         'flex flex-col gap-2' => ! $isCompact && ! $isEditorial,
         'pd-editorial' => $isEditorial,
     ])
@@ -31,20 +31,21 @@
     @endif
 
     @if($isCompact)
-        {{-- Acción exclusiva del home: una sola unidad por clic. Sin campo de
-             cantidad y deshabilitada cuando el producto no es comprable; la
-             validación y los errores del servidor se conservan intactos. El
-             botón vive sobre la imagen y usa un signo más negro dentro de un
-             cuadro blanco para mantener una acción compacta y visible. --}}
-        <form wire:submit="add" class="flex items-center">
+        {{-- Acción exclusiva del home: una sola unidad por clic, sin selector
+             de cantidad y deshabilitada cuando el producto no es comprable. Un
+             único botón naranja a lo ancho, como la referencia del dueño; la
+             validación y los errores del servidor se conservan intactos. --}}
+        <form wire:submit="add" class="w-full">
             <button
                 type="submit"
                 @disabled(! $available)
                 aria-label="{{ $available ? 'Agregar '.($product?->name ?? 'este producto').' al carrito' : ($product?->name ?? 'Este producto').' no disponible' }}"
-                title="Agregar al carrito"
-                class="inline-flex h-10 w-10 items-center justify-center rounded border border-border-soft bg-white text-lg leading-none text-ink transition-colors hover:border-primary hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-border-soft disabled:bg-surface-muted disabled:text-ink-muted"
+                wire:loading.attr="disabled"
+                wire:target="add"
+                class="inline-flex h-11 w-full items-center justify-center rounded bg-accent px-4 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted"
             >
-                <span data-add-to-cart-compact-plus aria-hidden="true">+</span>
+                <span wire:loading.remove wire:target="add">Agregar a la bolsa</span>
+                <span wire:loading wire:target="add">Agregando&hellip;</span>
             </button>
         </form>
 
@@ -62,6 +63,11 @@
                 class="pd-buy-form"
                 x-data="{ quantity: @entangle('quantity'), max: {{ $maxQuantity }} }"
             >
+                <div class="pd-qty-head">
+                    <span>Cantidad</span>
+                    <span>Máx. {{ $maxQuantity }}</span>
+                </div>
+
                 <div class="pd-qty" data-editorial-quantity>
                     <button
                         type="button"
@@ -101,7 +107,7 @@
                     wire:loading.attr="disabled"
                     wire:target="add"
                 >
-                    <span wire:loading.remove wire:target="add">Agregar al carrito</span>
+                    <span wire:loading.remove wire:target="add">Agregar al carrito<span class="pd-cta-arrow" aria-hidden="true">&rarr;</span></span>
                     <span wire:loading wire:target="add">Agregando&hellip;</span>
                 </button>
             </form>

@@ -14,6 +14,7 @@ class PublicProductDetailTest extends TestCase
     use RefreshDatabase;
 
     private Category $category;
+
     private int $sequence = 0;
 
     protected function setUp(): void
@@ -297,7 +298,8 @@ class PublicProductDetailTest extends TestCase
             ->assertSee('Sin especificaciones')
             ->assertSee('data-gallery-count="0"', false)
             ->assertSee('data-gallery-empty', false)
-            ->assertDontSee('data-gallery-thumb-index', false);
+            ->assertDontSee('data-gallery-thumb-index', false)
+            ->assertDontSee('data-pd-micro', false);
     }
 
     /**
@@ -308,10 +310,60 @@ class PublicProductDetailTest extends TestCase
         $this->product(['name' => 'Elegido Por Slug', 'slug' => 'elegido-por-slug']);
         $this->product(['name' => 'Otro Producto Distinto', 'slug' => 'otro-producto-distinto']);
 
-        $this->get('/catalogo/elegido-por-slug')
+        $html = $this->get('/catalogo/elegido-por-slug')->assertOk()->getContent();
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        $buy = $xpath->query('//*[@data-pd-buy]')->item(0);
+        $this->assertNotNull($buy, 'El detalle declara el riel de compra');
+        $this->assertStringContainsString('Elegido Por Slug', $buy->textContent);
+        $this->assertStringNotContainsString(
+            'Otro Producto Distinto',
+            $buy->textContent,
+            'La pieza hermana no se cuela en el riel de compra',
+        );
+
+        $related = $xpath->query('//*[@data-pd-related]')->item(0);
+        $this->assertNotNull($related, 'La vitrina de piezas hermanas se muestra');
+        $this->assertStringContainsString('Otro Producto Distinto', $related->textContent);
+    }
+
+    public function test_detalle_muestra_hasta_tres_piezas_hermanas_activas(): void
+    {
+        $this->product(['name' => 'Pieza Actual', 'slug' => 'pieza-actual']);
+        $this->product(['name' => 'Pieza Vecina', 'slug' => 'pieza-vecina']);
+        $this->product(['name' => 'Pieza Tercera', 'slug' => 'pieza-tercera']);
+        $this->product(['name' => 'Pieza Cuarta', 'slug' => 'pieza-cuarta']);
+        $this->product([
+            'name' => 'Pieza Inactiva',
+            'slug' => 'pieza-inactiva',
+            'is_active' => false,
+        ]);
+
+        $html = $this->get('/catalogo/pieza-actual')
             ->assertOk()
-            ->assertSee('Elegido Por Slug')
-            ->assertDontSee('Otro Producto Distinto');
+            ->assertSee('Otras piezas')
+            ->assertDontSee('Pieza Inactiva')
+            ->getContent();
+
+        $xpath = new \DOMXPath($this->documentOf($html));
+        $cards = $xpath->query('//*[@data-pd-related-card]');
+
+        $this->assertSame(3, $cards->length, 'La vitrina se limita a tres piezas');
+
+        $slugs = [];
+
+        foreach ($cards as $card) {
+            $path = parse_url($card->getAttribute('href'), PHP_URL_PATH);
+            $slugs[] = basename((string) $path);
+        }
+
+        $this->assertSame(
+            ['pieza-cuarta', 'pieza-tercera', 'pieza-vecina'],
+            $slugs,
+            'La vitrina muestra las piezas activas más recientes, sin la actual',
+        );
+        $this->assertNotContains('pieza-actual', $slugs);
+        $this->assertNotContains('pieza-inactiva', $slugs);
     }
 
     public function test_detalle_con_una_sola_unidad_activa_muestra_disponible(): void
@@ -340,5 +392,96 @@ class PublicProductDetailTest extends TestCase
             ->assertSee('Seiko')
             ->assertDontSee('Sin especificaciones')
             ->assertDontSee('Movimiento');
+    }
+
+    public function test_el_detalle_resume_solo_datos_tecnicos_reales_y_presentes(): void
+    {
+        $product = $this->product([
+            'name' => 'Resumen Técnico',
+            'slug' => 'resumen-tecnico',
+            'movimiento' => 'automatico',
+            'cristal' => 'zafiro',
+            'water_resistance_atm' => 20,
+            'diameter_mm' => 40.5,
+        ]);
+
+        $html = $this->get(route('catalog.show', $product))->assertOk()->getContent();
+        $micro = (new \DOMXPath($this->documentOf($html)))->query('//*[@data-pd-micro]')->item(0);
+
+        $this->assertNotNull($micro, 'El detalle declara el resumen técnico del riel');
+        $texto = $micro->textContent;
+
+        foreach (['Movimiento', 'Automático', 'Cristal', 'Zafiro', 'Resistencia', '20 ATM · 200 m'] as $dato) {
+            $this->assertStringContainsString($dato, $texto, "El resumen conserva el dato real: {$dato}");
+        }
+
+        $this->assertStringNotContainsString(
+            'Diámetro',
+            $texto,
+            'El resumen se limita a tres celdas; el diámetro queda en la ficha completa',
+        );
+    }
+
+    public function test_el_detalle_declara_animacion_progresiva_y_movimiento_reducido(): void
+    {
+        $product = $this->product([
+            'name' => 'Detalle Animado',
+            'slug' => 'detalle-animado',
+            'movimiento' => 'automatico',
+            'imagenes' => [
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/animado-1.jpg',
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/animado-2.jpg',
+            ],
+        ]);
+
+        $html = $this->get(route('catalog.show', $product))->assertOk()->getContent();
+
+        foreach (['data-pd-utility', 'data-pd-media', 'data-pd-rail', 'data-pd-buy', 'data-pd-micro', 'data-pd-details', 'data-pd-spec'] as $hook) {
+            $this->assertStringContainsString($hook, $html, "El detalle declara el gancho {$hook}");
+        }
+
+        $xpath = new \DOMXPath($this->documentOf($html));
+        $hooks = $xpath->query('//*[@data-pd-utility or @data-pd-media or @data-pd-buy or @data-pd-micro or @data-pd-details or @data-pd-spec]');
+
+        $this->assertGreaterThan(0, $hooks->length, 'El detalle declara ganchos de animación');
+
+        foreach ($hooks as $node) {
+            $this->assertFalse($node->hasAttribute('hidden'), 'Ningún gancho de animación llega oculto desde el servidor');
+            $this->assertStringNotContainsString(
+                'opacity-0',
+                $node->getAttribute('class'),
+                'Ningún gancho de animación llega invisible por CSS',
+            );
+        }
+
+        $js = file_get_contents(base_path('resources/js/app.js'));
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertNotFalse($js, 'Debe existir resources/js/app.js');
+        $this->assertNotFalse($css, 'Debe existir resources/css/app.css');
+
+        foreach (['initProductDetailAnimations', 'data-pd-media', 'data-pd-buy', 'data-pd-spec', 'prefersReducedMotion'] as $snippet) {
+            $this->assertStringContainsString($snippet, $js, "app.js debe declarar {$snippet}");
+        }
+
+        $this->assertMatchesRegularExpression(
+            '/if\s*\(\s*!root\s*\|\|\s*prefersReducedMotion\(\)\s*\)\s*\{\s*return;/s',
+            $js,
+            'La entrada del detalle debe salir sin animar con movimiento reducido',
+        );
+
+        $this->assertStringContainsString('@media (prefers-reduced-motion: reduce)', $css);
+        $this->assertStringContainsString('.pd-main-image.is-active', $css);
+    }
+
+    private function documentOf(string $html): \DOMDocument
+    {
+        $document = new \DOMDocument;
+        $previous = libxml_use_internal_errors(true);
+        $document->loadHTML('<?xml encoding="UTF-8">'.$html);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        return $document;
     }
 }

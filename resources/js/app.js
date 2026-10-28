@@ -454,3 +454,196 @@ function initHomeAnimations() {
 }
 
 initHomeAnimations();
+
+/**
+ * Detalle de producto — entrada Apex y continuidad de la galería.
+ *
+ * La franja de ruta y el riel de compra entran una sola vez: la cortina del
+ * marco sube, la foto activa se asienta con un zoom leve y el contenido del
+ * riel aparece escalonado. La ficha técnica se revela por scroll y las piezas
+ * hermanas cierran la página con un stagger corto. La transición entre
+ * miniaturas vive en CSS (`opacity` + `scale`), así el cambio de vista
+ * conserva la continuidad aunque este bloque no llegue a ejecutarse.
+ *
+ * El marcado del servidor nunca oculta nada: sin JavaScript la página se lee
+ * completa y la primera foto sigue visible. Con movimiento reducido la función
+ * sale antes de aplicar estados iniciales; el CSS también apaga los desplomes
+ * y el zoom. No se añade ninguna dependencia: GSAP y ScrollTrigger ya están en
+ * el bundle del storefront.
+ *
+ * Ganchos declarativos que conecta:
+ *   - `data-pd-utility`        franja superior de ruta y telemetría.
+ *   - `data-pd-media`          marco de la foto principal (cortina + zoom).
+ *   - `data-pd-rail`           riel de miniaturas.
+ *   - `data-pd-buy`            riel de compra; sus hijos entran escalonados.
+ *   - `data-pd-details`        ficha técnica; dispara el reveal por scroll.
+ *   - `data-pd-spec`           filas de la ficha técnica agrupada.
+ *   - `data-pd-related`        vitrina de piezas hermanas.
+ */
+
+const PD_ENTER_FROM = { autoAlpha: 0, y: 22 };
+const PD_ENTER_TO = { autoAlpha: 1, y: 0, duration: 0.65, ease: 'power3.out' };
+const PD_MEDIA_ZOOM_FROM = { scale: 1.055 };
+const PD_MEDIA_ZOOM_TO = { scale: 1, duration: 1.25, ease: 'power2.out' };
+
+/** Neutraliza la transición CSS de un elemento antes de que GSAP lo mueva. */
+function pdNeutralizeTransition(element) {
+    gsap.set(element, { transition: 'none' });
+}
+
+/** Entrada del detalle, desde el primer pintado y solo con movimiento. */
+function initProductDetailAnimations() {
+    const root = document.querySelector('[data-product-detail]');
+
+    if (!root || prefersReducedMotion()) {
+        return;
+    }
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    const utility = root.querySelector('[data-pd-utility]');
+    const media = root.querySelector('[data-pd-media]');
+    const activeImage = media ? media.querySelector('.pd-main-image.is-active') : null;
+    const rail = root.querySelector('[data-pd-rail]');
+    const buy = root.querySelector('[data-pd-buy]');
+    const details = root.querySelector('[data-pd-details]');
+    const detailIntro = root.querySelector('[data-pd-details-intro]');
+    const specCards = details ? Array.from(details.querySelectorAll('[data-pd-spec-group]')) : [];
+    const related = root.querySelector('[data-pd-related]');
+    const relatedCards = related ? Array.from(related.querySelectorAll('[data-pd-related-card]')) : [];
+    const thumbs = rail ? Array.from(rail.querySelectorAll('[data-gallery-thumb]')) : [];
+    const buyItems = buy ? Array.from(buy.children) : [];
+
+    if (utility) {
+        pdNeutralizeTransition(utility);
+        gsap.fromTo(
+            utility,
+            { autoAlpha: 0, y: 10 },
+            { ...PD_ENTER_TO, y: 0, duration: 0.5, clearProps: 'transform,opacity,visibility,transition' },
+        );
+    }
+
+    if (media) {
+        // La cortina sube desde el borde inferior del marco; la foto se asienta
+        // dentro sin cambiar la altura reservada por el CSS.
+        gsap.set(media, { clipPath: 'inset(0 0 100% 0)' });
+
+        const mediaTimeline = gsap.timeline();
+
+        mediaTimeline.to(media, {
+            clipPath: 'inset(0 0 0% 0)',
+            duration: 0.95,
+            ease: 'power3.inOut',
+            clearProps: 'clipPath',
+        }, 0);
+
+        if (activeImage) {
+            pdNeutralizeTransition(activeImage);
+            mediaTimeline.fromTo(
+                activeImage,
+                PD_MEDIA_ZOOM_FROM,
+                { ...PD_MEDIA_ZOOM_TO, clearProps: 'transform,transition' },
+                0.05,
+            );
+        }
+    }
+
+    if (thumbs.length > 0) {
+        thumbs.forEach((thumb) => pdNeutralizeTransition(thumb));
+        gsap.fromTo(
+            thumbs,
+            { autoAlpha: 0, y: 8 },
+            {
+                autoAlpha: 1,
+                y: 0,
+                duration: 0.5,
+                ease: 'power3.out',
+                stagger: 0.055,
+                delay: 0.2,
+                clearProps: 'transform,opacity,visibility,transition',
+            },
+        );
+    }
+
+    if (buyItems.length > 0) {
+        buyItems.forEach((item) => pdNeutralizeTransition(item));
+
+        // El riel de compra ya está dentro del primer viewport en escritorio y
+        // asoma en móvil; no se condiciona a ScrollTrigger para no dejar el
+        // título, el precio y el CTA ocultos si el navegador no dispara el
+        // cálculo inicial antes del primer scroll.
+        gsap.timeline({ delay: 0.12 }).fromTo(
+            buyItems,
+            PD_ENTER_FROM,
+            {
+                ...PD_ENTER_TO,
+                stagger: 0.075,
+                clearProps: 'transform,opacity,visibility,transition',
+            },
+        );
+    }
+
+    if (details) {
+        // La ficha puede quedar a la vista en el primer viewport de escritorio;
+        // en ese caso entra al cargar. Si está más abajo, se revela al scroll.
+        const detailsInView = details.getBoundingClientRect().top < window.innerHeight;
+        const detailTimeline = gsap.timeline(
+            detailsInView
+                ? { delay: 0.2 }
+                : { scrollTrigger: { trigger: details, start: 'top 84%', once: true } },
+        );
+
+        if (detailIntro) {
+            pdNeutralizeTransition(detailIntro);
+            detailTimeline.fromTo(
+                detailIntro,
+                { autoAlpha: 0, y: 18 },
+                { ...PD_ENTER_TO, y: 0, clearProps: 'transform,opacity,visibility,transition' },
+                0,
+            );
+        }
+
+        if (specCards.length > 0) {
+            specCards.forEach((card) => pdNeutralizeTransition(card));
+            detailTimeline.fromTo(
+                specCards,
+                { autoAlpha: 0, y: 18 },
+                {
+                    ...PD_ENTER_TO,
+                    y: 0,
+                    duration: 0.55,
+                    stagger: 0.06,
+                    clearProps: 'transform,opacity,visibility,transition',
+                },
+                0.08,
+            );
+        }
+    }
+
+    if (relatedCards.length > 0) {
+        relatedCards.forEach((card) => pdNeutralizeTransition(card));
+        gsap.fromTo(
+            relatedCards,
+            { autoAlpha: 0, y: 22 },
+            {
+                autoAlpha: 1,
+                y: 0,
+                duration: 0.55,
+                ease: 'power3.out',
+                stagger: 0.07,
+                scrollTrigger: {
+                    trigger: related,
+                    start: 'top 88%',
+                    once: true,
+                },
+                clearProps: 'transform,opacity,visibility,transition',
+            },
+        );
+    }
+
+    // Las fuentes y las fotos terminan de llegar después del primer paint y
+    // pueden mover la ficha: se recalculan los puntos de disparo una sola vez.
+    window.addEventListener('load', () => ScrollTrigger.refresh(), { once: true });
+}
+
+initProductDetailAnimations();

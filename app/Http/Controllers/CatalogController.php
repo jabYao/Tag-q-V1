@@ -78,7 +78,17 @@ class CatalogController extends Controller
 
         $product->load(['category', 'brand']);
 
-        return view('catalog.show', compact('product'));
+        // Vitrina corta de piezas hermanas: solo activas, sin la pieza actual y
+        // con un tope de tres para no convertir el detalle en otro catálogo.
+        $relacionados = Product::query()
+            ->with(['category', 'brand'])
+            ->where('is_active', true)
+            ->where('id', '!=', $product->getKey())
+            ->latest('id')
+            ->limit(3)
+            ->get();
+
+        return view('catalog.show', compact('product', 'relacionados'));
     }
 
     /**
