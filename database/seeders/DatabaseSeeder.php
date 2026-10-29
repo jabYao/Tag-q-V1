@@ -25,5 +25,9 @@ class DatabaseSeeder extends Seeder
                 ['name' => $category['name']],
             );
         }
+
+        // Catálogo de demostración para desarrollo local. Producción usa
+        // ProductionSeeder, que no incluye productos de ejemplo.
+        $this->call(DemoCatalogSeeder::class);
     }
 }
