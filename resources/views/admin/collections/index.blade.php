@@ -9,7 +9,7 @@
             <p class="admin-page-note">Selecciones editoriales del catálogo · solo el administrador crea y edita colecciones.</p>
 
             <div class="admin-page-actions">
-                <a class="admin-btn admin-btn--lume" href="{{ route('admin.collections.create') }}">+ Nueva colección</a>
+                <a class="admin-btn admin-btn--accent" href="{{ route('admin.collections.create') }}">+ Nueva colección</a>
             </div>
         </div>
 

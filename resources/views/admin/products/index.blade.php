@@ -79,7 +79,12 @@
                                 <span class="admin-product-slug">{{ $p->subcategoriaLabel() }}</span>
                             @endif
                         </td>
-                        <td class="admin-price admin-cell-right">$ {{ number_format($p->precio, 0, ',', '.') }}</td>
+                        <td class="admin-price admin-cell-right">
+                            @if($p->tieneDescuento())
+                                <span class="admin-product-slug line-through">$ {{ number_format($p->precio, 0, ',', '.') }}</span>
+                            @endif
+                            $ {{ number_format($p->precioFinal(), 0, ',', '.') }}
+                        </td>
                         <td>
                             @php
                                 $isOut = $p->stock <= 0;

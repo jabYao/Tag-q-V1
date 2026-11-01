@@ -485,4 +485,35 @@ class CartServiceTest extends TestCase
         $this->assertDatabaseMissing('cart_items', ['product_id' => $inactivo->id]);
         $this->assertDatabaseHas('cart_items', ['product_id' => $activo->id, 'quantity' => 1]);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Precio de oferta
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_el_carrito_cobra_el_precio_de_oferta_cuando_existe(): void
+    {
+        $producto = $this->product(['precio' => 189900, 'precio_oferta' => 132930]);
+
+        $this->cart->addToSession($producto->id, 2);
+
+        $lines = $this->cart->lines();
+
+        $this->assertSame(132930, $lines[0]['unit_price'], 'La línea usa el precio final, no el tachado');
+        $this->assertSame(265860, $lines[0]['subtotal']);
+        $this->assertSame(265860, $this->cart->total());
+    }
+
+    public function test_el_resumen_plano_del_carrito_en_bd_usa_el_precio_de_oferta(): void
+    {
+        $producto = $this->product(['precio' => 189900, 'precio_oferta' => 132930]);
+        $this->cart->addToDatabase($this->user, $producto->id, 2);
+
+        $this->assertSame([[
+            'product' => $producto->name,
+            'quantity' => 2,
+            'precio' => 132930,
+        ]], $this->cart->getDatabaseCart($this->user));
+    }
 }

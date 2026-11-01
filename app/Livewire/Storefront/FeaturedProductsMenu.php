@@ -38,7 +38,7 @@ class FeaturedProductsMenu extends Component
     private function featuredProducts(): SupportCollection
     {
         return Product::query()
-            ->with('category')
+            ->with('brand')
             ->where('is_active', true)
             ->orderByDesc('created_at')
             ->orderByDesc('id')

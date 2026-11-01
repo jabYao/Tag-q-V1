@@ -171,7 +171,7 @@
                                     <div class="flex flex-1 flex-col gap-1 p-3">
                                         <span class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-muted">{{ $product->category?->name ?? 'Sin categoría' }}</span>
                                         <h3 class="font-body text-[15px] leading-6 text-ink">{{ $product->name }}</h3>
-                                        <p class="mt-auto pt-2 font-display text-[15px] font-bold tabular-nums text-ink">$ {{ number_format($product->precio, 0, ',', '.') }} COP</p>
+                                        <p class="mt-auto pt-2 font-display text-[15px] font-bold tabular-nums text-ink">$ {{ number_format($product->precioFinal(), 0, ',', '.') }} COP</p>
                                     </div>
                                 </a>
                             </article>

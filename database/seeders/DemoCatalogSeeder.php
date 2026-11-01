@@ -153,6 +153,7 @@ class DemoCatalogSeeder extends Seeder
                 'slug' => 'loto-sport-cronografo-rojo',
                 'descripcion' => 'Reloj deportivo analógico-digital con caja reforzada en negro y rojo. Incluye cronógrafo, alarma, luz LED, doble hora y temporizador. Pensado para el uso diario y el entrenamiento.',
                 'precio' => 189900,
+                'precio_oferta' => 132930,
                 'stock' => 12,
                 'imagenes' => [
                     'https://res.cloudinary.com/dg6iut6sl/image/upload/v1792626492/tag-q/producto/cnbayntvcpzjknfpbx0y.jpg',
@@ -389,6 +390,7 @@ class DemoCatalogSeeder extends Seeder
                 'slug' => 'kairos-classic-two-tone',
                 'descripcion' => 'Reloj de acero inoxidable bicolor con esfera blanca texturizada y brazalete ajustable. Un equilibrio entre elegancia clásica y uso cotidiano.',
                 'precio' => 289900,
+                'precio_oferta' => 202930,
                 'stock' => 6,
                 'imagenes' => [
                     'https://res.cloudinary.com/dg6iut6sl/image/upload/v1792626490/tag-q/producto/tzvqlqmpyxi4idqc5fow.png',
@@ -563,6 +565,7 @@ class DemoCatalogSeeder extends Seeder
                 'slug' => 'rolex-submariner-41-gold',
                 'descripcion' => 'Reloj de buceo automático con caja y brazalete de oro amarillo, bisel cerámico negro y 300 metros de resistencia al agua. Diseñado para el agua y la aventura.',
                 'precio' => 1590000,
+                'precio_oferta' => 1192500,
                 'stock' => 4,
                 'imagenes' => [
                     'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780611034/tag-q/producto/jv9ftbjll0qdhk6pldmv.jpg',

@@ -256,6 +256,22 @@
         </div>
 
         <div class="admin-field">
+            <label class="admin-label" for="precio_oferta">Precio de oferta COP (opcional)</label>
+            <input
+                class="admin-input"
+                id="precio_oferta"
+                name="precio_oferta"
+                type="number"
+                min="1"
+                step="1"
+                value="{{ old('precio_oferta', $p?->precio_oferta) }}"
+                placeholder="Ej. 132930"
+                @disabled(! $isAdmin)
+            >
+            <p class="admin-help">Precio final con descuento; debe ser menor que el precio normal. Se muestra tachado el precio normal.</p>
+        </div>
+
+        <div class="admin-field">
             <label class="admin-label" for="stock">Stock</label>
             <input
                 class="admin-input"

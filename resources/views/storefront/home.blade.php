@@ -237,11 +237,8 @@
                     <a
                         data-home-hover
                         href="{{ route('catalog.index') }}"
-                        class="group inline-flex h-12 items-center gap-2 rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                    >
-                        Ver todos
-                        <span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">&rarr;</span>
-                    </a>
+                        class="inline-flex h-12 items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    >Ver todos</a>
                 </div>
 
                 @if($products->isEmpty())
@@ -423,18 +420,15 @@
                             <a
                                 data-home-hover
                                 href="{{ route('catalog.index') }}"
-                                class="group inline-flex h-12 items-center gap-2 rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                            >
-                                Ver todos
-                                <span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">&rarr;</span>
-                            </a>
+                                class="inline-flex h-12 items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >Ver todos</a>
 
                             <div class="flex items-center gap-2">
                                 <button
                                     type="button"
                                     data-home-favorites-prev
                                     aria-label="Favoritos anteriores"
-                                    class="inline-flex h-11 w-11 items-center justify-center rounded border border-border-soft bg-white text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    class="inline-flex h-11 w-11 items-center justify-center rounded border border-secondary bg-white text-secondary transition-colors hover:border-secondary-hover hover:text-secondary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 >
                                     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                                         <path d="M19 12H5m0 0 6-6m-6 6 6 6" />
@@ -444,7 +438,7 @@
                                     type="button"
                                     data-home-favorites-next
                                     aria-label="Más favoritos"
-                                    class="inline-flex h-11 w-11 items-center justify-center rounded border border-border-soft bg-white text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    class="inline-flex h-11 w-11 items-center justify-center rounded border border-secondary bg-white text-secondary transition-colors hover:border-secondary-hover hover:text-secondary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 >
                                     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                                         <path d="M5 12h14m0 0-6-6m6 6-6 6" />

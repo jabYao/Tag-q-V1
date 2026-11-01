@@ -334,6 +334,8 @@ class PublicCartTest extends TestCase
         Livewire::test(AddToCart::class, ['product' => $product, 'variant' => 'editorial'])
             ->assertSet('quantity', 1)
             ->assertSee('data-variant="editorial"', false)
+            ->assertSee('Disponible: 3')
+            ->assertSee('pd-buy-actions', false)
             ->assertSee('data-editorial-quantity-decrement', false)
             ->assertSee('data-editorial-quantity-increment', false)
             ->assertSee('type="number"', false)
@@ -519,12 +521,12 @@ class PublicCartTest extends TestCase
         $content = $this->get('/catalogo')
             ->assertOk()
             ->assertSeeLivewire(AddToCart::class)
-            ->assertSee('No disponible para agregar.')
             ->assertSee('Agotado')
             ->getContent();
 
         $this->assertSame(2, substr_count($content, 'data-add-to-cart='), 'Ambos productos activos muestran el estado del carrito');
-        $this->assertSame(1, substr_count($content, 'wire:submit="add"'), 'Solo el producto con stock ofrece un botón funcional');
+        $this->assertSame(1, substr_count($content, 'data-add-to-cart="false"'), 'Solo el producto sin stock queda deshabilitado');
+        $this->assertSame(1, substr_count($content, 'data-add-to-cart="true"'), 'El producto con stock conserva la acción');
         $this->assertSame(2, substr_count($content, 'data-catalog-item'), 'Las tarjetas siguen intactas');
     }
 

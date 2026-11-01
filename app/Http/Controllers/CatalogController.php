@@ -43,8 +43,8 @@ class CatalogController extends Controller
             ->when(filled($filters['material_pulso'] ?? null), fn (Builder $query) => $query->where('material_pulso', $filters['material_pulso']))
             ->when(filled($filters['cristal'] ?? null), fn (Builder $query) => $this->applyCrystalFilter($query, $filters['cristal']))
             ->when(filled($filters['movimiento'] ?? null), fn (Builder $query) => $this->applyMovementFilter($query, $filters['movimiento']))
-            ->when(filled($filters['precio_min'] ?? null), fn (Builder $query) => $query->where('precio', '>=', $filters['precio_min']))
-            ->when(filled($filters['precio_max'] ?? null), fn (Builder $query) => $query->where('precio', '<=', $filters['precio_max']))
+            ->when(filled($filters['precio_min'] ?? null), fn (Builder $query) => $query->whereRaw('COALESCE(precio_oferta, precio) >= ?', [$filters['precio_min']]))
+            ->when(filled($filters['precio_max'] ?? null), fn (Builder $query) => $query->whereRaw('COALESCE(precio_oferta, precio) <= ?', [$filters['precio_max']]))
             ->when(($filters['disponibilidad'] ?? 'todos') === 'disponible', fn (Builder $query) => $query->where('stock', '>', 0))
             ->when(($filters['disponibilidad'] ?? 'todos') === 'agotado', fn (Builder $query) => $query->where('stock', '<=', 0));
 
@@ -142,8 +142,8 @@ class CatalogController extends Controller
     private function applyOrder(Builder $query, ?string $order): void
     {
         match ($order ?? 'recientes') {
-            'precio_asc' => $query->orderBy('precio')->orderBy('id'),
-            'precio_desc' => $query->orderByDesc('precio')->orderByDesc('id'),
+            'precio_asc' => $query->orderByRaw('COALESCE(precio_oferta, precio) asc')->orderBy('id'),
+            'precio_desc' => $query->orderByRaw('COALESCE(precio_oferta, precio) desc')->orderByDesc('id'),
             'nombre_asc' => $query->orderBy('name')->orderBy('id'),
             default => $query->orderByDesc('created_at')->orderByDesc('id'),
         };

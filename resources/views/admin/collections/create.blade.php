@@ -17,7 +17,7 @@
 
         <div class="admin-form__actions">
             <a class="admin-link" href="{{ route('admin.collections.index') }}">Cancelar</a>
-            <button class="admin-btn admin-btn--dark admin-btn--save" type="submit">Crear colección</button>
+            <button class="admin-btn admin-btn--primary admin-btn--save" type="submit">Crear colección</button>
         </div>
     </form>
 @endsection

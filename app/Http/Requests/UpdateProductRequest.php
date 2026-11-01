@@ -48,6 +48,7 @@ class UpdateProductRequest extends FormRequest
 
             // Campos sensibles: el admin los edita; el empleado tiene prohibido enviarlos.
             'precio' => $esAdmin ? ['required', 'integer', 'min:0'] : ['prohibited'],
+            'precio_oferta' => $esAdmin ? ['nullable', 'integer', 'min:1', 'lt:precio'] : ['prohibited'],
             'stock' => $esAdmin ? ['required', 'integer', 'min:0'] : ['prohibited'],
 
             'case_shape' => ['required', Rule::in(array_keys(config('watch_specs.case_shapes', [])))],
@@ -73,5 +74,14 @@ class UpdateProductRequest extends FormRequest
             'imagenes_existentes' => ['nullable', 'array'],
             'imagenes_existentes.*' => ['string', 'url'],
         ], WatchSpecs::rules());
+    }
+
+    public function messages(): array
+    {
+        return [
+            'precio_oferta.lt' => 'El precio de oferta debe ser menor que el precio normal.',
+            'precio_oferta.integer' => 'El precio de oferta debe ser un número entero en COP.',
+            'precio_oferta.min' => 'El precio de oferta debe ser mayor que cero.',
+        ];
     }
 }

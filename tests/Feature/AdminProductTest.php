@@ -639,4 +639,91 @@ class AdminProductTest extends TestCase
         \Mockery::close();
         parent::tearDown();
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Precio de oferta (solo admin)
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_admin_puede_crear_un_producto_con_precio_de_oferta(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.products.store'), $this->validData([
+                'slug' => 'chronos-oferta',
+                'precio' => 189900,
+                'precio_oferta' => 132930,
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $this->assertDatabaseHas('products', [
+            'slug' => 'chronos-oferta',
+            'precio' => 189900,
+            'precio_oferta' => 132930,
+        ]);
+    }
+
+    public function test_admin_puede_actualizar_y_limpiar_el_precio_de_oferta(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'chronos-oferta',
+            'precio' => 189900,
+            'precio_oferta' => 132930,
+        ]));
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.products.update', $product), $this->validData([
+                'slug' => 'chronos-oferta',
+                'precio' => 189900,
+                'precio_oferta' => 150000,
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $this->assertSame(150000, $product->fresh()->precio_oferta);
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.products.update', $product), $this->validData([
+                'slug' => 'chronos-oferta',
+                'precio' => 189900,
+                'precio_oferta' => null,
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $this->assertNull($product->fresh()->precio_oferta);
+    }
+
+    public function test_el_precio_de_oferta_debe_ser_menor_que_el_precio_normal(): void
+    {
+        $this->actingAs($this->admin)
+            ->from(route('admin.products.create'))
+            ->post(route('admin.products.store'), $this->validData([
+                'precio' => 189900,
+                'precio_oferta' => 189900,
+            ]))
+            ->assertSessionHasErrors(['precio_oferta'])
+            ->assertRedirect(route('admin.products.create'));
+
+        $this->assertDatabaseMissing('products', ['slug' => 'chronos-test']);
+    }
+
+    public function test_empleado_no_puede_forzar_un_precio_de_oferta(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'emp-oferta',
+            'precio' => 500000,
+            'precio_oferta' => 450000,
+        ]));
+
+        $this->actingAs($this->empleado)
+            ->from(route('admin.products.edit', $product))
+            ->put(route('admin.products.update', $product), array_merge(
+                $this->validEmployeeData(['name' => 'Intento oferta', 'slug' => 'emp-oferta']),
+                ['precio_oferta' => 1000],
+            ))
+            ->assertSessionHasErrors(['precio_oferta'])
+            ->assertRedirect(route('admin.products.edit', $product));
+
+        $this->assertSame(450000, $product->fresh()->precio_oferta);
+        $this->assertSame('Chronos Test', $product->fresh()->name);
+    }
 }

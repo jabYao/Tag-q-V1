@@ -8,7 +8,7 @@
             <h1 class="admin-page-title admin-page-title--compact">USUARIOS</h1>
             <p class="admin-page-note">Equipo y clientes de la tienda · rol y acceso al panel</p>
             <div class="admin-page-actions">
-                <a class="admin-btn admin-btn--dark" href="{{ route('admin.users.create') }}">Nuevo usuario</a>
+                <a class="admin-btn admin-btn--accent" href="{{ route('admin.users.create') }}">Nuevo usuario</a>
             </div>
         </div>
 

@@ -35,8 +35,8 @@
             <a class="admin-brand" href="{{ route('admin.dashboard') }}" aria-label="Tag q, ir a la hoja de operación">
                 <svg class="admin-brand__tag" width="23" height="27" viewBox="0 0 23 27" aria-hidden="true" fill="none">
                     <path d="M3 4.6 7.6 1H21v25H7.6L3 22.4Z" stroke="currentColor" stroke-width="1.1"/>
-                    <circle cx="9" cy="6.2" r="1.5" stroke="#C8F169" stroke-width="1.1"/>
-                    <path d="M9 4.7c-1.6 0-2.1-1.7-3.8-2.1" stroke="#C8F169" stroke-width="1"/>
+                    <circle cx="9" cy="6.2" r="1.5" stroke="#F26B3A" stroke-width="1.1"/>
+                    <path d="M9 4.7c-1.6 0-2.1-1.7-3.8-2.1" stroke="#F26B3A" stroke-width="1"/>
                 </svg>
                 <span class="admin-brand__text">
                     <span class="admin-wordmark">TAG Q</span>
@@ -147,7 +147,7 @@
             </form>
 
             @if($isAdmin)
-                <a class="admin-btn admin-btn--ghost" href="{{ route('admin.products.create') }}">+ Nuevo producto</a>
+                <a class="admin-btn admin-btn--accent" href="{{ route('admin.products.create') }}">+ Nuevo producto</a>
             @endif
         </header>
 

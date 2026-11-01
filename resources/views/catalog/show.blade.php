@@ -348,18 +348,15 @@
                     </div>
 
                     <p class="pd-price">
-                        $ {{ number_format($product->precio, 0, ',', '.') }}
+                        @if($product->tieneDescuento())
+                            <span class="pd-price-before">$ {{ number_format($product->precio, 0, ',', '.') }}</span>
+                        @endif
+                        $ {{ number_format($product->precioFinal(), 0, ',', '.') }}
                         <small>COP</small>
                     </p>
 
                     <p class="pd-pricebox-note">Tarjeta · PSE · Nequi · Contraentrega</p>
                 </div>
-
-                @if($disponible)
-                    <p class="pd-stock"><i aria-hidden="true"></i>Disponible: {{ $product->stock }}<span>Máx. {{ $product->stock }} por pedido</span></p>
-                @else
-                    <p class="pd-stock pd-stock--out"><i aria-hidden="true"></i>Agotado</p>
-                @endif
 
                 <div class="pd-purchase">
                     @livewire('cart.add-to-cart', ['product' => $product, 'variant' => 'editorial'], key('detail-'.$product->id))
@@ -506,7 +503,7 @@
                             <span class="pd-related-body">
                                 <span class="pd-related-meta">
                                     <span>{{ $relacionadoEtiqueta }}</span>
-                                    <strong>$ {{ number_format($relacionado->precio, 0, ',', '.') }} COP</strong>
+                                    <strong>$ {{ number_format($relacionado->precioFinal(), 0, ',', '.') }} COP</strong>
                                 </span>
 
                                 <span class="pd-related-body-title">{{ $relacionado->name }}</span>

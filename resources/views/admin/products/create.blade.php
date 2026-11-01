@@ -17,7 +17,7 @@
 
         <div class="admin-form__actions">
             <a class="admin-link" href="{{ route('admin.products.index') }}">Cancelar</a>
-            <button class="admin-btn admin-btn--dark admin-btn--save" type="submit">Crear producto</button>
+            <button class="admin-btn admin-btn--primary admin-btn--save" type="submit">Crear producto</button>
         </div>
     </form>
 @endsection

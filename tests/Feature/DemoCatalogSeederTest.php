@@ -27,6 +27,22 @@ class DemoCatalogSeederTest extends TestCase
         $this->assertSame(8, Product::where('is_active', true)->count());
     }
 
+    public function test_incluye_productos_con_descuento_real(): void
+    {
+        $this->seed(DemoCatalogSeeder::class);
+
+        $ofertas = Product::whereNotNull('precio_oferta')->get();
+
+        $this->assertGreaterThanOrEqual(3, $ofertas->count(), 'El catálogo demo muestra varios productos en oferta');
+
+        foreach ($ofertas as $product) {
+            $this->assertGreaterThan(0, $product->precio_oferta);
+            $this->assertLessThan($product->precio, $product->precio_oferta);
+            $this->assertTrue($product->tieneDescuento());
+            $this->assertNotNull($product->descuentoPorcentaje());
+        }
+    }
+
     public function test_cada_producto_tiene_fotos_suficientes_y_specs_completas(): void
     {
         $this->seed(DemoCatalogSeeder::class);

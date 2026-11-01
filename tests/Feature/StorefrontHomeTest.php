@@ -835,7 +835,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringContainsString('data-variant="compact"', $available);
         $this->assertStringContainsString('data-add-to-cart="true"', $available);
         $this->assertStringContainsString('aria-label="Agregar Pulso Compacto al carrito"', $available);
-        $this->assertStringContainsString('Agregar a la bolsa', $available);
+        $this->assertStringContainsString('Agregar al carrito', $available);
         $this->assertStringContainsString('bg-accent', $available);
         $this->assertStringContainsString('w-full', $available);
         $this->assertSame(1, substr_count($available, '<button'), 'La tarjeta ofrece un único botón');
@@ -928,7 +928,7 @@ class StorefrontHomeTest extends TestCase
             'cristal' => 'zafiro',
             'water_resistance_atm' => 5,
             'diameter_mm' => 40.5,
-            'imagenes' => ['https://cdn.example.com/pulso-editorial.jpg'],
+            'imagenes' => ['https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/pulso-editorial.jpg'],
         ]);
 
         $response = $this->get('/')->assertOk();
@@ -937,34 +937,42 @@ class StorefrontHomeTest extends TestCase
             ->assertSee('data-home-card-media', false)
             ->assertSee('data-home-card-price', false)
             ->assertSee('data-home-card-stock', false)
-            ->assertSee('data-home-card-specs', false)
+            ->assertSee('data-home-card-reference', false)
             ->assertSee('data-home-card-action', false);
 
         $card = $this->cardHtml($response->getContent(), 'Pulso Editorial');
 
-        // Solo datos reales del producto: nombre, marca, referencia, ficha
-        // técnica, precio COP e insignia de estado.
+        // Solo datos reales del producto: nombre, referencia, precio COP e
+        // insignia de estado. El kicker recupera marca y movimiento con el
+        // formato nuevo de la tarjeta.
         $this->assertStringContainsString('Pulso Editorial', $card);
-        $this->assertStringContainsString('Marca Existente', $card);
         $this->assertStringContainsString('REF. TQ-4410', $card);
-        $this->assertStringContainsString('https://cdn.example.com/pulso-editorial.jpg', $card);
+        $this->assertStringContainsString('https://res.cloudinary.com/dg6iut6sl/image/upload/e_trim,f_webp,q_auto/v1/tag-q/producto/pulso-editorial.jpg', $card);
         $this->assertStringContainsString('$ 1.290.000 COP', $card);
+        $this->assertStringContainsString('Marca Existente · Automático', $card);
+        $this->assertStringNotContainsString('data-home-card-diameter', $card);
 
-        // Ficha corta con valores reales del reloj, sin etiquetas de grilla.
-        foreach (['Automático', 'Zafiro', '5 ATM · 50 m'] as $value) {
-            $this->assertStringContainsString($value, $card, "La ficha muestra el valor real {$value}");
+        // La referencia reemplaza las medidas en la misma línea y hereda su
+        // color apagado; las medidas reales no se imprimen cuando hay
+        // referencia.
+        $this->assertMatchesRegularExpression('/data-home-card-reference[^>]*text-ink-muted/', $card);
+        foreach (['40.5 mm', '5 ATM · 50 m'] as $value) {
+            $this->assertStringNotContainsString($value, $card, "La referencia reemplaza la medida {$value}");
         }
 
-        // El diámetro real va sobre la foto, como en la referencia del dueño.
-        $this->assertStringContainsString('data-home-card-diameter', $card);
-        $this->assertStringContainsString('40,5 mm', $card);
+        // La insignia `Nuevo` usa el naranja `secondary` de la referencia.
+        $this->assertMatchesRegularExpression('/data-home-card-stock[^>]*border-secondary/', $card);
+        $this->assertMatchesRegularExpression('/data-home-card-stock[^>]*text-secondary/', $card);
+        $this->assertStringContainsString('bg-secondary', $card);
 
-        // La foto es vertical (3:4), llena el ancho útil de la tarjeta y se
-        // recorta con `object-cover`; no lleva borde interno.
-        $this->assertStringContainsString('aspect-[3/4]', $card);
-        $this->assertStringContainsString('object-cover', $card);
+        // La foto es cuadrada (1:1) y se muestra completa: el recorte automático
+        // de Cloudinary quita el margen blanco y `object-contain` garantiza que
+        // la pieza nunca se corte. No lleva borde interno ni alto fijo.
+        $this->assertStringContainsString('aspect-square', $card);
+        $this->assertStringContainsString('object-contain', $card);
         $this->assertStringNotContainsString('h-52', $card);
-        $this->assertStringNotContainsString('object-contain', $card);
+        $this->assertStringNotContainsString('aspect-[3/4]', $card);
+        $this->assertStringNotContainsString('object-cover', $card);
         $this->assertStringNotContainsString('border-border-soft', $card);
 
         // Marco negro delgado (1 px) y un único botón naranja a lo ancho.
@@ -982,7 +990,30 @@ class StorefrontHomeTest extends TestCase
         $response->assertDontSee('Disponible: 2');
     }
 
-    public function test_las_tarjetas_del_home_muestran_la_descripcion_real_del_producto(): void
+    public function test_la_tarjeta_sin_referencia_muestra_las_medidas_reales_en_su_lugar(): void
+    {
+        $category = $this->category();
+
+        $this->product($category, [
+            'name' => 'Pulso Sin Referencia',
+            'slug' => 'pulso-sin-referencia',
+            'reference' => null,
+            'diameter_mm' => 38,
+            'water_resistance_atm' => 5,
+        ]);
+
+        $card = $this->cardHtml($this->get('/')->assertOk()->getContent(), 'Pulso Sin Referencia');
+
+        // Sin referencia, la línea técnica conserva las medidas reales con el
+        // mismo color apagado y no se inventa una referencia.
+        $this->assertStringNotContainsString('data-home-card-reference', $card);
+        $this->assertStringNotContainsString('REF.', $card);
+        $this->assertMatchesRegularExpression('/data-home-card-specs[^>]*text-ink-muted/', $card);
+        $this->assertStringContainsString('38 mm', $card);
+        $this->assertStringContainsString('5 ATM · 50 m', $card);
+    }
+
+    public function test_las_tarjetas_del_home_ya_no_muestran_la_descripcion_del_producto(): void
     {
         $category = $this->category();
 
@@ -994,9 +1025,119 @@ class StorefrontHomeTest extends TestCase
 
         $card = $this->cardHtml($this->get('/')->assertOk()->getContent(), 'Pulso Descrito');
 
-        $this->assertStringContainsString('data-home-card-description', $card);
-        $this->assertStringContainsString('Reloj automático con esfera azul y correa de cuero.', $card);
-        $this->assertStringContainsString('line-clamp-2', $card);
+        // El formato nuevo de la tarjeta cierra en precio + botón: la
+        // descripción ya no se imprime.
+        $this->assertStringNotContainsString('data-home-card-description', $card);
+        $this->assertStringNotContainsString('Reloj automático con esfera azul y correa de cuero.', $card);
+    }
+
+    public function test_las_tarjetas_del_home_muestran_el_descuento_real_con_precio_tachado_e_insignia_primaria(): void
+    {
+        $category = $this->category();
+
+        $this->product($category, [
+            'name' => 'Pulso En Oferta',
+            'slug' => 'pulso-en-oferta',
+            'precio' => 189900,
+            'precio_oferta' => 132930,
+            'stock' => 2,
+        ]);
+
+        $this->product($category, [
+            'name' => 'Pulso Precio Pleno',
+            'slug' => 'pulso-precio-pleno',
+            'precio' => 250000,
+            'stock' => 2,
+        ]);
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $card = $this->cardHtml($html, 'Pulso En Oferta');
+
+        // La oferta es real: precio normal tachado y precio final (el cobrado).
+        $this->assertStringContainsString('data-home-card-price-before', $card);
+        $this->assertStringContainsString('line-through', $card);
+        $this->assertStringContainsString('$ 189.900', $card);
+        $this->assertStringContainsString('$ 132.930 COP', $card);
+
+        // Insignia con el formato pedido (sin paréntesis, en negrita) y el color
+        // primario de la marca.
+        $this->assertStringContainsString('data-home-card-discount', $card);
+        $this->assertStringContainsString('30% OFF', $card);
+        $this->assertStringNotContainsString('(30% OFF)', $card);
+        $this->assertMatchesRegularExpression(
+            '/data-home-card-discount[^>]*bg-primary/',
+            $card,
+            'La insignia de descuento usa el fondo primario',
+        );
+        $this->assertMatchesRegularExpression(
+            '/data-home-card-discount[^>]*font-bold/',
+            $card,
+            'La insignia de descuento va en negrita',
+        );
+
+        // `Nuevo`: fondo blanco, letra y borde en el naranja `secondary` de la
+        // referencia.
+        $document = $this->documentOf($card);
+        $xpath = new \DOMXPath($document);
+        $stock = $xpath->query('//*[@data-home-card-stock]')->item(0);
+        $this->assertNotNull($stock);
+        $this->assertStringContainsString('Nuevo', $stock->textContent);
+        $stockClasses = $stock->getAttribute('class');
+        $this->assertStringContainsString('bg-white', $stockClasses);
+        $this->assertStringContainsString('text-secondary', $stockClasses);
+        $this->assertStringContainsString('border-secondary', $stockClasses);
+        $this->assertStringNotContainsString('bg-secondary', $stockClasses);
+        $this->assertStringNotContainsString('text-primary', $stockClasses);
+        $this->assertStringNotContainsString('border-primary', $stockClasses);
+
+        // La oferta queda a la derecha: mismo contenedor flex y último hijo.
+        $discount = $xpath->query('//*[@data-home-card-discount]')->item(0);
+        $this->assertNotNull($discount);
+        $overlay = $stock->parentNode;
+        $this->assertSame($overlay, $discount->parentNode);
+        $this->assertStringContainsString('justify-between', $overlay->getAttribute('class'));
+
+        $last = null;
+        foreach ($overlay->childNodes as $child) {
+            if ($child instanceof \DOMElement) {
+                $last = $child;
+            }
+        }
+        $this->assertSame($discount, $last, 'La insignia de descuento es el último chip de la fila');
+
+        // Sin oferta no se anuncia descuento ni se tacha ningún precio.
+        $pleno = $this->cardHtml($html, 'Pulso Precio Pleno');
+        $this->assertStringNotContainsString('data-home-card-discount', $pleno);
+        $this->assertStringNotContainsString('data-home-card-price-before', $pleno);
+        $this->assertStringContainsString('$ 250.000 COP', $pleno);
+    }
+
+    public function test_el_boton_de_la_bolsa_del_home_cierra_la_tarjeta_a_lo_ancho(): void
+    {
+        $this->product($this->category(), [
+            'name' => 'Pulso Hover',
+            'slug' => 'pulso-hover',
+            'stock' => 2,
+        ]);
+
+        $card = $this->cardHtml($this->get('/')->assertOk()->getContent(), 'Pulso Hover');
+        $xpath = new \DOMXPath($this->documentOf($card));
+
+        // La acción vive en el cuerpo, debajo del precio, y está siempre
+        // visible: no depende del hover como en el formato anterior.
+        $action = $xpath->query('//*[@data-home-card-action]')->item(0);
+        $this->assertNotNull($action, 'La tarjeta declara el contenedor de la acción');
+        $this->assertSame(0, $xpath->query('//*[@data-home-card-media]//*[@data-home-card-action]')->length, 'El botón ya no va sobre la foto');
+
+        $classes = $action->getAttribute('class');
+        $this->assertStringNotContainsString('opacity-0', $classes);
+        $this->assertStringNotContainsString('absolute', $classes);
+        $this->assertStringContainsString('relative', $classes);
+
+        // El botón sigue siendo único y a lo ancho, con su nombre accesible.
+        $this->assertSame(1, substr_count($card, '<button'));
+        $this->assertStringContainsString('aria-label="Agregar Pulso Hover al carrito"', $card);
+        $this->assertStringContainsString('w-full', $card);
     }
 
     public function test_el_home_sin_productos_conserva_las_secciones_sin_tarjetas_inventadas(): void
@@ -2061,6 +2202,21 @@ class StorefrontHomeTest extends TestCase
             );
         }
 
+        // Los dos botones del carrusel: fondo blanco, borde y flecha en el
+        // naranja secundario de la marca.
+        foreach (['data-home-favorites-prev', 'data-home-favorites-next'] as $control) {
+            $boton = $xpath->query('.//*[@'.$control.']', $section)->item(0);
+            $this->assertNotNull($boton, "El botón {$control} existe");
+
+            $clases = $boton->getAttribute('class');
+            $this->assertStringContainsString('bg-white', $clases, "{$control} mantiene el fondo blanco");
+            $this->assertStringContainsString('border-secondary', $clases, "{$control} pinta el borde secundario");
+            $this->assertStringContainsString('text-secondary', $clases, "{$control} pinta la flecha secundaria");
+            $this->assertStringContainsString('hover:border-secondary-hover', $clases);
+            $this->assertStringContainsString('hover:text-secondary-hover', $clases);
+            $this->assertStringNotContainsString('bg-secondary', $clases);
+        }
+
         $this->assertSame(8, $xpath->query('.//*[@data-favorite-card]', $section)->length);
         $this->assertSame(8, $xpath->query('.//*[contains(concat(" ", normalize-space(@class), " "), " swiper-slide ")]', $section)->length);
         $this->assertSame(8, substr_count($document->saveHTML($section), 'data-variant="compact"'), 'Cada favorito conserva su botón de bolsa');
@@ -2168,5 +2324,39 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringContainsString('prefersReducedMotion() ? 0 : 300', $js);
         $this->assertStringContainsString('[data-home-favorites-pagination]', $css);
         $this->assertStringContainsString('swiper-button-disabled', $css);
+    }
+
+    public function test_los_botones_ver_todos_del_home_van_sin_flecha(): void
+    {
+        $this->product($this->category(), [
+            'name' => 'Pulso Sin Flecha',
+            'slug' => 'pulso-sin-flecha',
+            'stock' => 2,
+        ]);
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $document = $this->documentOf($html);
+        $xpath = new \DOMXPath($document);
+
+        $verTodos = [];
+
+        foreach ($xpath->query('//a[@data-home-hover]') as $enlace) {
+            if (trim($enlace->textContent) === 'Ver todos') {
+                $verTodos[] = $enlace;
+            }
+        }
+
+        $this->assertNotEmpty($verTodos, 'El home conserva el botón Ver todos');
+
+        foreach ($verTodos as $enlace) {
+            $this->assertSame(
+                'Ver todos',
+                trim($enlace->textContent),
+                'El botón Ver todos no lleva flecha ni texto extra',
+            );
+        }
+
+        $this->assertStringNotContainsString('→', $html, 'El home no imprime flechas en los botones');
+        $this->assertStringNotContainsString('&rarr;', $html);
     }
 }

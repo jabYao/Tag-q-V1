@@ -138,7 +138,7 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
             ]);
     }
 
-    public function test_el_menu_muestra_nombre_precio_categoria_imagen_y_enlace_al_detalle(): void
+    public function test_el_menu_muestra_nombre_marca_precio_imagen_y_enlace_al_detalle(): void
     {
         $category = $this->category('Dama', 'dama-mega');
         $imagen = 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418323/tag-q/hero/tgcquxabd0kcnu1gpbas.jpg';
@@ -147,6 +147,8 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
             'name' => 'Chronos Mega',
             'slug' => 'chronos-mega',
             'precio' => 1290000,
+            'marca' => 'Tag Heuer',
+            'movimiento' => 'automatico',
             'imagenes' => [$imagen],
         ]);
 
@@ -158,9 +160,48 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
             ->assertSee('Chronos Mega')
             ->assertSee('1.290.000')
             ->assertSee('COP')
-            ->assertSee('Dama')
-            ->assertSee(CloudinaryUrl::webp($imagen))
+            ->assertSee('Tag Heuer · Automático')
+            ->assertDontSee('Dama')
+            ->assertSee(CloudinaryUrl::webpCard($imagen))
             ->assertSee('href="'.route('catalog.show', $product).'"', false);
+    }
+
+    public function test_el_menu_usa_el_mismo_formato_de_tarjeta_que_el_home_y_el_catalogo(): void
+    {
+        $imagen = 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418323/tag-q/hero/tgcquxabd0kcnu1gpbas.jpg';
+
+        $this->product($this->category('Dama', 'dama-mega'), [
+            'name' => 'Submariner Gold',
+            'slug' => 'submariner-gold-menu',
+            'precio' => 1590000,
+            'precio_oferta' => 1113000,
+            'stock' => 3,
+            'marca' => 'Rolex',
+            'movimiento' => 'automatico',
+            'reference' => 'RX-SUB-41',
+            'diameter_mm' => 41,
+            'water_resistance_atm' => 30,
+            'imagenes' => [$imagen],
+        ]);
+
+        $html = Livewire::test(FeaturedProductsMenu::class)->html();
+
+        // Mismo formato que el home y el catálogo: estado a la izquierda,
+        // descuento real a la derecha, kicker, nombre, referencia en lugar de
+        // las medidas, precio tachado y botón naranja compacto a lo ancho.
+        $this->assertStringContainsString('data-product-card', $html);
+        $this->assertStringContainsString('data-home-card-stock', $html);
+        $this->assertStringContainsString('data-home-card-discount', $html);
+        $this->assertStringContainsString('30% OFF', $html);
+        $this->assertStringContainsString('Rolex · Automático', $html);
+        $this->assertStringContainsString('REF. RX-SUB-41', $html);
+        $this->assertStringNotContainsString('41 mm', $html);
+        $this->assertStringNotContainsString('30 ATM', $html);
+        $this->assertStringContainsString('$ 1.590.000', $html);
+        $this->assertStringContainsString('$ 1.113.000 COP', $html);
+        $this->assertStringContainsString('data-variant="compact"', $html);
+        $this->assertStringContainsString('Agregar al carrito', $html);
+        $this->assertStringNotContainsString('type="number"', $html);
     }
 
     public function test_el_menu_conserva_un_estado_vacio_honesto_sin_productos(): void

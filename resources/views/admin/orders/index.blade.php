@@ -59,7 +59,7 @@
         </div>
 
         <div class="admin-filter__actions">
-            <button class="admin-btn admin-btn--dark" type="submit">Filtrar</button>
+            <button class="admin-btn admin-btn--primary" type="submit">Filtrar</button>
             @if($hasFilter)
                 <a class="admin-btn" href="{{ route('admin.orders.index') }}">Limpiar</a>
             @endif

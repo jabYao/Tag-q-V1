@@ -9,7 +9,7 @@
             <p class="admin-page-note">Fabricantes del catálogo · solo el administrador crea, desactiva y elimina marcas.</p>
 
             <div class="admin-page-actions">
-                <a class="admin-btn admin-btn--lume" href="{{ route('admin.brands.create') }}">+ Nueva marca</a>
+                <a class="admin-btn admin-btn--accent" href="{{ route('admin.brands.create') }}">+ Nueva marca</a>
             </div>
         </div>
 

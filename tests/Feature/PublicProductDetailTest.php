@@ -93,6 +93,22 @@ class PublicProductDetailTest extends TestCase
             ->assertDontSee('data-gallery-single', false);
     }
 
+    public function test_detalle_muestra_el_precio_de_oferta_y_tacha_el_normal(): void
+    {
+        $this->product([
+            'name' => 'Heritage Oferta',
+            'slug' => 'heritage-oferta-detalle',
+            'precio' => 980000,
+            'precio_oferta' => 686000,
+        ]);
+
+        $response = $this->get('/catalogo/heritage-oferta-detalle')->assertOk();
+
+        $response->assertSee('686.000')
+            ->assertSee('980.000')
+            ->assertSee('pd-price-before', false);
+    }
+
     public function test_detalle_renderiza_marca_referencia_y_especificaciones_estructuradas(): void
     {
         $brand = Brand::create([
@@ -472,6 +488,137 @@ class PublicProductDetailTest extends TestCase
 
         $this->assertStringContainsString('@media (prefers-reduced-motion: reduce)', $css);
         $this->assertStringContainsString('.pd-main-image.is-active', $css);
+    }
+
+    public function test_la_foto_principal_igual_a_la_altura_de_la_informacion_en_escritorio(): void
+    {
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertNotFalse($css, 'Debe existir resources/css/app.css');
+
+        // La galería deja de ser una caja para que marco, miniaturas y resumen
+        // técnico compitan en el mismo grid que la columna de compra.
+        $this->assertMatchesRegularExpression(
+            '/\[data-product-detail\]\s+\.pd-gallery\s*\{[^}]*display:\s*contents;/s',
+            $css,
+            'En escritorio la galería cede sus hijos al grid del hero',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-product-detail\]\s+\.pd-frame\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1;/s',
+            $css,
+            'El marco de la foto ocupa la fila 1, columna 1',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-product-detail\]\s+\.pd-buy\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*1;/s',
+            $css,
+            'La información ocupa la fila 1, columna 2, junto a la foto',
+        );
+
+        foreach (['.pd-rail', '.pd-techstrip'] as $selector) {
+            $this->assertMatchesRegularExpression(
+                '/\[data-product-detail\]\s+'.preg_quote($selector, '/').'\s*\{[^}]*grid-column:\s*1;/s',
+                $css,
+                "{$selector} cae debajo de la foto en la columna 1",
+            );
+        }
+
+        // En tablet y móvil se recupera el flujo vertical original.
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*1119px\)\s*\{.*?\[data-product-detail\]\s+\.pd-gallery\s*\{[^}]*display:\s*flex;/s',
+            $css,
+            'En tablet y móvil la galería vuelve al flujo vertical',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*1119px\)\s*\{.*?\[data-product-detail\]\s+\.pd-buy\s*\{[^}]*grid-column:\s*auto;[^}]*grid-row:\s*auto;/s',
+            $css,
+            'En tablet y móvil la compra vuelve al flujo normal del grid',
+        );
+    }
+
+    public function test_las_especificaciones_se_empaquetan_segun_su_altura(): void
+    {
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertNotFalse($css, 'Debe existir resources/css/app.css');
+
+        $this->assertSame(
+            1,
+            preg_match('/\[data-product-detail\]\s+\.pd-spec-grid\s*\{([^}]*)\}/s', $css, $grid),
+            'Debe existir la regla base del grid de especificaciones',
+        );
+
+        // Columnas CSS en lugar de grid por filas: las tarjetas cortas ya no
+        // quedan atrapadas bajo la tarjeta más alta de su fila.
+        $this->assertMatchesRegularExpression(
+            '/(?<![-\w])columns:\s*3;/',
+            $grid[1],
+            'Las especificaciones se reparten en tres columnas por altura',
+        );
+
+        $this->assertStringNotContainsString(
+            'grid-template-columns',
+            $grid[1],
+            'El grid por filas ya no debe fijar columnas rígidas',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-product-detail\]\s+\.pd-spec-card\s*\{[^}]*break-inside:\s*avoid;/s',
+            $css,
+            'Cada tarjeta evita partirse entre columnas',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*1119px\)\s*\{.*?\[data-product-detail\]\s+\.pd-spec-grid\s*\{[^}]*?(?<![-\w])columns:\s*2;/s',
+            $css,
+            'En tablet las especificaciones usan dos columnas',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*640px\)\s*\{.*?\[data-product-detail\]\s+\.pd-spec-grid\s*\{[^}]*?(?<![-\w])columns:\s*1;/s',
+            $css,
+            'En móvil las especificaciones usan una sola columna',
+        );
+    }
+
+    public function test_el_bloque_de_compra_muestra_el_stock_una_vez_y_compacta_las_acciones(): void
+    {
+        $product = $this->product([
+            'name' => 'Compra Compacta',
+            'slug' => 'compra-compacta',
+            'stock' => 5,
+        ]);
+
+        $html = $this->get(route('catalog.show', $product))
+            ->assertOk()
+            ->assertSee('Disponible: 5')
+            ->assertDontSee('Máx. 5 por pedido')
+            ->assertDontSee('Máx. 5')
+            ->getContent();
+
+        $this->assertSame(
+            1,
+            substr_count($html, 'Disponible: 5'),
+            'El stock se muestra una sola vez en el bloque de compra',
+        );
+
+        $css = file_get_contents(base_path('resources/css/app.css'));
+
+        $this->assertNotFalse($css, 'Debe existir resources/css/app.css');
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-product-detail\]\s+\.pd-buy-actions\s*\{[^}]*grid-template-columns:\s*150px\s+minmax\(0,\s*1fr\);/s',
+            $css,
+            'El stepper y el CTA comparten fila en escritorio',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*640px\)\s*\{.*?\[data-product-detail\]\s+\.pd-buy-actions\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s',
+            $css,
+            'En móvil el stepper y el CTA se apilan',
+        );
     }
 
     private function documentOf(string $html): \DOMDocument

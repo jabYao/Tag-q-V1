@@ -14,6 +14,7 @@ class PublicCatalogTest extends TestCase
     use RefreshDatabase;
 
     private Category $category;
+
     private int $sequence = 0;
 
     protected function setUp(): void
@@ -47,6 +48,25 @@ class PublicCatalogTest extends TestCase
         $this->get('/catalogo')
             ->assertOk()
             ->assertSee('Chronos Acero');
+    }
+
+    public function test_el_encabezado_del_catalogo_va_sin_eyebrow_intro_ni_contador_de_vitrina(): void
+    {
+        $this->product(['name' => 'Chronos Acero', 'slug' => 'chronos-acero']);
+
+        $response = $this->get('/catalogo')->assertOk();
+
+        $response
+            ->assertSee('Catálogo')
+            ->assertDontSee('Selección Tag Q')
+            ->assertDontSee('Relojes seleccionados para acompañar tu día.')
+            ->assertDontSee('En vitrina');
+
+        $html = $response->getContent();
+
+        foreach (['catalog-eyebrow', 'catalog-intro', 'catalog-metric'] as $clase) {
+            $this->assertStringNotContainsString($clase, $html, "El encabezado ya no imprime {$clase}");
+        }
     }
 
     public function test_catalogo_excluye_productos_inactivos(): void
@@ -122,8 +142,67 @@ class PublicCatalogTest extends TestCase
             ->assertSee('Tag Heuer · Automático')
             ->assertSee('Nuevo')
             ->assertSee('980.000')
-            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage.jpg', false)
+            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/e_trim,f_webp,q_auto/v1/tag-q/producto/heritage.jpg', false)
             ->assertDontSee('Disponible: 5');
+    }
+
+    public function test_la_tarjeta_del_catalogo_usa_el_formato_de_la_referencia(): void
+    {
+        $this->product([
+            'name' => 'Submariner Gold',
+            'slug' => 'submariner-gold',
+            'precio' => 1590000,
+            'precio_oferta' => 1113000,
+            'stock' => 3,
+            'marca' => 'Rolex',
+            'movimiento' => 'Automático',
+            'reference' => 'RX-SUB-41',
+            'diameter_mm' => 41,
+            'water_resistance_atm' => 30,
+        ]);
+
+        $html = $this->get('/catalogo')->assertOk()->getContent();
+        $document = new \DOMDocument;
+        libxml_use_internal_errors(true);
+        $document->loadHTML('<?xml encoding="utf-8" ?>'.$html);
+        libxml_clear_errors();
+
+        $xpath = new \DOMXPath($document);
+        $card = $xpath->query('//*[@data-catalog-item][@data-product-name="Submariner Gold"]')->item(0);
+        $this->assertNotNull($card);
+
+        // Kicker teal con marca y movimiento.
+        $kicker = $xpath->query('.//*[@data-product-card-kicker]', $card)->item(0);
+        $this->assertNotNull($kicker);
+        $this->assertSame('Rolex · Automático', trim($kicker->textContent));
+
+        // La referencia reemplaza las medidas en la línea técnica del cuerpo,
+        // ya no sobre la foto.
+        $meta = $xpath->query('.//*[@data-home-card-meta]', $card)->item(0);
+        $this->assertNotNull($meta, 'La referencia vive en el cuerpo de la tarjeta');
+
+        $ref = $xpath->query('.//*[@data-product-card-reference]', $card)->item(0);
+        $this->assertNotNull($ref);
+        $this->assertSame('REF. RX-SUB-41', trim($ref->textContent));
+        $this->assertSame(0, $xpath->query('.//*[@data-home-card-media]//*[@data-product-card-reference]', $card)->length);
+        $this->assertStringContainsString('text-ink-muted', $ref->getAttribute('class'));
+        $this->assertSame(0, $xpath->query('.//*[@data-product-card-specs]', $card)->length, 'La referencia reemplaza las medidas');
+
+        // Descuento real en la esquina opuesta al estado.
+        $discount = $xpath->query('.//*[@data-product-card-discount]', $card)->item(0);
+        $this->assertNotNull($discount, 'La tarjeta anuncia el descuento real');
+        $this->assertSame('30% OFF', trim($discount->textContent));
+
+        // Precio normal tachado y final en naranja.
+        $before = $xpath->query('.//*[@data-product-card-price-before]', $card)->item(0);
+        $this->assertNotNull($before);
+        $this->assertSame('$ 1.590.000', trim($before->textContent));
+        $this->assertStringContainsString('$ 1.113.000', $card->textContent);
+
+        // Acción: botón naranja a lo ancho, sin selector de cantidad.
+        $this->assertStringContainsString('data-variant="compact"', $document->saveHTML($card));
+        $this->assertStringNotContainsString('type="number"', $document->saveHTML($card));
+        $this->assertStringContainsString('Agregar al carrito', $card->textContent);
     }
 
     public function test_catalogo_usa_imagen_de_fallback_sin_imagenes(): void
@@ -441,6 +520,34 @@ class PublicCatalogTest extends TestCase
             ->assertSee('Medio')
             ->assertDontSee('Economico')
             ->assertDontSee('Premium');
+    }
+
+    public function test_catalogo_muestra_y_usa_el_precio_de_oferta_vigente(): void
+    {
+        $this->product([
+            'name' => 'Heritage Oferta',
+            'slug' => 'heritage-oferta',
+            'precio' => 980000,
+            'precio_oferta' => 686000,
+        ]);
+        $this->product(['name' => 'Precio Pleno', 'slug' => 'precio-pleno', 'precio' => 750000]);
+
+        $response = $this->get('/catalogo')->assertOk();
+
+        // La tarjeta anuncia el precio final y tacha el normal.
+        $response->assertSee('686.000')
+            ->assertSee('980.000')
+            ->assertSee('data-product-card-price-before', false);
+
+        // El filtro usa el precio que se cobra, no el tachado.
+        $this->get('/catalogo?precio_max=700000')
+            ->assertOk()
+            ->assertSee('Heritage Oferta')
+            ->assertDontSee('Precio Pleno');
+
+        // El orden también usa el precio final: 686.000 antes que 750.000.
+        $asc = $this->orderedNames($this->get('/catalogo?orden=precio_asc')->assertOk()->getContent());
+        $this->assertSame(['Heritage Oferta', 'Precio Pleno'], $asc);
     }
 
     public function test_catalogo_filtra_por_disponibilidad_disponible_y_agotado(): void

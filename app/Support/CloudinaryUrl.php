@@ -8,9 +8,13 @@ namespace App\Support;
  *
  * The transformation is applied only to the URL rendered in an `<img src>`:
  * the value stored in the database (and used to retain or delete the original
- * asset) is never touched. Non-Cloudinary URLs and URLs that already carry the
- * `f_webp`/`q_auto` components are returned unchanged, so the helper is safe to
- * call more than once.
+ * asset) is never touched. Non-Cloudinary URLs are returned unchanged, and
+ * both helpers are idempotent: calling them again over an already transformed
+ * URL does not duplicate components.
+ *
+ * {@see webp()} is the general-purpose variant. {@see webpCard()} adds
+ * Cloudinary's automatic trim (`e_trim`) for product-card thumbnails, where the
+ * white margin of the studio photo is wasted space.
  */
 final class CloudinaryUrl
 {
@@ -23,12 +27,47 @@ final class CloudinaryUrl
     private const QUALITY_COMPONENT = 'q_auto';
 
     /**
+     * Cloudinary's automatic trim: removes the uniform border around the
+     * subject. Product photography is delivered as a square canvas with a wide
+     * white margin, so the trim is what lets the watch fill a square card
+     * thumbnail without stretching or cropping the piece.
+     */
+    private const TRIM_COMPONENT = 'e_trim';
+
+    /**
      * Transform a Cloudinary image delivery URL to WebP + automatic quality.
      *
      * Non-Cloudinary URLs and any value that is not a Cloudinary image
      * delivery URL are returned unchanged.
      */
     public static function webp(?string $url): ?string
+    {
+        return self::transform($url, [
+            self::FORMAT_COMPONENT,
+            self::QUALITY_COMPONENT,
+        ]);
+    }
+
+    /**
+     * Same as {@see webp()} plus Cloudinary's automatic trim.
+     *
+     * Only for product cards: the trim discards the empty margin of the studio
+     * photo so the piece fills the square thumbnail. Galleries and detail views
+     * keep calling {@see webp()} because there the full canvas matters.
+     */
+    public static function webpCard(?string $url): ?string
+    {
+        return self::transform($url, [
+            self::TRIM_COMPONENT,
+            self::FORMAT_COMPONENT,
+            self::QUALITY_COMPONENT,
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $required  Transformation components the URL must carry.
+     */
+    private static function transform(?string $url, array $required): ?string
     {
         if ($url === null || $url === '') {
             return $url;
@@ -58,12 +97,7 @@ final class CloudinaryUrl
             && preg_match('/^v\d+$/', $second) === 1;
 
         if (! $hasTransformations) {
-            return substr_replace(
-                $url,
-                self::FORMAT_COMPONENT.','.self::QUALITY_COMPONENT.'/',
-                $offset,
-                0,
-            );
+            return substr_replace($url, implode(',', $required).'/', $offset, 0);
         }
 
         $components = array_values(array_filter(
@@ -71,20 +105,21 @@ final class CloudinaryUrl
             fn (string $component): bool => $component !== '',
         ));
 
-        if (in_array(self::FORMAT_COMPONENT, $components, true)
-            && in_array(self::QUALITY_COMPONENT, $components, true)) {
+        $missing = array_values(array_filter(
+            $required,
+            fn (string $component): bool => ! in_array($component, $components, true),
+        ));
+
+        if ($missing === []) {
             return $url;
         }
 
-        if (! in_array(self::FORMAT_COMPONENT, $components, true)) {
-            $components[] = self::FORMAT_COMPONENT;
-        }
-
-        if (! in_array(self::QUALITY_COMPONENT, $components, true)) {
-            $components[] = self::QUALITY_COMPONENT;
-        }
-
-        return substr_replace($url, implode(',', $components), $offset, strlen($head));
+        return substr_replace(
+            $url,
+            implode(',', array_merge($components, $missing)),
+            $offset,
+            strlen($head),
+        );
     }
 
     private static function firstSegment(string $value): string

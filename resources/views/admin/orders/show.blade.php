@@ -189,7 +189,7 @@
                                 @csrf
                                 @method('PATCH')
                                 <input type="hidden" name="status" value="{{ $target }}">
-                                <button class="admin-btn admin-btn--dark" type="submit">Marcar como {{ $statusLabels[$target] ?? $target }}</button>
+                                <button class="admin-btn admin-btn--primary" type="submit">Marcar como {{ $statusLabels[$target] ?? $target }}</button>
                             </form>
                         @endforeach
                     </div>
@@ -240,7 +240,7 @@
                             <input class="admin-input" id="reason" name="reason" type="text" maxlength="255" autocomplete="off">
                         </div>
                         <div class="admin-detail-actions">
-                            <button class="admin-btn admin-btn--dark" type="submit">Reembolsar con Wompi</button>
+                            <button class="admin-btn admin-btn--primary" type="submit">Reembolsar con Wompi</button>
                         </div>
                     </form>
                 @endif

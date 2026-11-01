@@ -491,4 +491,31 @@ class CheckoutTest extends TestCase
 
         app(CheckoutService::class)->confirm($this->shipping(), null);
     }
+
+    public function test_checkout_cobra_el_precio_de_oferta_y_lo_congela_como_snapshot(): void
+    {
+        $product = $this->product(['precio' => 189900, 'precio_oferta' => 132930, 'stock' => 5]);
+        $this->cart()->addToSession($product->id, 2);
+
+        Livewire::test(CheckoutForm::class)
+            ->set($this->shipping())
+            ->call('confirm')
+            ->assertHasNoErrors();
+
+        $order = Order::firstOrFail();
+        $this->assertSame(265860, $order->total, 'El total cobra la oferta por la cantidad');
+
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 2,
+            'price' => 132930,
+        ]);
+
+        // El snapshot no depende de la oferta futura del producto.
+        $product->update(['precio_oferta' => null]);
+
+        $this->assertSame(132930, OrderItem::where('product_id', $product->id)->firstOrFail()->price);
+        $this->assertSame(265860, $order->fresh()->total);
+    }
 }

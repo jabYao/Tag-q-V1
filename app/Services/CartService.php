@@ -212,7 +212,9 @@ class CartService
     {
         $available = max(0, (int) $product->stock);
         $quantity = $this->clampQuantity($quantity, $available);
-        $unitPrice = (int) $product->precio;
+        // El precio de oferta, cuando existe, es el que se cobra en toda la
+        // tienda: la misma fuente que usa el checkout.
+        $unitPrice = $product->precioFinal();
 
         return [
             'product' => $product,
@@ -356,7 +358,7 @@ class CartService
         return $cart->items->map(fn ($i) => [
             'product' => $i->product->name,
             'quantity' => $i->quantity,
-            'precio' => $i->product->precio,
+            'precio' => $i->product->precioFinal(),
         ])->toArray();
     }
 }

@@ -34,6 +34,7 @@ class StoreProductRequest extends FormRequest
             'slug' => ['required', 'string', 'max:255', 'unique:products,slug'],
             'descripcion' => ['nullable', 'string'],
             'precio' => ['required', 'integer', 'min:0'],
+            'precio_oferta' => ['nullable', 'integer', 'min:1', 'lt:precio'],
             'stock' => ['required', 'integer', 'min:0'],
 
             'case_shape' => ['required', Rule::in(array_keys(config('watch_specs.case_shapes', [])))],
@@ -57,5 +58,14 @@ class StoreProductRequest extends FormRequest
             'imagenes' => ['nullable', 'array', 'max:5'],
             'imagenes.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ], WatchSpecs::rules());
+    }
+
+    public function messages(): array
+    {
+        return [
+            'precio_oferta.lt' => 'El precio de oferta debe ser menor que el precio normal.',
+            'precio_oferta.integer' => 'El precio de oferta debe ser un número entero en COP.',
+            'precio_oferta.min' => 'El precio de oferta debe ser mayor que cero.',
+        ];
     }
 }

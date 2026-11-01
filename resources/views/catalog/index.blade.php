@@ -1,17 +1,16 @@
-@use('App\Support\CloudinaryUrl')
 @extends('layouts.storefront')
 
 @section('title', config('app.name', 'Tag q').' — Catálogo')
 
 {{-- El catálogo usa el contenedor global del storefront (`site-container`,
-     90vw) para que el rail de filtros arranque en el mismo margen que el
-     resto de páginas. La grilla de productos conserva su propio tope
-     (`lg:max-w-[1400px]`) para que las tarjetas no se estiren en pantallas
-     anchas. --}}
+     90vw) para que la banda de ruta, la cabecera y la grilla arranquen en el
+     mismo margen que el resto de páginas. La grilla conserva su propio tope
+     (`lg:max-w-[1400px]`) para no estirar las tarjetas en pantallas anchas. --}}
 @section('main-class', 'site-container py-8')
+@section('main-attributes', ' data-catalog')
 
-{{-- Dentro del contenedor, la columna de filtros queda sticky en
-     escritorio; en móvil se abre con el botón "Filtros" (Alpine) y la regla
+{{-- Dentro del contenedor, la columna de filtros queda sticky en escritorio;
+     en móvil se abre con el botón "Filtros" (Alpine) y la regla
      `[data-catalog-filters][data-open='false']` la oculta sin parpadeos. --}}
 
 @section('content')
@@ -96,147 +95,170 @@
         $clearFiltersUrl = route('catalog.index', $currentSort === 'recientes' ? [] : ['orden' => $currentSort]);
     @endphp
 
-    <div>
-        <nav aria-label="Migas de pan" class="mb-6 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-            <a href="{{ route('home') }}" class="transition hover:text-gray-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-950">Inicio</a>
-            <span aria-hidden="true" class="text-gray-300">/</span>
-            <span class="text-gray-950">Catálogo</span>
-        </nav>
+    <div class="catalog-crumbs">
+        <div class="catalog-shell catalog-crumbs__inner">
+            <nav class="catalog-crumbs__nav" aria-label="Migas de pan">
+                <a href="{{ route('home') }}">Inicio</a>
+                <span class="catalog-crumbs__sep" aria-hidden="true">/</span>
+                <span class="catalog-crumbs__current" aria-current="page">Catálogo</span>
+            </nav>
 
-        <header class="mb-8 flex flex-wrap items-end justify-between gap-6 border-b border-gray-200 pb-8">
-            <div class="max-w-2xl">
-                <h1 class="font-bebas text-[46px] uppercase leading-none tracking-tight text-gray-950 sm:text-[58px]">Catálogo</h1>
-                <p class="mt-3 max-w-xl text-sm leading-relaxed text-gray-600 sm:text-base">
-                    Relojes seleccionados para acompañar tu día. Filtrá por estilo, marca, medidas y movimiento para encontrar tu próxima pieza.
-                </p>
+            <div class="catalog-crumbs__chips">
+                <span class="catalog-chip"><i aria-hidden="true"></i>Envío nacional</span>
+                <span class="catalog-chip catalog-chip--quiet"><i aria-hidden="true"></i>Contraentrega</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="catalog-shell catalog-page">
+        <header class="catalog-head">
+            <div class="catalog-head__main">
+                <h1 class="catalog-title">Catálogo</h1>
             </div>
 
-            <form
-                method="GET"
-                action="{{ route('catalog.index') }}"
-                aria-label="Ordenar productos"
-                class="flex items-center gap-3"
-            >
-                @foreach ($sortBase as $name => $value)
-                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
-                @endforeach
+            <div class="catalog-head__aside">
+                <form
+                    method="GET"
+                    action="{{ route('catalog.index') }}"
+                    aria-label="Ordenar productos"
+                    class="catalog-sort"
+                >
+                    @foreach ($sortBase as $name => $value)
+                        <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                    @endforeach
 
-                <label for="catalog-sort" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Ordenar</label>
+                    <label for="catalog-sort" class="catalog-label">Ordenar por</label>
 
-                <div class="relative">
-                    <select
-                        id="catalog-sort"
-                        name="orden"
-                        x-on:change="$el.form.submit()"
-                        class="appearance-none border-0 border-b border-gray-300 bg-transparent py-1.5 pl-0 pr-7 text-sm font-medium text-gray-950 focus:border-gray-950 focus:outline-none focus:ring-0"
-                    >
-                        @foreach ($sortOptions as $value => $label)
-                            <option value="{{ $value }}" @selected($currentSort === $value)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500">
-                        <path d="M5 8l5 5 5-5" />
-                    </svg>
-                </div>
+                    <div class="catalog-sort__control">
+                        <select
+                            id="catalog-sort"
+                            name="orden"
+                            x-on:change="$el.form.submit()"
+                            class="catalog-sort__select"
+                        >
+                            @foreach ($sortOptions as $value => $label)
+                                <option value="{{ $value }}" @selected($currentSort === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="catalog-sort__icon">
+                            <path d="M5 8l5 5 5-5" />
+                        </svg>
+                    </div>
 
-                <noscript>
-                    <button type="submit" class="text-sm font-semibold text-gray-950 underline decoration-gray-300 underline-offset-4">Aplicar</button>
-                </noscript>
-            </form>
+                    <noscript>
+                        <button type="submit" class="catalog-sort__apply">Aplicar orden</button>
+                    </noscript>
+                </form>
+            </div>
         </header>
 
         <div x-data="{ filtersOpen: false }">
-            <div class="mb-5 flex items-center justify-between gap-4 lg:hidden">
+            <div class="catalog-toolbar">
                 <button
                     type="button"
                     data-catalog-filter-toggle
                     @click="filtersOpen = ! filtersOpen"
                     :aria-expanded="filtersOpen ? 'true' : 'false'"
                     aria-controls="catalog-filters"
-                    class="inline-flex items-center gap-2 border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-950"
+                    class="catalog-toggle"
                 >
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="catalog-toggle__icon">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M7 12h10M10 17h4" />
                     </svg>
                     Filtros
                     @if($activeFilters > 0)
-                        <span class="inline-flex min-w-5 items-center justify-center bg-gray-950 px-1.5 py-0.5 text-[11px] font-bold text-white">{{ $activeFilters }}</span>
+                        <span class="catalog-toggle__count">{{ $activeFilters }}</span>
                     @endif
                 </button>
+
+                @if($activeFilters > 0)
+                    <a href="{{ $clearFiltersUrl }}" class="catalog-toolbar__clear">Limpiar</a>
+                @endif
             </div>
 
-            <div class="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
+            <div class="catalog-body">
                 <aside
                     id="catalog-filters"
                     data-catalog-filters
                     data-open="false"
                     :data-open="filtersOpen ? 'true' : 'false'"
-                    class="lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2"
+                    class="catalog-filters"
                 >
                     <form
                         method="GET"
                         action="{{ route('catalog.index') }}"
                         aria-label="Filtros del catálogo"
-                        class="lg:pr-2"
+                        class="catalog-filter-panel"
                     >
                         {{-- El orden vive en el encabezado: el formulario lo
                              conserva al aplicar filtros, sin volver a mostrarlo. --}}
                         <input type="hidden" name="orden" value="{{ $currentSort }}">
 
-                        <div>
-                            <label for="filter-q" class="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Buscar</label>
-                            <div class="relative">
-                                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400">
-                                    <circle cx="11" cy="11" r="7" />
-                                    <path stroke-linecap="round" d="m16.5 16.5 4 4" />
-                                </svg>
-                                <input
-                                    type="search"
-                                    id="filter-q"
-                                    name="q"
-                                    value="{{ $filters['q'] ?? '' }}"
-                                    placeholder="Nombre, marca o descripción"
-                                >
+                        <div class="catalog-filters__head">
+                            <h2 class="catalog-filters__title">Filtros</h2>
+                            @if($activeFilters > 0)
+                                <span class="catalog-filters__count">{{ $activeFilters }}</span>
+                            @endif
+                        </div>
+
+                        <div class="catalog-filters__body">
+                            <div class="catalog-field">
+                                <label for="filter-q" class="catalog-label">Buscar</label>
+                                <div class="catalog-search">
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="catalog-search__icon">
+                                        <circle cx="11" cy="11" r="7" />
+                                        <path stroke-linecap="round" d="m16.5 16.5 4 4" />
+                                    </svg>
+                                    <input
+                                        type="search"
+                                        id="filter-q"
+                                        name="q"
+                                        value="{{ $filters['q'] ?? '' }}"
+                                        placeholder="Nombre, marca o descripción"
+                                        class="catalog-input catalog-search__input"
+                                    >
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="mt-6 border-t border-gray-100 pt-5">
-                            <label for="filter-categoria" class="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Categoría</label>
-                            <select id="filter-categoria" name="categoria">
-                                <option value="">Todas</option>
-                                @foreach($categories as $category)
-                                    <option value="{{ $category->slug }}" @selected(($filters['categoria'] ?? null) === $category->slug)>{{ $category->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
+                            <section class="catalog-filter-group" aria-labelledby="catalog-group-categoria">
+                                <h3 id="catalog-group-categoria" class="catalog-filter-group__title">Categoría</h3>
+                                <label for="filter-categoria" class="sr-only">Categoría</label>
+                                <select id="filter-categoria" name="categoria" class="catalog-select">
+                                    <option value="">Todas</option>
+                                    @foreach($categories as $category)
+                                        <option value="{{ $category->slug }}" @selected(($filters['categoria'] ?? null) === $category->slug)>{{ $category->name }}</option>
+                                    @endforeach
+                                </select>
+                            </section>
 
-                        <div class="mt-5">
-                            <label for="filter-subcategoria" class="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Estilo</label>
-                            <select id="filter-subcategoria" name="subcategoria">
-                                <option value="">Todos</option>
-                                @foreach($options['subcategoria'] as $slug => $label)
-                                    <option value="{{ $slug }}" @selected(($filters['subcategoria'] ?? null) === $slug)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
+                            <section class="catalog-filter-group" aria-labelledby="catalog-group-estilo">
+                                <h3 id="catalog-group-estilo" class="catalog-filter-group__title">Estilo</h3>
+                                <label for="filter-subcategoria" class="sr-only">Estilo</label>
+                                <select id="filter-subcategoria" name="subcategoria" class="catalog-select">
+                                    <option value="">Todos</option>
+                                    @foreach($options['subcategoria'] as $slug => $label)
+                                        <option value="{{ $slug }}" @selected(($filters['subcategoria'] ?? null) === $slug)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </section>
 
-                        <div class="mt-5">
-                            <label for="filter-marca" class="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Marca</label>
-                            <select id="filter-marca" name="marca">
-                                <option value="">Todas</option>
-                                @foreach($options['marca'] as $value => $label)
-                                    <option value="{{ $value }}" @selected(($filters['marca'] ?? null) === (string) $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
+                            <section class="catalog-filter-group" aria-labelledby="catalog-group-marca">
+                                <h3 id="catalog-group-marca" class="catalog-filter-group__title">Marca</h3>
+                                <label for="filter-marca" class="sr-only">Marca</label>
+                                <select id="filter-marca" name="marca" class="catalog-select">
+                                    <option value="">Todas</option>
+                                    @foreach($options['marca'] as $value => $label)
+                                        <option value="{{ $value }}" @selected(($filters['marca'] ?? null) === (string) $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </section>
 
-                        <div class="mt-6 border-t border-gray-100 pt-5">
-                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Detalles</p>
+                            <section class="catalog-filter-group" aria-labelledby="catalog-group-detalles">
+                                <h3 id="catalog-group-detalles" class="catalog-filter-group__title">Detalles</h3>
 
-                            <div class="mt-3 space-y-3">
-                                <div>
-                                    <label for="filter-strap-type" class="block text-sm text-gray-600">Tipo de correa</label>
-                                    <select id="filter-strap-type" name="strap_type">
+                                <div class="catalog-field">
+                                    <label for="filter-strap-type" class="catalog-field__label">Tipo de correa</label>
+                                    <select id="filter-strap-type" name="strap_type" class="catalog-select">
                                         <option value="">Todas</option>
                                         @foreach($options['strap_type'] as $slug => $label)
                                             <option value="{{ $slug }}" @selected(($filters['strap_type'] ?? null) === $slug)>{{ $label }}</option>
@@ -244,9 +266,9 @@
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label for="filter-water-resistance" class="block text-sm text-gray-600">Resistencia al agua</label>
-                                    <select id="filter-water-resistance" name="water_resistance_atm">
+                                <div class="catalog-field">
+                                    <label for="filter-water-resistance" class="catalog-field__label">Resistencia al agua</label>
+                                    <select id="filter-water-resistance" name="water_resistance_atm" class="catalog-select">
                                         <option value="">Todas</option>
                                         @foreach($options['water_resistance_atm'] as $atm => $label)
                                             <option value="{{ $atm }}" @selected((string) ($filters['water_resistance_atm'] ?? null) === (string) $atm)>{{ $label }}</option>
@@ -254,9 +276,9 @@
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label for="filter-cristal" class="block text-sm text-gray-600">Cristal</label>
-                                    <select id="filter-cristal" name="cristal">
+                                <div class="catalog-field">
+                                    <label for="filter-cristal" class="catalog-field__label">Cristal</label>
+                                    <select id="filter-cristal" name="cristal" class="catalog-select">
                                         <option value="">Todos</option>
                                         @foreach($options['cristal'] as $slug => $label)
                                             <option value="{{ $slug }}" @selected(($filters['cristal'] ?? null) === $slug)>{{ $label }}</option>
@@ -264,271 +286,201 @@
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label for="filter-movimiento" class="block text-sm text-gray-600">Movimiento</label>
-                                    <select id="filter-movimiento" name="movimiento">
+                                <div class="catalog-field">
+                                    <label for="filter-movimiento" class="catalog-field__label">Movimiento</label>
+                                    <select id="filter-movimiento" name="movimiento" class="catalog-select">
                                         <option value="">Todos</option>
                                         @foreach($options['movimiento'] as $slug => $label)
                                             <option value="{{ $slug }}" @selected(($filters['movimiento'] ?? null) === $slug)>{{ $label }}</option>
                                         @endforeach
                                     </select>
                                 </div>
-                            </div>
+                            </section>
+
+                            <section class="catalog-filter-group" aria-labelledby="catalog-group-medidas">
+                                <h3 id="catalog-group-medidas" class="catalog-filter-group__title">Medidas (mm)</h3>
+
+                                <div class="catalog-range">
+                                    <div class="catalog-field">
+                                        <label for="filter-diametro-min" class="catalog-field__label">Diámetro mín.</label>
+                                        <input
+                                            type="number"
+                                            id="filter-diametro-min"
+                                            name="diametro_min"
+                                            value="{{ $filters['diametro_min'] ?? '' }}"
+                                            min="0"
+                                            max="100"
+                                            step="0.1"
+                                            inputmode="decimal"
+                                            class="catalog-input"
+                                        >
+                                    </div>
+
+                                    <div class="catalog-field">
+                                        <label for="filter-diametro-max" class="catalog-field__label">Diámetro máx.</label>
+                                        <input
+                                            type="number"
+                                            id="filter-diametro-max"
+                                            name="diametro_max"
+                                            value="{{ $filters['diametro_max'] ?? '' }}"
+                                            min="0"
+                                            max="100"
+                                            step="0.1"
+                                            inputmode="decimal"
+                                            class="catalog-input"
+                                        >
+                                    </div>
+
+                                    <div class="catalog-field">
+                                        <label for="filter-grosor-min" class="catalog-field__label">Grosor mín.</label>
+                                        <input
+                                            type="number"
+                                            id="filter-grosor-min"
+                                            name="grosor_min"
+                                            value="{{ $filters['grosor_min'] ?? '' }}"
+                                            min="0"
+                                            max="100"
+                                            step="0.1"
+                                            inputmode="decimal"
+                                            class="catalog-input"
+                                        >
+                                    </div>
+
+                                    <div class="catalog-field">
+                                        <label for="filter-grosor-max" class="catalog-field__label">Grosor máx.</label>
+                                        <input
+                                            type="number"
+                                            id="filter-grosor-max"
+                                            name="grosor_max"
+                                            value="{{ $filters['grosor_max'] ?? '' }}"
+                                            min="0"
+                                            max="100"
+                                            step="0.1"
+                                            inputmode="decimal"
+                                            class="catalog-input"
+                                        >
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="catalog-filter-group" aria-labelledby="catalog-group-precio">
+                                <h3 id="catalog-group-precio" class="catalog-filter-group__title">Precio (COP)</h3>
+
+                                <div class="catalog-range">
+                                    <div class="catalog-field">
+                                        <label for="filter-precio-min" class="catalog-field__label">Mínimo</label>
+                                        <input
+                                            type="number"
+                                            id="filter-precio-min"
+                                            name="precio_min"
+                                            value="{{ $filters['precio_min'] ?? '' }}"
+                                            min="0"
+                                            step="1"
+                                            inputmode="numeric"
+                                            class="catalog-input"
+                                        >
+                                    </div>
+
+                                    <div class="catalog-field">
+                                        <label for="filter-precio-max" class="catalog-field__label">Máximo</label>
+                                        <input
+                                            type="number"
+                                            id="filter-precio-max"
+                                            name="precio_max"
+                                            value="{{ $filters['precio_max'] ?? '' }}"
+                                            min="0"
+                                            step="1"
+                                            inputmode="numeric"
+                                            class="catalog-input"
+                                        >
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="catalog-filter-group" aria-labelledby="catalog-group-disponibilidad">
+                                <h3 id="catalog-group-disponibilidad" class="catalog-filter-group__title">Disponibilidad</h3>
+                                <label for="filter-disponibilidad" class="sr-only">Disponibilidad</label>
+                                <select id="filter-disponibilidad" name="disponibilidad" class="catalog-select">
+                                    <option value="todos" @selected(($filters['disponibilidad'] ?? 'todos') === 'todos')>Todos</option>
+                                    <option value="disponible" @selected(($filters['disponibilidad'] ?? null) === 'disponible')>Disponible</option>
+                                    <option value="agotado" @selected(($filters['disponibilidad'] ?? null) === 'agotado')>Agotado</option>
+                                </select>
+                            </section>
                         </div>
 
-                        <div class="mt-6 border-t border-gray-100 pt-5">
-                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Medidas (mm)</p>
-
-                            <div class="mt-3 grid grid-cols-2 gap-3">
-                                <div>
-                                    <label for="filter-diametro-min" class="block text-sm text-gray-600">Diámetro mín.</label>
-                                    <input
-                                        type="number"
-                                        id="filter-diametro-min"
-                                        name="diametro_min"
-                                        value="{{ $filters['diametro_min'] ?? '' }}"
-                                        min="0"
-                                        max="100"
-                                        step="0.1"
-                                        inputmode="decimal"
-                                    >
-                                </div>
-
-                                <div>
-                                    <label for="filter-diametro-max" class="block text-sm text-gray-600">Diámetro máx.</label>
-                                    <input
-                                        type="number"
-                                        id="filter-diametro-max"
-                                        name="diametro_max"
-                                        value="{{ $filters['diametro_max'] ?? '' }}"
-                                        min="0"
-                                        max="100"
-                                        step="0.1"
-                                        inputmode="decimal"
-                                    >
-                                </div>
-
-                                <div>
-                                    <label for="filter-grosor-min" class="block text-sm text-gray-600">Grosor mín.</label>
-                                    <input
-                                        type="number"
-                                        id="filter-grosor-min"
-                                        name="grosor_min"
-                                        value="{{ $filters['grosor_min'] ?? '' }}"
-                                        min="0"
-                                        max="100"
-                                        step="0.1"
-                                        inputmode="decimal"
-                                    >
-                                </div>
-
-                                <div>
-                                    <label for="filter-grosor-max" class="block text-sm text-gray-600">Grosor máx.</label>
-                                    <input
-                                        type="number"
-                                        id="filter-grosor-max"
-                                        name="grosor_max"
-                                        value="{{ $filters['grosor_max'] ?? '' }}"
-                                        min="0"
-                                        max="100"
-                                        step="0.1"
-                                        inputmode="decimal"
-                                    >
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-6 border-t border-gray-100 pt-5">
-                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Precio (COP)</p>
-
-                            <div class="mt-3 grid grid-cols-2 gap-3">
-                                <div>
-                                    <label for="filter-precio-min" class="block text-sm text-gray-600">Mínimo</label>
-                                    <input
-                                        type="number"
-                                        id="filter-precio-min"
-                                        name="precio_min"
-                                        value="{{ $filters['precio_min'] ?? '' }}"
-                                        min="0"
-                                        step="1"
-                                        inputmode="numeric"
-                                       
-                                    >
-                                </div>
-
-                                <div>
-                                    <label for="filter-precio-max" class="block text-sm text-gray-600">Máximo</label>
-                                    <input
-                                        type="number"
-                                        id="filter-precio-max"
-                                        name="precio_max"
-                                        value="{{ $filters['precio_max'] ?? '' }}"
-                                        min="0"
-                                        step="1"
-                                        inputmode="numeric"
-                                       
-                                    >
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-6 border-t border-gray-100 pt-5">
-                            <label for="filter-disponibilidad" class="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Disponibilidad</label>
-                            <select id="filter-disponibilidad" name="disponibilidad">
-                                <option value="todos" @selected(($filters['disponibilidad'] ?? 'todos') === 'todos')>Todos</option>
-                                <option value="disponible" @selected(($filters['disponibilidad'] ?? null) === 'disponible')>Disponible</option>
-                                <option value="agotado" @selected(($filters['disponibilidad'] ?? null) === 'agotado')>Agotado</option>
-                            </select>
-                        </div>
-
-                        <div class="mt-6 border-t border-gray-200 pt-5">
-                            <button type="submit" class="inline-flex w-full items-center justify-center bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2">
+                        <div class="catalog-filter-actions">
+                            <button type="submit" class="catalog-btn catalog-btn--primary catalog-btn--block">
                                 Aplicar filtros
                             </button>
-                            <a href="{{ $clearFiltersUrl }}" class="mt-3 inline-flex w-full items-center justify-center text-sm font-semibold text-gray-600 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-950 hover:decoration-gray-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2">
-                                Limpiar
-                            </a>
+                            <a href="{{ $clearFiltersUrl }}" class="catalog-filter-clear">Limpiar filtros</a>
                         </div>
                     </form>
                 </aside>
 
-                <section aria-label="Productos del catálogo" class="min-w-0 lg:max-w-[1400px]">
-                    <div class="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
-                        <p class="text-sm text-gray-600">
+                <section aria-label="Productos del catálogo" class="catalog-results lg:max-w-[1400px]">
+                    <div class="catalog-results__bar">
+                        <p class="catalog-results__count">
                             @if($products->total() > 0)
-                                Mostrando <span class="font-semibold text-gray-950">{{ $products->firstItem() }}–{{ $products->lastItem() }}</span> de <span class="font-semibold text-gray-950">{{ $products->total() }}</span> relojes
+                                Mostrando <b>{{ $products->firstItem() }}–{{ $products->lastItem() }}</b> de <b>{{ $products->total() }}</b> relojes
                             @else
                                 Sin resultados
                             @endif
                         </p>
 
                         @if($activeFilters > 0)
-                            <a href="{{ $clearFiltersUrl }}" class="text-sm font-semibold text-gray-950 underline decoration-gray-300 underline-offset-4 transition hover:decoration-gray-950">Limpiar filtros</a>
+                            <a href="{{ $clearFiltersUrl }}" class="catalog-results__clear">Limpiar filtros</a>
                         @endif
                     </div>
 
                     @if($activeFilters > 0)
-                        <div class="mb-6 flex flex-wrap items-center gap-2">
+                        <div class="catalog-active-chips">
                             @foreach($activeFilterChips as $chip)
-                                <a href="{{ $chip['url'] }}" class="inline-flex items-center gap-2 border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-950 hover:text-gray-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-950">
-                                    <span><span class="font-semibold">{{ $chip['label'] }}:</span> {{ $chip['value'] }}</span>
-                                    <span aria-hidden="true" class="text-gray-400">&times;</span>
+                                <a href="{{ $chip['url'] }}" class="catalog-chip-filter">
+                                    <span><b>{{ $chip['label'] }}:</b> {{ $chip['value'] }}</span>
+                                    <span aria-hidden="true" class="catalog-chip-filter__x">&times;</span>
                                 </a>
                             @endforeach
                         </div>
                     @endif
 
                     @if($products->isEmpty())
-                        <div class="flex flex-col items-center justify-center border border-dashed border-gray-300 bg-white px-6 py-20 text-center">
-                            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-                                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="h-6 w-6">
+                        <div class="catalog-empty">
+                            <span class="catalog-empty__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                                     <circle cx="11" cy="11" r="7" />
                                     <path stroke-linecap="round" d="m16.5 16.5 4 4" />
                                 </svg>
-                            </div>
-                            <h2 class="mt-5 font-bebas text-[32px] uppercase leading-none text-gray-950">Sin resultados</h2>
-                            <p class="mt-3 max-w-md text-sm leading-relaxed text-gray-600">
+                            </span>
+                            <h2 class="catalog-empty__title">Sin resultados</h2>
+                            <p class="catalog-empty__copy">
                                 @if($activeFilters > 0)
-                                    No hay productos disponibles con esos filtros. Probá quitar alguno o volver al catálogo completo.
+                                    No hay productos disponibles con esos filtros. Prueba quitando algún filtro o vuelve al catálogo completo.
                                 @else
-                                    No hay productos disponibles por el momento. Volvé pronto para descubrir nuevas piezas.
+                                    No hay productos disponibles por el momento. Vuelve pronto para descubrir nuevas piezas.
                                 @endif
                             </p>
-                            <a href="{{ route('catalog.index') }}" class="mt-6 inline-flex items-center bg-gray-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2">
-                                Ver todo el catálogo
-                            </a>
+                            <a href="{{ route('catalog.index') }}" class="catalog-btn catalog-btn--accent">Ver todo el catálogo</a>
                         </div>
                     @else
-                        <div class="grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 xl:grid-cols-3">
+                        <div class="catalog-grid">
                             @foreach($products as $product)
-                                @php
-                                    $imagenes = $product->imagenes ?? [];
-                                    $imagen = $imagenes[0] ?? null;
-                                    // La tarjeta del catálogo usa los mismos atributos
-                                    // reales que la del home: marca y movimiento, sin
-                                    // inventar especificaciones.
-                                    $atributos = array_filter(
-                                        [$product->brandName(), $product->movementLabel()],
-                                        fn ($valor) => filled($valor),
-                                    );
-                                    $estado = match (true) {
-                                        ! $product->is_active || $product->stock <= 0 => 'Agotado',
-                                        $product->created_at !== null
-                                            && $product->created_at->gte(now()->subDays(30)) => 'Nuevo',
-                                        default => null,
-                                    };
-                                @endphp
-
-                                <article
-                                    data-catalog-item
-                                    data-product-name="{{ $product->name }}"
-                                    class="group relative flex flex-col rounded-xl"
-                                >
-                                    {{-- La imagen es la pieza principal: un marco fino y
-                                         neutro, sin sombra ni borde de tarjeta. El zoom
-                                         del hover es el único movimiento de la ficha. --}}
-                                    <div class="relative aspect-[3/4] overflow-hidden rounded-xl border border-gray-200 bg-[#f5f4f1] transition-colors duration-300 group-hover:border-gray-400 motion-reduce:transition-none">
-                                        @if($imagen)
-                                            <img
-                                                src="{{ CloudinaryUrl::webp($imagen) }}"
-                                                alt="{{ $product->name }}"
-                                                loading="lazy"
-                                                class="h-full w-full object-cover transition duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03] motion-reduce:transition-none"
-                                            >
-                                        @else
-                                            <div class="flex h-full w-full items-center justify-center text-xs uppercase tracking-[0.16em] text-gray-500">Sin imagen</div>
-                                        @endif
-
-                                        @if($estado !== null)
-                                            <span
-                                                @class([
-                                                    'pointer-events-none absolute left-3 top-3 z-[2] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]',
-                                                    'bg-gray-950 text-white' => $estado === 'Agotado',
-                                                    'bg-white text-gray-950 ring-1 ring-gray-200' => $estado !== 'Agotado',
-                                                ])
-                                            >{{ $estado }}</span>
-                                        @endif
-                                    </div>
-
-                                    {{-- Enlace estirado al detalle: cubre imagen e
-                                         información y deja fuera el control del carrito
-                                         para no anidar controles dentro de un enlace. --}}
-                                    <a
-                                        href="{{ route('catalog.show', $product) }}"
-                                        class="absolute inset-0 z-[1] rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-inset"
-                                    >
-                                        <span class="sr-only">Ver {{ $product->name }}</span>
-                                    </a>
-
-                                    {{-- Misma información que la tarjeta del home:
-                                         nombre, marca · movimiento y precio. La
-                                         categoría y el stock exacto ya no compiten
-                                         con la pieza; el estado sigue en la insignia. --}}
-                                    <div class="flex flex-1 flex-col pt-4">
-                                        <h2 class="text-base font-semibold leading-snug tracking-[-0.01em] text-gray-950">{{ $product->name }}</h2>
-
-                                        @if($atributos !== [])
-                                            <p class="mt-1 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">{{ implode(' · ', $atributos) }}</p>
-                                        @endif
-
-                                        <div class="mt-auto pt-4">
-                                            <p class="flex items-baseline gap-1.5 text-lg font-bold text-gray-950">
-                                                $ {{ number_format($product->precio, 0, ',', '.') }}
-                                                <span class="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">COP</span>
-                                            </p>
-
-                                            <div class="relative z-[2] mt-3">
-                                                @livewire('cart.add-to-cart', ['product' => $product], key('catalog-'.$product->id))
-                                            </div>
-                                        </div>
-                                    </div>
-                                </article>
+                                {{-- La grilla reutiliza la misma tarjeta del home y del
+                                     mega menú: un solo formato, un solo componente de
+                                     bolsa y los mismos datos reales del producto. --}}
+                                @include('storefront.partials.product-card', [
+                                    'product' => $product,
+                                    'cardAttribute' => 'data-catalog-item',
+                                    'wireKeyPrefix' => 'catalog',
+                                    'headingLevel' => 2,
+                                ])
                             @endforeach
                         </div>
 
-                        <div class="mt-12 border-t border-gray-200 pt-6">
-                            {{ $products->links() }}
-                        </div>
+                        @if($products->hasPages())
+                            <div class="catalog-pagination">
+                                {{ $products->links('catalog.partials.pagination') }}
+                            </div>
+                        @endif
                     @endif
                 </section>
             </div>

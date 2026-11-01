@@ -103,8 +103,9 @@ class CheckoutService
                     throw new \RuntimeException("No hay suficiente stock de {$product->name}.");
                 }
 
-                // Snapshot del precio: el pedido no depende del precio futuro del producto.
-                $price = (int) $product->precio;
+                // Snapshot del precio final (oferta si existe): el pedido no
+                // depende del precio futuro del producto.
+                $price = $product->precioFinal();
                 $lines[] = ['product' => $product, 'quantity' => $quantity, 'price' => $price];
                 $total += $price * $quantity;
             }

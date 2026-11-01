@@ -18,6 +18,7 @@ class Product extends Model
         'slug',
         'descripcion',
         'precio',
+        'precio_oferta',
         'stock',
         'imagenes',
         'marca',
@@ -41,6 +42,7 @@ class Product extends Model
         return [
             'brand_id' => 'integer',
             'precio' => 'integer',
+            'precio_oferta' => 'integer',
             'stock' => 'integer',
             'imagenes' => 'array',
             'diameter_mm' => 'float',
@@ -81,6 +83,46 @@ class Product extends Model
         }
 
         return config('tagq.subcategories')[$this->subcategoria] ?? null;
+    }
+
+    /**
+     * Precio final que se cobra: la oferta cuando existe y es menor que el
+     * precio normal; en cualquier otro caso, el precio normal.
+     */
+    public function precioFinal(): int
+    {
+        return $this->tieneDescuento()
+            ? (int) $this->precio_oferta
+            : (int) $this->precio;
+    }
+
+    /**
+     * Hay descuento real solo si la oferta es un entero positivo menor que el
+     * precio normal. Una oferta igual, mayor o nula no se anuncia.
+     */
+    public function tieneDescuento(): bool
+    {
+        return $this->precio_oferta !== null
+            && (int) $this->precio > 0
+            && (int) $this->precio_oferta > 0
+            && (int) $this->precio_oferta < (int) $this->precio;
+    }
+
+    /**
+     * Porcentaje entero que se muestra en la insignia `30% OFF`. Se calcula
+     * desde el precio normal y el de oferta para que la etiqueta no pueda
+     * contradecir el precio que se cobra. Devuelve null cuando no hay descuento
+     * o cuando el redondeo no alcanza un punto porcentual.
+     */
+    public function descuentoPorcentaje(): ?int
+    {
+        if (! $this->tieneDescuento()) {
+            return null;
+        }
+
+        $porcentaje = (int) round((1 - ((int) $this->precio_oferta / (int) $this->precio)) * 100);
+
+        return $porcentaje >= 1 ? $porcentaje : null;
     }
 
     public function movementLabel(): ?string
