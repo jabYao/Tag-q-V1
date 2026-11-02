@@ -12,20 +12,28 @@ import ScrollTrigger from 'gsap/ScrollTrigger';
 // `POST /livewire/update`.
 
 /**
- * Alto real de la cabecera del storefront (`--storefront-header-h`).
+ * Alturas reales de la cabecera y de la franja del home.
  *
  * El top bar de envíos y la navbar son hermanos al principio del `<body>`.
  * La navbar es sticky: al scrollear se pega al borde superior, así que su
  * `getBoundingClientRect().bottom` deja de representar la cabecera completa.
  * La altura estable se obtiene sumando el alto del top bar y el de la navbar;
  * esa suma no depende del scroll. Se publica en px sobre `<html>` para que el
- * hero del home se dibuje como `100dvh - cabecera` y quede pegado a la navbar.
- * Se recalcula al cargar y al redimensionar; las páginas sin navbar (panel de
- * administración) no hacen nada. El script es `type="module"`, así que ya corre
- * con el DOM listo.
+ * hero del home se dibuje como `100dvh - cabecera - franja` y quede pegado a
+ * la navbar.
  *
- * Publica además el alto de la navbar sola (`--storefront-nav-h`): la barra
- * transparente que separa la cabecera del hero del home mide exactamente eso.
+ * Publica además:
+ * - `--storefront-nav-h`: el alto de la navbar sola, que la franja del home
+ *   conserva como mínimo.
+ * - `--storefront-hero-spacer-h`: el alto real de la franja del home. En
+ *   pantallas angostas el destacado ocupa dos líneas y la franja supera la
+ *   navbar; el hero descuenta este valor para que la paginación no quede
+ *   fuera del viewport.
+ *
+ * Se recalcula al cargar, al redimensionar y cuando la cabecera o la franja
+ * cambian de alto (ResizeObserver); las páginas sin navbar (panel de
+ * administración) no hacen nada. El script es `type="module"`, así que ya
+ * corre con el DOM listo.
  */
 function publishStorefrontHeaderHeight() {
     const nav = document.querySelector('[data-storefront-nav]');
@@ -35,29 +43,43 @@ function publishStorefrontHeaderHeight() {
     }
 
     const topbar = document.querySelector('[data-shipping-topbar]');
+    const spacer = document.querySelector('[data-home-hero-spacer]');
     const height = (topbar ? topbar.offsetHeight : 0) + nav.offsetHeight;
 
     document.documentElement.style.setProperty('--storefront-header-h', `${height}px`);
     document.documentElement.style.setProperty('--storefront-nav-h', `${nav.offsetHeight}px`);
+    document.documentElement.style.setProperty(
+        '--storefront-hero-spacer-h',
+        `${spacer ? spacer.offsetHeight : 0}px`,
+    );
 }
 
 publishStorefrontHeaderHeight();
 window.addEventListener('resize', publishStorefrontHeaderHeight);
+// La carga de fuentes puede cambiar el alto de la franja después del primer
+// pintado; `load` vuelve a publicar la medida.
+window.addEventListener('load', publishStorefrontHeaderHeight);
 
-// Auto-corrección: si la cabecera cambia de alto después del primer pintado
-// (cambio de breakpoint, reflow), el ResizeObserver vuelve a publicar la
-// medida y el hero vuelve a encajar en el viewport sin esperar un resize.
+// Auto-corrección: si la cabecera o la franja cambian de alto después del
+// primer pintado (cambio de breakpoint, reflow), el ResizeObserver vuelve a
+// publicar la medida y el hero vuelve a encajar en el viewport sin esperar un
+// resize.
 if (typeof ResizeObserver === 'function') {
     const nav = document.querySelector('[data-storefront-nav]');
 
     if (nav) {
         const topbar = document.querySelector('[data-shipping-topbar]');
+        const spacer = document.querySelector('[data-home-hero-spacer]');
         const observer = new ResizeObserver(publishStorefrontHeaderHeight);
 
         observer.observe(nav);
 
         if (topbar) {
             observer.observe(topbar);
+        }
+
+        if (spacer) {
+            observer.observe(spacer);
         }
     }
 }
@@ -253,9 +275,10 @@ document.querySelectorAll('[data-home-hero-slider]').forEach((section) => initHo
  *
  * Muestra cinco tarjetas a la vez en escritorio y avanza de una en una, así
  * cada posición queda llena aunque el total no sea múltiplo de cinco. En móvil
- * deja ver un pedazo de la siguiente ficha para invitar al gesto; en tablet
- * muestra dos y en portátil, tres. Sin autoplay: el visitante decide cuándo
- * moverse. La paginación se puede pulsar y las flechas tienen nombre accesible.
+ * deja ver un asomo más sutil de la siguiente ficha (`1.08`) para invitar al
+ * gesto sin cortar de más la insignia; en tablet muestra dos y en portátil,
+ * tres. Sin autoplay: el visitante decide cuándo moverse. La paginación se
+ * puede pulsar y las flechas tienen nombre accesible.
  *
  * Con `prefers-reduced-motion: reduce` la velocidad del desplazamiento es cero
  * desde el arranque, y se actualiza si la preferencia cambia con la página
@@ -272,7 +295,7 @@ function initHomeFavoritesSlider(section) {
 
     const swiper = new Swiper(container, {
         modules: [Navigation, Pagination],
-        slidesPerView: 1.15,
+        slidesPerView: 1.08,
         slidesPerGroup: 1,
         spaceBetween: 16,
         speed: prefersReducedMotion() ? 0 : 300,

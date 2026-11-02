@@ -1489,11 +1489,12 @@ class StorefrontHomeTest extends TestCase
     |
     | El hero sale del contenedor de la página sin tocar el shell compartido: el
     | home redefine `main-class` como `w-full` y el hero queda después de una
-    | barra transparente (`data-home-hero-spacer`) que mide el alto de la navbar
-    | y no pinta fondo. Su alto es `100dvh - cabecera - navbar`, calculado en CSS
-    | con las variables `--storefront-header-h` y `--storefront-nav-h` que
-    | publica `resources/js/app.js` desde la altura real de la cabecera (top bar
-    | de envíos + navbar) y de la navbar sola.
+    | barra transparente (`data-home-hero-spacer`) que conserva como mínimo el
+    | alto de la navbar y no pinta fondo. Su alto es `100dvh - cabecera -
+    | franja`, calculado en CSS con `--storefront-header-h` (top bar de envíos +
+    | navbar) y `--storefront-hero-spacer-h` (alto real de la franja), que
+    | publica `resources/js/app.js`; `--storefront-nav-h` queda como respaldo
+    | para el primer pintado.
     */
 
     public function test_el_home_saca_el_hero_del_contenedor_de_la_pagina(): void
@@ -1686,21 +1687,36 @@ class StorefrontHomeTest extends TestCase
         // pintado, sin esperar a un resize de la ventana.
         $this->assertStringContainsString('ResizeObserver', $js, 'app.js debe re-medir la cabecera con ResizeObserver');
 
-        // La barra transparente entre la navbar y el hero mide el alto de la
-        // navbar sola, y el hero descuenta esa misma altura para seguir cerrando
-        // en el borde del viewport.
+        // La barra transparente entre la navbar y el hero conserva como mínimo
+        // el alto de la navbar. En pantallas angostas el destacado ocupa dos
+        // líneas y la franja crece: `app.js` publica su alto real en
+        // `--storefront-hero-spacer-h` y el hero lo descuenta para que la
+        // paginación no quede fuera del viewport. `--storefront-nav-h` queda
+        // como respaldo del primer pintado.
         $this->assertStringContainsString('--storefront-nav-h', $css, 'El CSS debe usar el alto de la navbar sola');
         $this->assertStringContainsString('[data-home-hero-spacer]', $css, 'El CSS debe dimensionar la barra transparente');
-        $this->assertStringContainsString('min-height: var(--storefront-nav-h, 0px)', $css, 'La franja mide el alto de la navbar');
+        $this->assertStringContainsString('min-height: var(--storefront-nav-h, 0px)', $css, 'La franja mide como mínimo el alto de la navbar');
+        $this->assertStringContainsString('--storefront-hero-spacer-h', $css, 'El CSS debe usar el alto real de la franja');
         $this->assertMatchesRegularExpression(
-            '/\[data-home-hero-viewport\]\s*\{[^}]*100dvh - var\(--storefront-header-h, 0px\) - var\(--storefront-nav-h, 0px\)/s',
+            '/\[data-home-hero-viewport\]\s*\{[^}]*100dvh - var\(--storefront-header-h, 0px\) -\s*var\(--storefront-hero-spacer-h, var\(--storefront-nav-h, 0px\)\)/s',
             $css,
-            'El hero descuenta la cabecera y la barra transparente de su alto mínimo',
+            'El hero descuenta la cabecera y el alto real de la franja de su alto mínimo',
         );
         $this->assertMatchesRegularExpression(
             '/setProperty\(\s*[\'\"]--storefront-nav-h[\'\"]/',
             $js,
             'app.js debe publicar --storefront-nav-h en el documento',
+        );
+        $this->assertStringContainsString('[data-home-hero-spacer]', $js, 'app.js debe medir la franja del hero');
+        $this->assertMatchesRegularExpression(
+            '/setProperty\(\s*[\'\"]--storefront-hero-spacer-h[\'\"]/',
+            $js,
+            'app.js debe publicar --storefront-hero-spacer-h en el documento',
+        );
+        $this->assertMatchesRegularExpression(
+            '/observer\.observe\(\s*spacer\s*\)/',
+            $js,
+            'app.js debe re-medir la franja con ResizeObserver',
         );
     }
 
@@ -1722,10 +1738,11 @@ class StorefrontHomeTest extends TestCase
         $this->assertContains('border-2', $pillClasses, 'El borde es de 2px');
         $this->assertContains('rounded-[5px]', $pillClasses, 'La pastilla usa un radio de 5px');
         $this->assertContains('bg-surface-muted', $pillClasses, 'La pastilla usa el gris suave del sistema');
-        $this->assertContains('p-3', $pillClasses, 'La pastilla aplica el paso 3 de Tailwind (12px) en los cuatro lados');
+        $this->assertContains('p-2.5', $pillClasses, 'La pastilla usa el paso 2.5 de Tailwind (10px) en móvil');
+        $this->assertContains('sm:p-3', $pillClasses, 'La pastilla recupera 12px desde sm');
         $this->assertNotContains('rounded-none', $pillClasses, 'La pastilla ya no es de esquina viva');
         $this->assertNotContains('rounded-full', $pillClasses, 'La pastilla no es de extremos redondeados');
-        $this->assertContains('text-[15px]', $pillClasses, 'El texto de la pastilla va a 15px');
+        $this->assertContains('text-[clamp(12px,3.3vw,15px)]', $pillClasses, 'El texto de la pastilla escala de 12px a 15px');
 
         $texto = preg_replace('/\s+/', ' ', trim($pill->textContent));
 
@@ -1754,6 +1771,14 @@ class StorefrontHomeTest extends TestCase
         $this->assertContains('font-medium', $configuracionClasses, 'La configuración no va en negrita');
         $this->assertNotContains('font-black', $configuracionClasses, 'La configuración es más delgada que el destacado');
         $this->assertContains('text-ink-muted', $configuracionClasses, 'La configuración va en gris');
+
+        // Los separadores siguen en el DOM (el texto los conserva), pero se
+        // ocultan en móvil para que la franja no cuelgue signos sueltos.
+        foreach (['//', '|'] as $separador) {
+            $this->assertArrayHasKey($separador, $parts, "La pastilla conserva el separador {$separador}");
+            $this->assertContains('hidden', $this->classesOf($parts[$separador]), "El separador {$separador} se oculta en móvil");
+            $this->assertContains('sm:inline', $this->classesOf($parts[$separador]), "El separador {$separador} vuelve desde sm");
+        }
 
         // Telemetría: fuera de la pastilla, `COORD:` en gris, la coordenada en
         // negrita y el corchete en el naranja `secondary` del sistema.

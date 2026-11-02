@@ -312,7 +312,7 @@
         {{-- El fondo de la navbar sigue siendo de borde a borde; el padding
              horizontal vive ahora en `site-container` (90vw), que es el mismo
              contenedor del `<main>` y del pie de página. --}}
-        <div class="site-container grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div class="site-container grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-4">
             {{-- Columna izquierda: las categorías primarias en mayúsculas con
                  tracking y un subrayado discreto en hover/focus. En móvil esta
                  misma celda la ocupa el botón que abre el menú, así el control
@@ -447,20 +447,21 @@
                  sombra suave inferior original (`feDropShadow`), así que se
                  renderiza sin filtros de Tailwind: invertirlo acá apagaría esa
                  sombra. El wordmark contiguo lleva Jost 500 (`font-jost`),
-                 tracking amplio y tamaño responsive (30px móvil · 56px desde
-                 `lg`), sin cambiar el destino ni el nombre accesible de la
-                 marca. --}}
+                 tracking amplio y tamaño fluido con
+                 `clamp(29px, 8.6vw, 48px)`: en móvil deja espacio a la bolsa
+                 y desde tablet conserva los 48px del escritorio. Sin cambiar
+                 el destino ni el nombre accesible de la marca. --}}
             <a
                 data-nav-brand
                 href="{{ route('home') }}"
-                class="inline-flex items-center justify-self-center gap-[27px] whitespace-nowrap px-2 font-serif text-xl font-semibold tracking-[0.12em] text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-primary sm:text-2xl"
+                class="inline-flex items-center justify-self-center gap-1.5 whitespace-nowrap px-0 font-serif text-xl font-semibold tracking-[0.12em] text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-primary sm:gap-[27px] sm:px-2 sm:text-2xl"
             ><img
                     data-nav-brand-mark
                     src="{{ asset('images/tag-q-logo.svg') }}"
                     alt=""
                     aria-hidden="true"
-                    class="h-7 w-auto shrink-0 sm:h-14"
-                /><span data-nav-brand-wordmark class="font-jost text-[48px] font-medium leading-none tracking-[0.1em]">Tag Q</span></a>
+                    class="h-6 w-auto shrink-0 sm:h-14"
+                /><span data-nav-brand-wordmark class="font-jost text-[clamp(29px,8.6vw,48px)] font-medium leading-none tracking-[0.1em]">Tag Q</span></a>
 
             {{-- Columna derecha: utilidades solo-icono (buscar, cuenta, bolsa),
                  alineadas al final. No llevan texto visible; su nombre

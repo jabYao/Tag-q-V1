@@ -876,11 +876,11 @@ class StorefrontNavigationTest extends TestCase
         $this->assertNotContains('invert', $markClasses, 'El SVG ya es blanco: no se invierte con filtros de Tailwind');
         $this->assertNotContains('opacity-70', $markClasses, 'El SVG ya es blanco: no se atenúa con filtros de Tailwind');
 
-        // Altura responsive del logo pedida por el usuario: 28px en móvil
-        // (`h-7`) y 56px desde el breakpoint `sm` (`sm:h-14`, Tailwind
+        // Altura responsive del logo pedida por el usuario: 24px en móvil
+        // (`h-6`) y 56px desde el breakpoint `sm` (`sm:h-14`, Tailwind
         // `height: calc(var(--spacing) * 14)`). La altura anterior `sm:h-8`
         // (32px) queda fuera.
-        $this->assertContains('h-7', $markClasses, 'El logo conserva la altura móvil de 28px');
+        $this->assertContains('h-6', $markClasses, 'El logo conserva la altura móvil de 24px');
         $this->assertContains('sm:h-14', $markClasses, 'El logo sube a 56px desde el breakpoint sm');
         $this->assertNotContains('sm:h-8', $markClasses, 'El logo ya no usa la altura sm:h-8 de 32px');
 

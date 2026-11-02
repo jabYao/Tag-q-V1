@@ -49,10 +49,12 @@
          `data-home-hero-slider` y `data-home-hero-autoplay`; sin él, el marcado
          muestra igual la primera imagen con su texto encima. --}}
     {{-- Franja entre la navbar y el hero (pedido del dueño). No pinta fondo:
-         deja ver el fondo del documento y mide el alto de la navbar, que la
-         cabecera publica en `--storefront-nav-h`. El hero descuenta esa misma
-         altura de su `min-height`, así cabecera + franja + hero siguen cerrando
-         en el borde del viewport.
+         deja ver el fondo del documento y conserva como mínimo el alto de la
+         navbar, que la cabecera publica en `--storefront-nav-h`. El hero
+         descuenta el alto real de esta franja (`--storefront-hero-spacer-h`,
+         medido en `resources/js/app.js`): en pantallas angostas el destacado
+         ocupa dos líneas y la franja puede superar la navbar, así que restar
+         solo `--storefront-nav-h` dejaba la paginación fuera del viewport.
 
          Contenido: a la izquierda, el destacado del producto en una pastilla
          cuadrada con el borde del sistema (`border-border-soft` + fondo blanco,
@@ -61,20 +63,20 @@
          A la derecha, fuera de la pastilla, la telemetría de coordenadas:
          `COORD:` en gris, la coordenada en negrita y el corchete de estado en el
          naranja `secondary` del sistema. Los separadores `//` y `|` quedan
-         fuera del árbol accesible; el texto sí se anuncia. En pantallas
-         angostas la coordenada se oculta para que la franja conserve el alto de
-         la navbar. --}}
+         fuera del árbol accesible y se ocultan bajo `sm`; el texto sí se
+         anuncia. En pantallas angostas la coordenada se oculta para que la
+         franja no crezca de más. --}}
     <div data-home-hero-spacer class="bg-transparent">
         <div class="site-container flex flex-col gap-2 py-2 2xl:flex-row 2xl:items-center 2xl:justify-between 2xl:gap-6">
             <p
                 data-home-hero-highlight
-                class="inline-flex w-fit flex-wrap items-center gap-2 rounded-[5px] border-2 border-border-soft bg-surface-muted p-3 font-display text-[15px] uppercase leading-none tracking-[0.15em] text-ink"
+                class="inline-flex w-fit flex-wrap items-center gap-1.5 rounded-[5px] border-2 border-border-soft bg-surface-muted p-2.5 font-display text-[clamp(12px,3.3vw,15px)] uppercase leading-none tracking-[0.15em] text-ink sm:gap-2 sm:p-3"
             >
                 <span data-home-hero-pulse aria-hidden="true"></span>
                 <span class="font-black">DESTACADO</span>
-                <span aria-hidden="true" class="font-medium text-ink-muted">//</span>
+                <span aria-hidden="true" class="hidden font-medium text-ink-muted sm:inline">//</span>
                 <span class="font-black">G-SHOCK GW-M5610U</span>
-                <span aria-hidden="true" class="font-medium text-ink-muted">|</span>
+                <span aria-hidden="true" class="hidden font-medium text-ink-muted sm:inline">|</span>
                 <span class="font-medium text-ink-muted">SOLAR + MULTIBANDA</span>
             </p>
 
@@ -202,9 +204,13 @@
 
             {{-- Controles del carrusel: flechas y puntos, en blanco sobre las
                  imágenes oscuras; el punto activo usa el naranja de acento
-                 (ver `resources/css/app.css`). --}}
-            <button type="button" data-home-hero-prev aria-label="Imagen anterior" class="swiper-button-prev hidden sm:flex"></button>
-            <button type="button" data-home-hero-next aria-label="Imagen siguiente" class="swiper-button-next hidden sm:flex"></button>
+                 (ver `resources/css/app.css`). Las flechas se ocultan bajo
+                 `sm` desde `app.css` y no con `hidden sm:flex`: el CSS de
+                 Swiper se importa después de Tailwind y su `display:flex`
+                 gana a la utilidad. En móvil el gesto táctil y los puntos
+                 siguen disponibles. --}}
+            <button type="button" data-home-hero-prev aria-label="Imagen anterior" class="swiper-button-prev"></button>
+            <button type="button" data-home-hero-next aria-label="Imagen siguiente" class="swiper-button-next"></button>
             <div data-home-hero-pagination class="swiper-pagination"></div>
         </div>
     </section>

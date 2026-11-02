@@ -1683,16 +1683,34 @@
 }
 
 /*
+ * Flechas del hero en móvil.
+ *
+ * El CSS de Swiper se importa después de Tailwind y define
+ * `.swiper-button-prev/next { display: flex }` sin capa; por eso las
+ * utilidades `hidden sm:flex` no lograban ocultarlas. Esta regla vive sin
+ * capa y después del import, así que gana en el mismo orden de cascada. Bajo
+ * `sm` el gesto táctil y la paginación bastan; desde `sm` Swiper vuelve a
+ * mostrarlas.
+ */
+@media (max-width: 639.98px) {
+    [data-home-hero-slider] .swiper-button-prev,
+    [data-home-hero-slider] .swiper-button-next {
+        display: none;
+    }
+}
+
+/*
  * Barra entre la cabecera y el hero del home.
  *
  * Pedido del dueño: la foto del hero no debe tocar la navbar, y dentro de la
  * franja viven el destacado del producto y la telemetría de coordenadas. La
- * barra no pinta fondo (deja ver el fondo del `<body>`) y mide el alto de la
- * navbar, que la cabecera publica en `--storefront-nav-h`. Es `min-height` y no
- * `height` para que el contenido nunca se recorte en pantallas angostas; en
- * escritorio el contenido cabe en una línea y la franja mide exactamente lo
- * mismo que la navbar. Sin valores en px: si la navbar cambia de alto
- * (breakpoint, zoom, tipografía) la barra la sigue sin ajustes a mano.
+ * barra no pinta fondo (deja ver el fondo del `<body>`) y conserva como mínimo
+ * el alto de la navbar, que la cabecera publica en `--storefront-nav-h`. Es
+ * `min-height` y no `height` para que el contenido nunca se recorte en
+ * pantallas angostas; cuando el destacado ocupa dos líneas, `app.js` publica
+ * el alto real en `--storefront-hero-spacer-h` y el hero lo descuenta. Sin
+ * valores en px: si la navbar o la franja cambian de alto (breakpoint, zoom,
+ * tipografía) el hero las sigue sin ajustes a mano.
  */
 [data-home-hero-spacer] {
     display: flex;
@@ -1705,13 +1723,15 @@
  *
  * El hero ya no vive dentro del contenedor: ocupa todo el ancho y debe cubrir
  * exactamente el espacio que queda bajo la cabecera (top bar de envíos +
- * navbar) menos la barra transparente que ahora los separa, para que el bloque
- * cabecera + barra + hero siga cerrando justo en el borde del viewport y no
+ * navbar) menos la franja transparente que ahora los separa, para que el bloque
+ * cabecera + franja + hero siga cerrando justo en el borde del viewport y no
  * aparezca un scroll de más. La altura real de la cabecera la publica
  * `resources/js/app.js` en `--storefront-header-h` y `--storefront-nav-h` sobre
- * <html>; si el script aún no corrió, el respaldo es `0px`. El suelo de `26rem`
- * evita que un viewport corto (móvil apaisado, teclado abierto) recorte el texto
- * y las acciones superpuestos.
+ * <html>; el alto real de la franja se publica en
+ * `--storefront-hero-spacer-h` (con la navbar como respaldo para el primer
+ * pintado). Si el script aún no corrió, el respaldo es `0px`. El suelo de
+ * `26rem` evita que un viewport corto (móvil apaisado, teclado abierto)
+ * recorte el texto y las acciones superpuestos.
  *
  * Reglas sin capa (`@layer`) a propósito: Swiper define `.swiper` con
  * `position: relative` y, al ser CSS propio, gana sobre las utilidades de
@@ -1720,7 +1740,10 @@
  */
 [data-home-hero-viewport] {
     min-height: max(
-        calc(100dvh - var(--storefront-header-h, 0px) - var(--storefront-nav-h, 0px)),
+        calc(
+            100dvh - var(--storefront-header-h, 0px) -
+                var(--storefront-hero-spacer-h, var(--storefront-nav-h, 0px))
+        ),
         26rem
     );
 }
