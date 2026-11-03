@@ -12,6 +12,7 @@
     $nameHook = $nameHook ?? null;
     $priceHook = $priceHook ?? null;
     $headingLevel = $headingLevel ?? 3;
+    $cardClasses = $cardClasses ?? '';
 
     $imagenes = $product->imagenes ?? [];
     $imagen = $imagenes[0] ?? null;
@@ -65,7 +66,7 @@
     data-product-name="{{ $product->name }}"
     data-home-reveal
     data-home-hover
-    class="group relative flex h-full flex-col overflow-hidden rounded-lg border border-ink bg-white hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.18)]"
+    class="group relative flex h-full flex-col overflow-hidden rounded-lg border border-ink bg-white hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.18)] {{ $cardClasses }}"
 >
     {{-- Foto cuadrada (1:1) a todo el ancho del card: al no haber relleno
          lateral, la pieza ocupa el ancho completo y el marco la recorta con sus

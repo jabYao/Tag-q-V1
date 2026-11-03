@@ -15,10 +15,11 @@ use Illuminate\View\View;
  *   que la portada móvil de categorías y la galería bento de escritorio usan
  *   para elegir fotos reales por render.
  * - Como máximo seis productos activos recientes, con la misma consulta de
- *   "recientes" del catálogo (`created_at`/`id` descendente). Los inactivos
- *   nunca se listan; los activos con stock 0 sí (se marcan como Agotado). La
- *   tarjeta muestra marca, referencia y ficha técnica reales, así que la
- *   consulta carga `brand` junto con `category` para no hacer N+1.
+ *   "recientes" del catálogo (`created_at`/`id` descendente). La vista muestra
+ *   los seis en móvil y conserva los cuatro primeros en escritorio. Los
+ *   inactivos nunca se listan; los activos con stock 0 sí (se marcan como
+ *   Agotado). La tarjeta muestra marca, referencia y ficha técnica reales, así
+ *   que la consulta carga `brand` junto con `category` para no hacer N+1.
  * - Candidatos de la galería bento: TODO el catálogo activo (no solo los
  *   recientes del grid), para que la vista elija tres fotos de producto al
  *   azar en cada render. La vista descarta imágenes repetidas y a Kairos
@@ -32,10 +33,10 @@ use Illuminate\View\View;
  */
 class StorefrontHomeController extends Controller
 {
-    /** Máximo de productos recientes mostrados en el home. */
+    /** Productos recientes cargados: seis en móvil, cuatro visibles en escritorio. */
     private const RECENT_PRODUCTS = 6;
 
-    /** Cupo del carrusel de favoritos: tres visibles, ocho en total. */
+    /** Cupo del carrusel de favoritos: tres visibles en móvil, cinco en escritorio y ocho en total. */
     private const FAVORITE_PRODUCTS = 8;
 
     /**

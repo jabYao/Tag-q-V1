@@ -48,8 +48,8 @@ class HomeMobileTest extends DuskTestCase
     private const VIEWPORT_HEIGHT = 844;
 
     /**
-     * Productos del catálogo: seis llenan recientes y ocho permiten que el
-     * carrusel de favoritos active el bucle con tres fichas visibles.
+     * Productos del catálogo: seis llenan recientes en móvil y ocho permiten
+     * que el carrusel de favoritos active el bucle en escritorio.
      */
     private const PRODUCTS_ON_HOME = 8;
 
@@ -172,11 +172,19 @@ class HomeMobileTest extends DuskTestCase
                     .' <= document.documentElement.clientHeight + 1;',
                     true,
                 )
-                // Recientes: dos columnas y Ver todos móvil después de la grilla.
+                // Recientes: seis tarjetas visibles en móvil, dos columnas y
+                // Ver todos móvil después de la grilla.
                 ->assertScript(
                     'return getComputedStyle('
                     .'document.querySelector("[data-home-products-grid] > div")'
                     .').gridTemplateColumns.split(" ").length === 2;',
+                    true,
+                )
+                ->assertScript(
+                    'const cards = Array.from(document.querySelectorAll('
+                    .'"[data-home-products-grid] [data-home-card]"));'
+                    .'return cards.length === 6'
+                    .' && cards.every((card) => getComputedStyle(card).display !== "none");',
                     true,
                 )
                 ->assertScript(

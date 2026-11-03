@@ -644,7 +644,21 @@ class StorefrontHomeTest extends TestCase
         $this->assertContains('sm:grid-cols-2', $gridClasses, 'La tablet conserva dos columnas');
         $this->assertContains('lg:grid-cols-3', $gridClasses, 'El escritorio conserva tres columnas');
         $this->assertContains('xl:grid-cols-4', $gridClasses, 'Las pantallas anchas conservan cuatro columnas');
-        $this->assertSame(6, $xpath->query('.//*[@data-home-card]', $grid)->length, 'La grilla muestra seis recientes');
+
+        $cards = $xpath->query('.//*[@data-home-card]', $grid);
+        $this->assertSame(6, $cards->length, 'La grilla declara seis recientes para móvil');
+
+        // Escritorio conserva cuatro: las tarjetas 5 y 6 se ocultan desde `lg`.
+        foreach ($cards as $index => $card) {
+            $this->assertInstanceOf(\DOMElement::class, $card);
+            $cardClasses = $this->classesOf($card);
+
+            if ($index < 4) {
+                $this->assertNotContains('lg:hidden', $cardClasses, 'Las cuatro primeras tarjetas siguen visibles en escritorio');
+            } else {
+                $this->assertContains('lg:hidden', $cardClasses, 'Las tarjetas 5 y 6 se ocultan en escritorio');
+            }
+        }
 
         $mobile = $xpath->query('//a[@data-home-ver-todos="recent-mobile"]')->item(0);
         $desktop = $xpath->query('//a[@data-home-ver-todos="recent-desktop"]')->item(0);
@@ -2534,7 +2548,7 @@ class StorefrontHomeTest extends TestCase
 
         $this->assertStringContainsString('data-home-favorites-swiper', $favoritosJs);
 
-        // Móvil: tres miniaturas por pantalla; tablet: dos; escritorio: tres.
+        // Móvil: tres miniaturas por pantalla; tablet: dos; escritorio: cinco.
         $this->assertMatchesRegularExpression(
             '/slidesPerView:\s*3,/',
             $favoritosJs,
@@ -2546,12 +2560,12 @@ class StorefrontHomeTest extends TestCase
             'Desde 640 px el carrusel muestra dos tarjetas',
         );
         $this->assertMatchesRegularExpression(
-            '/1024:\s*\{[^}]*slidesPerView:\s*3/s',
+            '/1024:\s*\{[^}]*slidesPerView:\s*5/s',
             $favoritosJs,
-            'Desde 1024 px el carrusel vuelve a tres tarjetas',
+            'Desde 1024 px el carrusel muestra cinco tarjetas',
         );
-        $this->assertStringNotContainsString('slidesPerView: 5', $favoritosJs, 'El carrusel ya no muestra cinco tarjetas');
-        $this->assertStringNotContainsString('1280:', $favoritosJs, 'El carrusel ya no tiene un breakpoint propio de 1280');
+        $this->assertStringContainsString('slidesPerView: 5', $favoritosJs, 'El escritorio muestra cinco tarjetas');
+        $this->assertStringNotContainsString('1280:', $favoritosJs, 'El carrusel no tiene un breakpoint propio de 1280');
 
         // Marquesina continua: autoplay sin pausa entre diapositivas, avance
         // lineal y bucle cuando hay diapositivas suficientes para no repetir
@@ -2559,9 +2573,9 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringContainsString('modules: [Autoplay]', $favoritosJs, 'El carrusel usa el módulo de autoplay');
         $this->assertMatchesRegularExpression('/slidesPerGroup:\s*1,/', $favoritosJs, 'El carrusel avanza de una en una');
         $this->assertMatchesRegularExpression(
-            '/slideCount\s*>=?\s*6/',
+            '/slideCount\s*>=?\s*7/',
             $favoritosJs,
-            'El bucle solo se activa con al menos seis diapositivas',
+            'El bucle solo se activa con diapositivas suficientes para cinco visibles',
         );
         $this->assertMatchesRegularExpression('/loop:\s*canLoop,/', $favoritosJs, 'El bucle depende de la cantidad de diapositivas');
         $this->assertMatchesRegularExpression(

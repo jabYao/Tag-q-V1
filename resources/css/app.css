@@ -1912,8 +1912,9 @@
 
 /*
  * La tarjeta de favoritos comparte la ficha de recientes, pero el carrusel
- * muestra tres por pantalla. Referencia, precio y CTA se ajustan para conservar
- * una sola línea de lectura sin tocar el tamaño de la grilla de cuatro columnas.
+ * muestra cinco por pantalla en escritorio y tres en móvil. Referencia, precio
+ * y CTA se ajustan para conservar una sola línea de lectura sin tocar el tamaño
+ * de la tarjeta de la grilla de cuatro columnas.
  */
 [data-favorite-card] [data-home-card-meta] {
     gap: 0.375rem;

@@ -300,8 +300,8 @@ document.querySelectorAll('[data-home-hero-slider]').forEach((section) => initHo
  * Carrusel de favoritos (`data-home-favorites`).
  *
  * Móvil muestra tres fichas mini por pantalla (la ficha reduce su información
- * por CSS), tablet dos y escritorio tres; siempre avanza de una en una. Cuando
- * hay diapositivas suficientes (`slides >= 6`), el carrusel se mueve solo en
+ * por CSS), tablet dos y escritorio cinco; siempre avanza de una en una. Cuando
+ * hay diapositivas suficientes (`slides >= 7`), el carrusel se mueve solo en
  * bucle como una marquesina continua: `delay: 0` encadena una transición con la
  * siguiente y el CSS fija `transition-timing-function: linear` para que la
  * velocidad sea constante, sin acelerar y frenar en cada tarjeta. Con menos
@@ -325,7 +325,9 @@ function initHomeFavoritesSlider(section) {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const canHover = window.matchMedia('(hover: hover)');
     const slideCount = container.querySelectorAll('.swiper-slide').length;
-    const canLoop = slideCount >= 6;
+    // Cinco visibles en escritorio necesitan dos diapositivas de margen para
+    // que el bucle no repita una ficha en pantalla.
+    const canLoop = slideCount >= 7;
     const marqueeSpeed = 6000;
 
     const swiper = new Swiper(container, {
@@ -343,7 +345,7 @@ function initHomeFavoritesSlider(section) {
         watchOverflow: true,
         breakpoints: {
             640: { slidesPerView: 2, spaceBetween: 20 },
-            1024: { slidesPerView: 3, spaceBetween: 20 },
+            1024: { slidesPerView: 5, spaceBetween: 20 },
         },
     });
 

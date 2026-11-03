@@ -279,6 +279,10 @@
                                 'product' => $product,
                                 'cardAttribute' => 'data-home-card',
                                 'wireKeyPrefix' => 'home',
+                                // Móvil lista seis recientes; escritorio conserva
+                                // las cuatro primeras para mantener el ritmo
+                                // original de la grilla.
+                                'cardClasses' => $loop->index >= 4 ? 'lg:hidden' : '',
                             ])
                         @endforeach
                         </div>
@@ -470,11 +474,12 @@
 
             {{-- Favoritos: cierre del home, justo antes del footer. La consulta
                  ordena por unidades vendidas en pedidos consolidados y limita a
-                 ocho; el carrusel muestra tres a la vez y avanza solo en bucle.
-                 Los productos sin ventas solo completan el cupo cuando el
-                 catálogo no llega a ocho, nunca se inventan fichas. En móvil el
-                 margen inferior se reduce para no dejar un hueco grande antes
-                 del footer; desde `sm` conserva el ritmo del home. --}}
+                 ocho; el carrusel muestra tres a la vez en móvil y cinco en
+                 escritorio, y avanza solo en bucle. Los productos sin ventas
+                 solo completan el cupo cuando el catálogo no llega a ocho,
+                 nunca se inventan fichas. En móvil el margen inferior se reduce
+                 para no dejar un hueco grande antes del footer; desde `sm`
+                 conserva el ritmo del home. --}}
             @if($favoriteProducts->isNotEmpty())
                 <section data-home-favorites aria-labelledby="home-favorites-title" class="mb-4 sm:mb-20">
                     <div data-home-reveal class="mb-7 flex flex-col gap-5 border-b border-border-soft pb-5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
