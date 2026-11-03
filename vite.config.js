@@ -15,9 +15,9 @@ export default defineConfig({
                     weights: [400, 500, 600, 700],
                 }),
                 bunny('Jost', {
-                    // 500 medium: el único peso que usa el wordmark `Tag Q`
-                    // (utilidad `font-jost`) en navbar y footer.
-                    weights: [500],
+                    // 400 regular para el wordmark del navbar y 500 medium
+                    // para el footer y el panel administrativo.
+                    weights: [400, 500],
                 }),
             ],
         }),

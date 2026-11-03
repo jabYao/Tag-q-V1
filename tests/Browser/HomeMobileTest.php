@@ -21,8 +21,9 @@ use Tests\DuskTestCase;
  * - La grilla de recientes usa dos columnas y su "Ver todos" va después.
  * - La portada móvil de categorías muestra tres fichas (una grande y dos
  *   pequeñas) y reemplaza a la galería de escritorio, que queda oculta.
- * - El carrusel de favoritos muestra tres fichas mini por pantalla, con la
- *   información secundaria oculta y el "Ver todos" después del carrusel.
+ * - El carrusel de favoritos muestra tres fichas mini por pantalla, se mueve
+ *   solo en bucle continuo y no tiene flechas ni indicadores; sigue siendo
+ *   arrastrable y el "Ver todos" va después del carrusel.
  *
  * Cómo ejecutarlo (mismas condiciones que el resto de tests/Browser):
  *   1. Chromedriver disponible: `php artisan dusk:chrome-driver --detect`.
@@ -47,7 +48,7 @@ class HomeMobileTest extends DuskTestCase
     private const VIEWPORT_HEIGHT = 844;
 
     /**
-     * Productos del catálogo: cuatro llenan recientes y ocho permiten que el
+     * Productos del catálogo: seis llenan recientes y ocho permiten que el
      * carrusel de favoritos active el bucle con tres fichas visibles.
      */
     private const PRODUCTS_ON_HOME = 8;
@@ -226,6 +227,23 @@ class HomeMobileTest extends DuskTestCase
                     .'return ratio > 2.8 && ratio < 3.2;',
                     true,
                 )
+                // Sin flechas ni indicadores: la marquesina se mueve sola.
+                ->assertScript(
+                    'const section = document.querySelector("[data-home-favorites]");'
+                    .'return section.querySelectorAll('
+                    .'"[data-home-favorites-prev], [data-home-favorites-next],'
+                    .' [data-home-favorites-pagination], .swiper-button-prev,'
+                    .' .swiper-button-next, .swiper-pagination").length === 0;',
+                    true,
+                )
+                ->assertScript(
+                    'const swiper = document.querySelector("[data-home-favorites-swiper]").swiper;'
+                    .'return swiper.params.loop === true'
+                    .' && swiper.params.autoplay.delay === 0'
+                    .' && getComputedStyle(swiper.wrapperEl).transitionTimingFunction === "linear"'
+                    .' && swiper.autoplay.running === true;',
+                    true,
+                )
                 // La ficha mini esconde la información secundaria y deja el
                 // icono de la bolsa; conserva nombre y precio.
                 ->assertScript(
@@ -280,6 +298,28 @@ class HomeMobileTest extends DuskTestCase
                     .' && panel.getBoundingClientRect().height'
                     .' <= document.documentElement.clientHeight * 0.70 + 1;',
                     true,
+                )
+                // Tienda recoge sus categorías en un submenú que solo aparece
+                // al tocar el botón, y se vuelve a cerrar con otro toque.
+                ->assertScript(
+                    'return getComputedStyle('
+                    .'document.querySelector("[data-nav-mobile-tienda-submenu]")'
+                    .').display === "none";',
+                    true,
+                )
+                ->click('[data-nav-mobile-item="tienda"]')
+                ->waitUntil(
+                    'getComputedStyle(document.querySelector('
+                    .'"[data-nav-mobile-tienda-submenu]")).display !== "none";',
+                    10,
+                )
+                ->assertVisible('[data-nav-mobile-tienda-submenu]')
+                ->assertVisible('[data-nav-mobile-child="ninos"]')
+                ->click('[data-nav-mobile-item="tienda"]')
+                ->waitUntil(
+                    'getComputedStyle(document.querySelector('
+                    .'"[data-nav-mobile-tienda-submenu]")).display === "none";',
+                    10,
                 );
         });
     }

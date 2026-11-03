@@ -300,16 +300,20 @@ document.querySelectorAll('[data-home-hero-slider]').forEach((section) => initHo
  * Carrusel de favoritos (`data-home-favorites`).
  *
  * Móvil muestra tres fichas mini por pantalla (la ficha reduce su información
- * por CSS), tablet dos y escritorio tres; siempre avanza de una en una. El
- * bucle se activa solo cuando hay diapositivas suficientes para llenar el
- * carrusel sin repetir una misma ficha en pantalla (`slides >= 6`): con menos
- * el recorrido se detiene en los extremos. Sin autoplay: el visitante decide
- * cuándo moverse. La paginación se puede pulsar y las flechas tienen nombre
- * accesible.
+ * por CSS), tablet dos y escritorio tres; siempre avanza de una en una. Cuando
+ * hay diapositivas suficientes (`slides >= 6`), el carrusel se mueve solo en
+ * bucle como una marquesina continua: `delay: 0` encadena una transición con la
+ * siguiente y el CSS fija `transition-timing-function: linear` para que la
+ * velocidad sea constante, sin acelerar y frenar en cada tarjeta. Con menos
+ * diapositivas queda quieto y swipeable, sin inventar fichas.
  *
- * Con `prefers-reduced-motion: reduce` la velocidad del desplazamiento es cero
- * desde el arranque, y se actualiza si la preferencia cambia con la página
- * abierta. El contenido no se oculta sin JavaScript.
+ * No hay flechas ni paginación: el visitante puede arrastrar en cualquier
+ * dirección y un toque fuera de las tarjetas/enlaces adelanta una ficha con una
+ * transición corta. Al tocar o pasar el puntero se pausa; al soltar, reanuda.
+ *
+ * Con `prefers-reduced-motion: reduce` no arranca solo y la velocidad es cero;
+ * la preferencia se reevalúa si cambia con la página abierta. El contenido no
+ * se oculta sin JavaScript.
  */
 function initHomeFavoritesSlider(section) {
     const container = section.querySelector('[data-home-favorites-swiper]');
@@ -319,33 +323,75 @@ function initHomeFavoritesSlider(section) {
     }
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const canHover = window.matchMedia('(hover: hover)');
     const slideCount = container.querySelectorAll('.swiper-slide').length;
+    const canLoop = slideCount >= 6;
+    const marqueeSpeed = 6000;
 
     const swiper = new Swiper(container, {
-        modules: [Navigation, Pagination],
+        modules: [Autoplay],
         slidesPerView: 3,
         slidesPerGroup: 1,
         spaceBetween: 10,
-        loop: slideCount >= 6,
+        loop: canLoop,
         loopAdditionalSlides: 1,
-        speed: prefersReducedMotion() ? 0 : 300,
+        speed: reducedMotion.matches ? 0 : marqueeSpeed,
+        autoplay: canLoop && !reducedMotion.matches
+            ? { delay: 0, disableOnInteraction: false }
+            : false,
+        allowTouchMove: true,
         watchOverflow: true,
-        navigation: {
-            prevEl: section.querySelector('[data-home-favorites-prev]'),
-            nextEl: section.querySelector('[data-home-favorites-next]'),
-        },
-        pagination: {
-            el: section.querySelector('[data-home-favorites-pagination]'),
-            clickable: true,
-        },
         breakpoints: {
             640: { slidesPerView: 2, spaceBetween: 20 },
             1024: { slidesPerView: 3, spaceBetween: 20 },
         },
     });
 
+    const pause = () => swiper.autoplay && swiper.autoplay.stop();
+
+    const resume = () => {
+        if (!canLoop || reducedMotion.matches) {
+            return;
+        }
+
+        // En táctil el `:hover` sintético y el foco pueden quedarse pegados
+        // después de un toque; solo el puntero real conserva la pausa.
+        if (canHover.matches && (section.matches(':hover') || section.contains(document.activeElement))) {
+            return;
+        }
+
+        swiper.autoplay.start();
+    };
+
+    swiper.on('touchStart', pause);
+    swiper.on('touchEnd', resume);
+    section.addEventListener('mouseenter', pause);
+    section.addEventListener('mouseleave', resume);
+    section.addEventListener('focusin', pause);
+    section.addEventListener('focusout', resume);
+
+    // Un toque en el espacio libre del carrusel (nunca sobre una tarjeta,
+    // enlace o botón) adelanta una ficha rápido y luego retoma la marquesina.
+    section.addEventListener('click', (event) => {
+        if (event.target.closest('a, button, input, select, textarea, form, [role="button"]')) {
+            return;
+        }
+
+        swiper.slideNext(reducedMotion.matches ? 0 : 320);
+    });
+
     reducedMotion.addEventListener('change', (event) => {
-        swiper.params.speed = event.matches ? 0 : 300;
+        swiper.params.speed = event.matches ? 0 : marqueeSpeed;
+
+        if (event.matches) {
+            pause();
+
+            return;
+        }
+
+        if (canLoop) {
+            swiper.autoplay.start();
+        }
     });
 }
 

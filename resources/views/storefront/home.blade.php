@@ -356,7 +356,7 @@
                     $galleryUsedSources[$categoryImages[$slug]] = true;
                 }
 
-                // Candidatos de producto: todo el catálogo activo (no solo los cuatro
+                // Candidatos de producto: todo el catálogo activo (no solo los seis
                 // recientes del grid), con imagen real, sin repetir URL y excluyendo
                 // por completo a Kairos Obama (con o sin el sufijo "th-1").
                 $galleryProductCandidates = [];
@@ -470,9 +470,9 @@
 
             {{-- Favoritos: cierre del home, justo antes del footer. La consulta
                  ordena por unidades vendidas en pedidos consolidados y limita a
-                 ocho; el carrusel muestra cinco a la vez en escritorio. Los
-                 productos sin ventas solo completan el cupo cuando el catálogo
-                 no llega a ocho, nunca se inventan fichas. --}}
+                 ocho; el carrusel muestra tres a la vez y avanza solo en bucle.
+                 Los productos sin ventas solo completan el cupo cuando el
+                 catálogo no llega a ocho, nunca se inventan fichas. --}}
             @if($favoriteProducts->isNotEmpty())
                 <section data-home-favorites aria-labelledby="home-favorites-title" class="mb-20">
                     <div data-home-reveal class="mb-7 flex flex-col gap-5 border-b border-border-soft pb-5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
@@ -481,37 +481,12 @@
                             <h2 id="home-favorites-title" class="mt-2 font-display text-[32px] font-bold uppercase leading-[36px] tracking-[-0.01em] text-ink sm:text-[40px] sm:leading-[44px] lg:text-[48px] lg:leading-[52px] lg:tracking-[-0.02em]">Los más vendidos</h2>
                         </div>
 
-                        <div class="flex flex-wrap items-center gap-3">
-                            <a
-                                data-home-hover
-                                data-home-ver-todos="favorites-desktop"
-                                href="{{ route('catalog.index') }}"
-                                class="hidden h-12 items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:inline-flex"
-                            >Ver todos</a>
-
-                            <div class="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    data-home-favorites-prev
-                                    aria-label="Favoritos anteriores"
-                                    class="inline-flex h-11 w-11 items-center justify-center rounded border border-secondary bg-white text-secondary transition-colors hover:border-secondary-hover hover:text-secondary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                >
-                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
-                                        <path d="M19 12H5m0 0 6-6m-6 6 6 6" />
-                                    </svg>
-                                </button>
-                                <button
-                                    type="button"
-                                    data-home-favorites-next
-                                    aria-label="Más favoritos"
-                                    class="inline-flex h-11 w-11 items-center justify-center rounded border border-secondary bg-white text-secondary transition-colors hover:border-secondary-hover hover:text-secondary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                >
-                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
-                                        <path d="M5 12h14m0 0-6-6m6 6-6 6" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
+                        <a
+                            data-home-hover
+                            data-home-ver-todos="favorites-desktop"
+                            href="{{ route('catalog.index') }}"
+                            class="hidden h-12 items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:inline-flex"
+                        >Ver todos</a>
                     </div>
 
                     <div class="relative">
@@ -528,8 +503,6 @@
                                 @endforeach
                             </div>
                         </div>
-
-                        <div data-home-favorites-pagination class="mt-6 flex justify-center"></div>
 
                         <a
                             data-home-hover

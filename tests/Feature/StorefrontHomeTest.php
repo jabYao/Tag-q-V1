@@ -22,7 +22,7 @@ use Tests\TestCase;
  *   de marca `Tag Q` apunta al home y el resto de enlaces no cambia.
  * - Las categorías enlazan al filtro real del catálogo (`categoria`, el mismo
  *   parámetro que valida `CatalogFilterRequest`).
- * - Muestra como máximo cuatro productos activos recientes, reutilizando las
+ * - Muestra como máximo seis productos activos recientes, reutilizando las
  *   convenciones de la tarjeta del catálogo (imagen con fallback, precio COP y
  *   disponibilidad/agotado). Un producto inactivo nunca aparece, ni siquiera
  *   siendo el más reciente.
@@ -539,16 +539,16 @@ class StorefrontHomeTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | Productos recientes activos (máximo cuatro)
+    | Productos recientes activos (máximo seis)
     |--------------------------------------------------------------------------
     */
 
-    public function test_el_home_muestra_como_maximo_cuatro_productos_activos_recientes(): void
+    public function test_el_home_muestra_como_maximo_seis_productos_activos_recientes(): void
     {
         $category = $this->category();
 
         $products = [];
-        foreach (range(1, 5) as $position) {
+        foreach (range(1, 7) as $position) {
             $products[] = $this->product($category, [
                 'name' => "Reciente {$position}",
                 'slug' => "reciente-{$position}",
@@ -566,7 +566,9 @@ class StorefrontHomeTest extends TestCase
             $recentNames[] = $card->getAttribute('data-product-name');
         }
 
-        // Los cuatro más recientes entran; el más antiguo queda fuera de esta
+        $this->assertCount(6, $recentNames, 'La sección muestra seis productos recientes');
+
+        // Los seis más recientes entran; el más antiguo queda fuera de esta
         // sección. Puede seguir apareciendo en favoritos, donde el ranking es
         // por ventas y no por fecha.
         foreach (array_slice($products, 1) as $product) {
@@ -623,7 +625,7 @@ class StorefrontHomeTest extends TestCase
     {
         $category = $this->category();
 
-        foreach (range(1, 4) as $position) {
+        foreach (range(1, 6) as $position) {
             $this->product($category, [
                 'name' => "Grilla Móvil {$position}",
                 'slug' => "grilla-movil-{$position}",
@@ -642,7 +644,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertContains('sm:grid-cols-2', $gridClasses, 'La tablet conserva dos columnas');
         $this->assertContains('lg:grid-cols-3', $gridClasses, 'El escritorio conserva tres columnas');
         $this->assertContains('xl:grid-cols-4', $gridClasses, 'Las pantallas anchas conservan cuatro columnas');
-        $this->assertSame(4, $xpath->query('.//*[@data-home-card]', $grid)->length, 'La grilla mantiene sus cuatro recientes');
+        $this->assertSame(6, $xpath->query('.//*[@data-home-card]', $grid)->length, 'La grilla muestra seis recientes');
 
         $mobile = $xpath->query('//a[@data-home-ver-todos="recent-mobile"]')->item(0);
         $desktop = $xpath->query('//a[@data-home-ver-todos="recent-desktop"]')->item(0);
@@ -677,7 +679,7 @@ class StorefrontHomeTest extends TestCase
     |
     | La galería bento muestra hasta cinco fichas: dos categorías con imagen,
     | elegidas al azar, y tres fotos de producto tomadas de TODO el catálogo
-    | activo (no solo los cuatro recientes del grid), sin repetir URLs, sin
+    | activo (no solo los seis recientes del grid), sin repetir URLs, sin
     | productos inactivos y excluyendo a Kairos Obama. Con pocos datos se
     | muestran menos fichas; nunca se inventan.
     */
@@ -749,9 +751,9 @@ class StorefrontHomeTest extends TestCase
             ]);
         }
 
-        // Cuatro productos recientes SIN imagen: llenan el grid pero no aportan
+        // Seis productos recientes SIN imagen: llenan el grid pero no aportan
         // ninguna foto a la galería.
-        foreach (range(1, 4) as $position) {
+        foreach (range(1, 6) as $position) {
             $this->product($category, [
                 'name' => "Reciente Sin Foto {$position}",
                 'slug' => "reciente-sin-foto-{$position}",
@@ -2405,32 +2407,24 @@ class StorefrontHomeTest extends TestCase
         $this->assertSame('Favoritos', trim($xpath->query('.//p', $section)->item(0)?->textContent ?? ''));
         $this->assertStringContainsString('Los más vendidos', $section->textContent);
 
+        $this->assertSame(
+            1,
+            $xpath->query('.//*[@data-home-favorites-swiper]', $section)->length,
+            'El carrusel de favoritos declara su contenedor',
+        );
+
+        // Sin flechas ni paginación: la marquesina se mueve sola y el gesto
+        // táctil reemplaza los controles externos.
         foreach ([
-            'data-home-favorites-swiper',
             'data-home-favorites-prev',
             'data-home-favorites-next',
             'data-home-favorites-pagination',
-        ] as $marker) {
+        ] as $removed) {
             $this->assertSame(
-                1,
-                $xpath->query('.//*[@'.$marker.']', $section)->length,
-                "El carrusel de favoritos declara {$marker}",
+                0,
+                $xpath->query('.//*[@'.$removed.']', $section)->length,
+                "El carrusel de favoritos ya no declara {$removed}",
             );
-        }
-
-        // Los dos botones del carrusel: fondo blanco, borde y flecha en el
-        // naranja secundario de la marca.
-        foreach (['data-home-favorites-prev', 'data-home-favorites-next'] as $control) {
-            $boton = $xpath->query('.//*[@'.$control.']', $section)->item(0);
-            $this->assertNotNull($boton, "El botón {$control} existe");
-
-            $clases = $boton->getAttribute('class');
-            $this->assertStringContainsString('bg-white', $clases, "{$control} mantiene el fondo blanco");
-            $this->assertStringContainsString('border-secondary', $clases, "{$control} pinta el borde secundario");
-            $this->assertStringContainsString('text-secondary', $clases, "{$control} pinta la flecha secundaria");
-            $this->assertStringContainsString('hover:border-secondary-hover', $clases);
-            $this->assertStringContainsString('hover:text-secondary-hover', $clases);
-            $this->assertStringNotContainsString('bg-secondary', $clases);
         }
 
         $this->assertSame(8, $xpath->query('.//*[@data-favorite-card]', $section)->length);
@@ -2515,7 +2509,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringContainsString('data-home-favorites', $html);
     }
 
-    public function test_el_carrusel_de_favoritos_muestra_tres_en_movil_dos_en_tablet_y_tres_en_escritorio(): void
+    public function test_el_carrusel_de_favoritos_muestra_tres_por_pantalla_y_avanza_solo_en_bucle(): void
     {
         $js = file_get_contents(base_path('resources/js/app.js'));
         $css = file_get_contents(base_path('resources/css/app.css'));
@@ -2523,45 +2517,69 @@ class StorefrontHomeTest extends TestCase
         $this->assertNotFalse($js);
         $this->assertNotFalse($css);
 
-        foreach ([
-            'data-home-favorites-swiper',
-            'data-home-favorites-prev',
-            'data-home-favorites-next',
-            'data-home-favorites-pagination',
-        ] as $marker) {
-            $this->assertStringContainsString($marker, $js, "app.js inicializa {$marker}");
-        }
+        $inicio = strpos($js, 'function initHomeFavoritesSlider');
+        $fin = strpos($js, "document.querySelectorAll('[data-home-favorites]')");
+        $this->assertNotFalse($inicio);
+        $this->assertNotFalse($fin);
+
+        $favoritosJs = substr($js, $inicio, $fin - $inicio);
+
+        $this->assertStringContainsString('data-home-favorites-swiper', $favoritosJs);
 
         // Móvil: tres miniaturas por pantalla; tablet: dos; escritorio: tres.
         $this->assertMatchesRegularExpression(
             '/slidesPerView:\s*3,/',
-            $js,
+            $favoritosJs,
             'El carrusel arranca con tres tarjetas visibles en móvil',
         );
         $this->assertMatchesRegularExpression(
             '/640:\s*\{[^}]*slidesPerView:\s*2/s',
-            $js,
+            $favoritosJs,
             'Desde 640 px el carrusel muestra dos tarjetas',
         );
         $this->assertMatchesRegularExpression(
             '/1024:\s*\{[^}]*slidesPerView:\s*3/s',
-            $js,
+            $favoritosJs,
             'Desde 1024 px el carrusel vuelve a tres tarjetas',
         );
-        $this->assertStringNotContainsString('slidesPerView: 5', $js, 'El carrusel ya no muestra cinco tarjetas');
-        $this->assertStringNotContainsString('1280:', $js, 'El carrusel ya no tiene un breakpoint propio de 1280');
+        $this->assertStringNotContainsString('slidesPerView: 5', $favoritosJs, 'El carrusel ya no muestra cinco tarjetas');
+        $this->assertStringNotContainsString('1280:', $favoritosJs, 'El carrusel ya no tiene un breakpoint propio de 1280');
 
-        // Avance de una en una y bucle solo cuando hay diapositivas suficientes
-        // para no repetir una ficha en la misma pantalla.
-        $this->assertMatchesRegularExpression('/slidesPerGroup:\s*1,/', $js, 'El carrusel avanza de una en una');
+        // Marquesina continua: autoplay sin pausa entre diapositivas, avance
+        // lineal y bucle cuando hay diapositivas suficientes para no repetir
+        // una ficha en la misma pantalla.
+        $this->assertStringContainsString('modules: [Autoplay]', $favoritosJs, 'El carrusel usa el módulo de autoplay');
+        $this->assertMatchesRegularExpression('/slidesPerGroup:\s*1,/', $favoritosJs, 'El carrusel avanza de una en una');
         $this->assertMatchesRegularExpression(
-            '/loop:\s*slideCount\s*>=?\s*6/',
-            $js,
+            '/slideCount\s*>=?\s*6/',
+            $favoritosJs,
             'El bucle solo se activa con al menos seis diapositivas',
         );
-        $this->assertStringContainsString('prefersReducedMotion() ? 0 : 300', $js);
-        $this->assertStringContainsString('[data-home-favorites-pagination]', $css);
-        $this->assertStringContainsString('swiper-button-disabled', $css);
+        $this->assertMatchesRegularExpression('/loop:\s*canLoop,/', $favoritosJs, 'El bucle depende de la cantidad de diapositivas');
+        $this->assertMatchesRegularExpression(
+            '/autoplay:\s*canLoop\s*&&\s*!reducedMotion\.matches/s',
+            $favoritosJs,
+            'El autoplay se activa solo en bucle y sin movimiento reducido',
+        );
+        $this->assertStringContainsString('delay: 0', $favoritosJs, 'La marquesina no se detiene entre diapositivas');
+        $this->assertStringNotContainsString('easing:', $favoritosJs, 'El ritmo constante no depende de una opción que Swiper ignora');
+        $this->assertMatchesRegularExpression(
+            '/\[data-home-favorites-swiper\]\s+\.swiper-wrapper\s*\{[^}]*transition-timing-function:\s*linear/s',
+            $css,
+            'El CSS fija una velocidad lineal para la marquesina',
+        );
+        $this->assertStringContainsString('marqueeSpeed = 6000', $favoritosJs, 'La marquesina tiene una velocidad base lenta');
+        $this->assertStringContainsString('allowTouchMove: true', $favoritosJs, 'El visitante puede arrastrar en cualquier dirección');
+        $this->assertStringNotContainsString('navigation:', $favoritosJs, 'El carrusel ya no configura flechas');
+        $this->assertStringNotContainsString('pagination:', $favoritosJs, 'El carrusel ya no configura indicadores');
+        $this->assertStringContainsString('slideNext(reducedMotion.matches ? 0 : 320)', $favoritosJs, 'Un toque libre adelanta una ficha rápido');
+
+        // El CSS ya no estiliza controles retirados; sí invita a arrastrar.
+        $this->assertStringContainsString('[data-home-favorites-swiper]', $css);
+        $this->assertStringContainsString('cursor: grab', $css);
+        $this->assertStringNotContainsString('[data-home-favorites-pagination]', $css);
+        $this->assertStringNotContainsString('[data-home-favorites-prev]', $css);
+        $this->assertStringNotContainsString('[data-home-favorites-next]', $css);
     }
 
     public function test_los_favoritos_usan_una_ficha_mini_en_movil_y_su_ver_todos_va_despues_del_carrusel(): void

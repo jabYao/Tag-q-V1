@@ -12,9 +12,9 @@ use Illuminate\View\View;
  * Construido solo con datos ya existentes del catálogo, sin contenido inventado:
  *
  * - Categorías existentes (`Category::orderBy('name')`, igual que el catálogo),
- *   que la galería bento usa para elegir dos fotos reales por render. El home
- *   ya no tiene una franja de categorías propia.
- * - Como máximo cuatro productos activos recientes, con la misma consulta de
+ *   que la portada móvil de categorías y la galería bento de escritorio usan
+ *   para elegir fotos reales por render.
+ * - Como máximo seis productos activos recientes, con la misma consulta de
  *   "recientes" del catálogo (`created_at`/`id` descendente). Los inactivos
  *   nunca se listan; los activos con stock 0 sí (se marcan como Agotado). La
  *   tarjeta muestra marca, referencia y ficha técnica reales, así que la
@@ -33,9 +33,9 @@ use Illuminate\View\View;
 class StorefrontHomeController extends Controller
 {
     /** Máximo de productos recientes mostrados en el home. */
-    private const RECENT_PRODUCTS = 4;
+    private const RECENT_PRODUCTS = 6;
 
-    /** Cupo del carrusel de favoritos: cinco visibles, ocho en total. */
+    /** Cupo del carrusel de favoritos: tres visibles, ocho en total. */
     private const FAVORITE_PRODUCTS = 8;
 
     /**
@@ -60,7 +60,7 @@ class StorefrontHomeController extends Controller
             ->get();
 
         // Candidatos de la galería bento: todo el catálogo activo con imagen
-        // real, no solo los cuatro recientes del grid. La vista filtra sin
+        // real, no solo los seis recientes del grid. La vista filtra sin
         // imagen, duplicados y Kairos Obama, y elige tres al azar por render.
         $galleryProducts = Product::query()
             ->where('is_active', true)

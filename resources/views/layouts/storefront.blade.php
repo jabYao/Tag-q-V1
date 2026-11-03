@@ -169,12 +169,13 @@
          Colecciones y un estado vacío honesto cuando no hay colecciones. El
          formulario GET `catalog.index?q=...` sigue siendo el respaldo/Enter.
          Sin API propia, sin endpoint JSON, sin dependencias ni assets externos. El
-         wordmark `Tag Q` pasa a Jost 500 (`font-jost`, token del
-         tema), con tracking de `0.1em`, tamaño de 48px y una separación de
-         27px respecto del SVG, tanto en el navbar como en el footer; el SVG
-         del logo se mantiene a su izquierda. El submenú de Tienda se eleva a un
-         mega menú a ancho completo compartido por escritorio y móvil, con los
-         destacados reales servidos por el componente Livewire
+         wordmark `Tag Q` usa Jost (`font-jost`, token del tema) con tracking de
+         `0.1em` y una separación de 27px respecto del SVG; en el navbar va en
+         Jost 400 y baja a `clamp(26px, 7.6vw, 42px)` para equilibrar el logo,
+         mientras el footer conserva Jost 500 a 40px. El SVG del logo se
+         mantiene a su izquierda. El submenú de Tienda se eleva a un mega menú a
+         ancho completo compartido por escritorio y móvil, con los destacados
+         reales servidos por el componente Livewire
          `storefront.featured-products-menu` (montado en carga diferida). --}}
     <nav
         data-storefront-nav
@@ -446,10 +447,9 @@
                  marca. El asset público ya trae relleno blanco (#ffffff) con la
                  sombra suave inferior original (`feDropShadow`), así que se
                  renderiza sin filtros de Tailwind: invertirlo acá apagaría esa
-                 sombra. El wordmark contiguo lleva Jost 500 (`font-jost`),
-                 tracking amplio y tamaño fluido con
-                 `clamp(29px, 8.6vw, 48px)`: en móvil deja espacio a la bolsa
-                 y desde tablet conserva los 48px del escritorio. Sin cambiar
+                 sombra. El wordmark contiguo lleva Jost 400 (`font-jost`) y un
+                 tamaño fluido de `clamp(26px, 7.6vw, 42px)`: más pequeño y
+                 delgado que el footer para no competir con el logo. Sin cambiar
                  el destino ni el nombre accesible de la marca. --}}
             <a
                 data-nav-brand
@@ -461,7 +461,7 @@
                     alt=""
                     aria-hidden="true"
                     class="h-6 w-auto shrink-0 sm:h-14"
-                /><span data-nav-brand-wordmark class="font-jost text-[clamp(29px,8.6vw,48px)] font-medium leading-none tracking-[0.1em]">Tag Q</span></a>
+                /><span data-nav-brand-wordmark class="font-jost text-[clamp(26px,7.6vw,42px)] font-normal leading-none tracking-[0.1em]">Tag Q</span></a>
 
             {{-- Columna derecha: utilidades solo-icono (buscar, cuenta, bolsa),
                  alineadas al final. No llevan texto visible; su nombre
@@ -593,13 +593,14 @@
             x-cloak
             class="site-container mt-3 flex max-h-[70dvh] flex-col gap-1 overflow-y-auto overscroll-contain border-t border-white/20 pb-4 pt-3 lg:hidden"
         >
-            {{-- En móvil Tienda alterna (tap) el mismo panel a ancho completo;
-                 el hover no existe en táctil. `Ver todo` sigue llevando al
-                 catálogo completo dentro del panel. --}}
+            {{-- En móvil Tienda alterna (tap) su submenú y el panel de
+                 destacados; el hover no existe en táctil. Los enlaces de
+                 categorías viven recogidos dentro del submenú para no llenar
+                 el menú principal. `Ver todo` sigue llevando al catálogo. --}}
             <button
                 type="button"
                 data-nav-mobile-item="tienda"
-                aria-controls="storefront-tienda-mega-menu-mobile"
+                aria-controls="storefront-tienda-mobile-submenu storefront-tienda-mega-menu-mobile"
                 :aria-expanded="megaOpen"
                 @click="megaOpen = ! megaOpen"
                 class="flex w-full items-center justify-between rounded px-3 py-2 text-left font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10"
@@ -609,6 +610,29 @@
                     <polyline points="6 9 12 15 18 9" />
                 </svg>
             </button>
+
+            {{-- Submenú móvil de Tienda: categorías y filtros reales, ocultos
+                 hasta que se toca TIENDA. Se anima con Alpine y respeta el
+                 movimiento reducido. --}}
+            <div
+                id="storefront-tienda-mobile-submenu"
+                data-nav-mobile-tienda-submenu
+                x-show="megaOpen"
+                x-cloak
+                x-transition:enter="transition ease-out duration-150 motion-reduce:transition-none"
+                x-transition:enter-start="opacity-0 -translate-y-1 motion-reduce:translate-y-0"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="transition ease-in duration-100 motion-reduce:transition-none"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 -translate-y-1 motion-reduce:translate-y-0"
+                class="mt-1 flex flex-col gap-0.5 rounded border border-white/15 bg-white/5 p-1.5"
+            >
+                <a data-nav-mobile-child="ver-todo" href="{{ route('catalog.index') }}" class="rounded px-3 py-2 pl-5 text-sm text-white/75 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Ver todo</a>
+                <a data-nav-mobile-child="ninos" href="{{ route('catalog.index', ['categoria' => 'ninos']) }}" class="rounded px-3 py-2 pl-5 text-sm text-white/75 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Niños</a>
+                @foreach(config('tagq.subcategories', []) as $slug => $label)
+                    <a data-nav-mobile-child="{{ $slug }}" href="{{ route('catalog.index', ['subcategoria' => $slug]) }}" class="rounded px-3 py-2 pl-5 text-sm text-white/75 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">{{ $label }}</a>
+                @endforeach
+            </div>
 
             {{-- Panel móvil: mismos destacados reales, en flujo dentro del menú
                  desplegable y alternado con tap (nunca hover). --}}
@@ -625,11 +649,6 @@
             </div>
             <a data-nav-mobile-item="damas" href="{{ route('catalog.index', ['categoria' => 'dama']) }}" class="rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">DAMAS</a>
             <a data-nav-mobile-item="caballeros" href="{{ route('catalog.index', ['categoria' => 'caballero']) }}" class="rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">CABALLEROS</a>
-            <a data-nav-mobile-child="ver-todo" href="{{ route('catalog.index') }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Ver todo</a>
-            <a data-nav-mobile-child="ninos" href="{{ route('catalog.index', ['categoria' => 'ninos']) }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Niños</a>
-            @foreach(config('tagq.subcategories', []) as $slug => $label)
-                <a data-nav-mobile-child="{{ $slug }}" href="{{ route('catalog.index', ['subcategoria' => $slug]) }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">{{ $label }}</a>
-            @endforeach
 
             <div data-nav-mobile-account-group class="mt-3 border-t border-white/20 pt-3">
                 <p class="px-3 pb-1 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">Cuenta</p>
@@ -765,10 +784,10 @@
          con URL inventadas; viven debajo de la descripción de la columna de
          marca, sin rótulo ni copy visibles. La columna Legal apunta a rutas públicas reales
          (`legal.*`) cuyas páginas provisionales conservan su título y avisan
-         que el contenido está pendiente. El wordmark `Tag Q` comparte con el
-         navbar la tipografía Jost 500 (`font-jost`), el tracking amplio y el
-         tamaño responsive (30px móvil · 56px desde `lg`), conservando el SVG a
-         su izquierda y el enlace real al home. --}}
+         que el contenido está pendiente. El wordmark `Tag Q` conserva en el
+         footer Jost 500 (`font-jost`), el tracking amplio y 40px, manteniendo
+         el SVG a su izquierda y el enlace real al home; el navbar usa una
+         variante más pequeña y delgada para equilibrar el logo. --}}
     <footer data-storefront-footer class="border-t border-white/10 bg-[#00052c] text-white">
         <div class="site-container py-12">
             <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">

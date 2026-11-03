@@ -908,6 +908,28 @@ class StorefrontNavigationTest extends TestCase
         $this->assertNotNull($wordmark, 'El wordmark exacto vive dentro de la marca');
         $this->assertSame('Tag Q', $wordmark->textContent, 'El wordmark se mantiene literal');
 
+        // T12: el wordmark del navbar armoniza con el logo, más pequeño y
+        // delgado que el del footer. Jost 400 regular, tamaño fluido de 26 a
+        // 42px y el tracking de la marca.
+        $wordmarkClasses = preg_split('/\s+/', trim((string) $wordmark->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        foreach (['font-jost', 'font-normal', 'text-[clamp(26px,7.6vw,42px)]', 'tracking-[0.1em]'] as $class) {
+            $this->assertContains($class, $wordmarkClasses, "El wordmark del navbar aplica {$class}");
+        }
+
+        $this->assertNotContains('font-medium', $wordmarkClasses, 'El wordmark del navbar ya no usa el peso medium del footer');
+        $this->assertNotContains('text-[clamp(29px,8.6vw,48px)]', $wordmarkClasses, 'El wordmark del navbar abandona el tamaño anterior');
+        $this->assertNotContains('text-[40px]', $wordmarkClasses, 'El wordmark del navbar no hereda el tamaño fijo del footer');
+
+        // El footer conserva su versión Jost 500 a 40px.
+        $footer = $xpath->query('//*[@data-storefront-footer]')->item(0);
+        $this->assertNotNull($footer, 'El footer compartido existe');
+        $this->assertStringContainsString(
+            'font-jost text-[40px] font-medium leading-none tracking-[0.1em]',
+            $html,
+            'El footer mantiene su wordmark Jost 500 a 40px',
+        );
+
         // Sin ningún nodo de elemento entre ambos: el SVG queda inmediatamente
         // a la izquierda del wordmark.
         $intercalado = false;
@@ -1485,6 +1507,55 @@ class StorefrontNavigationTest extends TestCase
                 "El ítem móvil {$item} usa Space Grotesk (token --font-display de DESIGN.md)"
             );
         }
+    }
+
+    public function test_el_submenu_movil_de_tienda_recoge_las_categorias_y_se_abre_con_tienda(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+
+        $submenu = $xpath->query('//*[@data-nav-mobile-tienda-submenu]')->item(0);
+
+        $this->assertNotNull($submenu, 'El menú móvil declara el submenú de Tienda');
+        $this->assertSame(
+            'storefront-tienda-mobile-submenu',
+            $submenu->getAttribute('id'),
+            'El submenú tiene un id estable para aria-controls'
+        );
+        $this->assertSame('megaOpen', $submenu->getAttribute('x-show'), 'El submenú comparte el estado de Tienda');
+        $this->assertTrue($submenu->hasAttribute('x-cloak'), 'El submenú arranca cerrado sin parpadeo');
+
+        $esperados = array_merge(['ver-todo', 'ninos'], array_keys(config('tagq.subcategories')));
+
+        foreach ($esperados as $slug) {
+            $this->assertNotNull(
+                $xpath->query('.//*[@data-nav-mobile-child="'.$slug.'"]', $submenu)->item(0),
+                "El enlace móvil {$slug} vive dentro del submenú de Tienda"
+            );
+        }
+
+        // Las categorías y filtros ya no llenan el menú principal: se listan
+        // una sola vez, dentro del submenú.
+        $this->assertSame(
+            count($esperados),
+            $xpath->query('//*[@data-nav-mobile-child]')->length,
+            'El menú móvil solo lista las categorías dentro del submenú de Tienda'
+        );
+
+        $tienda = $xpath->query('//*[@data-nav-mobile-item="tienda"]')->item(0);
+
+        $this->assertNotNull($tienda, 'El botón móvil de Tienda existe');
+        $this->assertSame(
+            'storefront-tienda-mobile-submenu storefront-tienda-mega-menu-mobile',
+            $tienda->getAttribute('aria-controls'),
+            'Tienda apunta al submenú y al panel de destacados'
+        );
+        $this->assertStringContainsString(
+            '@click="megaOpen = ! megaOpen"',
+            $html,
+            'Tocar Tienda alterna el submenú'
+        );
     }
 
     /*
