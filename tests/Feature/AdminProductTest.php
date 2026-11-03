@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\CloudinaryService;
+use App\Services\ProductImageService;
+use App\Support\WatchSpecs;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -17,9 +20,13 @@ class AdminProductTest extends TestCase
     use RefreshDatabase;
 
     private Category $category;
+
     private Brand $brand;
+
     private User $admin;
+
     private User $empleado;
+
     private User $cliente;
 
     private static int $referenceCounter = 0;
@@ -39,6 +46,7 @@ class AdminProductTest extends TestCase
         $mock->shouldReceive('upload')->andReturnUsing(function ($file, $opts) {
             static $n = 0;
             $n++;
+
             return ['secure_url' => "https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/fake_{$n}.jpg", 'public_id' => "tag-q/producto/fake_{$n}"];
         });
         $mock->shouldReceive('destroy')->andReturn(['result' => 'ok']);
@@ -178,7 +186,7 @@ class AdminProductTest extends TestCase
         $spy->shouldReceive('ping')->andReturn(['status' => 'ok']);
         $this->app->instance(CloudinaryService::class, $spy);
         // Re-instanciar ProductImageService con el nuevo mock
-        $this->app->forgetInstance(\App\Services\ProductImageService::class);
+        $this->app->forgetInstance(ProductImageService::class);
 
         Storage::fake('local');
         $nueva = UploadedFile::fake()->image('nueva.jpg');
@@ -208,13 +216,46 @@ class AdminProductTest extends TestCase
         $spy->shouldReceive('upload')->andReturn(['secure_url' => 'x', 'public_id' => 'x']);
         $spy->shouldReceive('ping')->andReturn(['status' => 'ok']);
         $this->app->instance(CloudinaryService::class, $spy);
-        $this->app->forgetInstance(\App\Services\ProductImageService::class);
+        $this->app->forgetInstance(ProductImageService::class);
 
         $this->actingAs($this->admin)
             ->delete(route('admin.products.destroy', $product))
             ->assertRedirect(route('admin.products.index'));
 
         $this->assertDatabaseMissing('products', ['id' => $product->id]);
+    }
+
+    public function test_no_se_puede_eliminar_un_producto_con_pedidos(): void
+    {
+        $product = Product::create($this->validData(['slug' => 'con-pedido']));
+
+        $order = Order::create([
+            'code' => 'TAG-CONPED01',
+            'user_id' => null,
+            'status' => 'pendiente_de_pago',
+            'total' => 1290000,
+            'shipping_cost' => 0,
+            'payment_method' => 'contraentrega',
+            'shipping_address' => [
+                'nombre' => 'Ana Pérez',
+                'email' => 'ana@example.com',
+                'telefono' => '3001234567',
+                'direccion' => 'Calle 10 # 20-30',
+                'ciudad' => 'Bogotá',
+            ],
+        ]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => 1290000,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->delete(route('admin.products.destroy', $product))
+            ->assertRedirect(route('admin.products.index'))
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
     }
 
     public function test_empleado_no_puede_crear_producto(): void
@@ -361,6 +402,84 @@ class AdminProductTest extends TestCase
             ->assertOk()
             ->assertSee('Nuevo producto')
             ->assertSee('Eliminar');
+    }
+
+    public function test_el_listado_resume_el_inventario_y_pagina_de_20_en_20(): void
+    {
+        $threshold = (int) config('tagq.low_stock_threshold', 3);
+
+        foreach (range(1, 22) as $position) {
+            $product = Product::create($this->validData([
+                'name' => "Producto {$position}",
+                'slug' => "producto-{$position}",
+                'stock' => $position <= 3 ? 1 : 8,
+                'is_active' => $position <= 15,
+            ]));
+            $product->forceFill(['created_at' => now()->subMinutes(23 - $position)])->saveQuietly();
+        }
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.products.index'))
+            ->assertOk()
+            ->assertViewHas('stats', function (array $stats) use ($threshold) {
+                return $stats['total'] === 22
+                    && $stats['active'] === 15
+                    && $stats['low_stock'] === 3
+                    && $stats['low_stock_threshold'] === $threshold;
+            })
+            ->assertViewHas('products', function ($products) {
+                return $products->perPage() === 20
+                    && $products->total() === 22
+                    && $products->count() === 20
+                    && $products->first()->name === 'Producto 22';
+            });
+    }
+
+    public function test_rechaza_archivos_que_no_son_imagen_o_superan_5mb(): void
+    {
+        $pdf = UploadedFile::fake()->create('ficha.pdf', 100, 'application/pdf');
+        $enorme = UploadedFile::fake()->image('enorme.jpg')->size(6000);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.products.store'), $this->validData([
+                'imagenes' => [$pdf, $enorme],
+            ]))
+            ->assertSessionHasErrors(['imagenes.0', 'imagenes.1'])
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('products', ['slug' => 'chronos-test']);
+    }
+
+    public function test_el_update_limita_a_cinco_imagenes_entre_existentes_y_nuevas(): void
+    {
+        $product = Product::create($this->validData([
+            'slug' => 'limite-imagenes',
+            'imagenes' => [
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/uno.jpg',
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/dos.jpg',
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/tres.jpg',
+            ],
+        ]));
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.products.update', $product), $this->validData([
+                'slug' => 'limite-imagenes',
+                'reference' => $product->reference,
+                'imagenes_existentes' => $product->imagenes,
+                'imagenes' => [
+                    UploadedFile::fake()->image('nueva-1.jpg'),
+                    UploadedFile::fake()->image('nueva-2.jpg'),
+                    UploadedFile::fake()->image('nueva-3.jpg'),
+                ],
+            ]))
+            ->assertRedirect(route('admin.products.index'));
+
+        $imagenes = $product->fresh()->imagenes;
+
+        $this->assertCount(5, $imagenes, 'El producto nunca guarda más de cinco imágenes');
+        $this->assertSame($product->imagenes, array_slice($imagenes, 0, 3), 'Conserva primero las imágenes existentes');
+        $this->assertStringContainsString('fake_1', $imagenes[3]);
+        $this->assertStringContainsString('fake_2', $imagenes[4]);
     }
 
     public function test_subcategoria_es_obligatoria_al_crear(): void
@@ -623,7 +742,7 @@ class AdminProductTest extends TestCase
         $this->assertStringContainsString('name="reference"', $html);
         $this->assertStringContainsString('name="case_shape"', $html);
 
-        foreach (\App\Support\WatchSpecs::keys() as $key) {
+        foreach (WatchSpecs::keys() as $key) {
             $this->assertStringContainsString('name="specs['.$key.']"', $html, "El formulario debe ofrecer el spec {$key}");
             $this->assertStringContainsString('name="specs_activos['.$key.']"', $html, "El formulario debe permitir activar el spec {$key}");
         }

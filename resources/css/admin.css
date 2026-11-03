@@ -2770,6 +2770,24 @@
         border-left: 0;
     }
 
+    /* En móvil el resumen ya no cabe en una fila: pasa a una grilla que
+       reparte las métricas sin desbordar el viewport ni cortar la nota. */
+    .admin-glance {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        align-items: start;
+        gap: 16px 20px;
+    }
+
+    .admin-glance__item + .admin-glance__item {
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .admin-glance__note {
+        white-space: normal;
+    }
+
     .admin-sales {
         justify-content: space-between;
     }

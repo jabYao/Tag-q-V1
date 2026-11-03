@@ -20,6 +20,18 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     /**
+     * Valores por defecto del modelo, alineados con la migración.
+     *
+     * `is_active` nace en `true` también en memoria: así un usuario recién
+     * creado sin el campo no se considera desactivado antes de refrescarse.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_active' => true,
+    ];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

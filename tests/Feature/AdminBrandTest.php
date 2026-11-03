@@ -14,6 +14,7 @@ class AdminBrandTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private User $empleado;
 
     protected function setUp(): void
@@ -59,6 +60,56 @@ class AdminBrandTest extends TestCase
             ->assertSee('Marcas')
             ->assertSee('Seiko')
             ->assertSee('seiko');
+    }
+
+    public function test_el_listado_resume_marcas_y_sus_productos(): void
+    {
+        $category = Category::create(['name' => 'Caballero', 'slug' => 'caballero']);
+        $activa = $this->brand(['name' => 'Tag q', 'slug' => 'tag-q', 'is_active' => true]);
+        $inactiva = $this->brand(['name' => 'Seiko', 'slug' => 'seiko', 'is_active' => false]);
+
+        Product::create([
+            'category_id' => $category->id,
+            'brand_id' => $activa->id,
+            'name' => 'Chronos Uno',
+            'slug' => 'chronos-uno',
+            'reference' => 'REF-UNO',
+            'precio' => 1000000,
+            'stock' => 1,
+            'is_active' => true,
+        ]);
+        Product::create([
+            'category_id' => $category->id,
+            'brand_id' => $inactiva->id,
+            'name' => 'Chronos Dos',
+            'slug' => 'chronos-dos',
+            'reference' => 'REF-DOS',
+            'precio' => 1000000,
+            'stock' => 1,
+            'is_active' => true,
+        ]);
+
+        foreach (range(1, 20) as $position) {
+            $this->brand([
+                'name' => "Marca {$position}",
+                'slug' => "marca-{$position}",
+                'is_active' => false,
+            ]);
+        }
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.brands.index'))
+            ->assertOk()
+            ->assertViewHas('stats', function (array $stats) {
+                return $stats['total'] === 22
+                    && $stats['active'] === 1
+                    && $stats['products'] === 2;
+            })
+            ->assertViewHas('brands', function ($brands) {
+                return $brands->perPage() === 20
+                    && $brands->total() === 22
+                    && $brands->count() === 20;
+            });
     }
 
     public function test_admin_puede_crear_una_marca(): void

@@ -197,6 +197,59 @@ class AdminOrderManagementTest extends TestCase
             });
     }
 
+    public function test_filtros_combinados_y_conteos_por_estado_se_calculan_en_servidor(): void
+    {
+        $this->order(['code' => 'TAG-MATCH01', 'status' => 'pagado']);
+        $this->order(['code' => 'TAG-MATCH02', 'status' => 'pagado']);
+        $this->order(['code' => 'TAG-MATCH03', 'status' => 'pendiente_de_pago']);
+        $this->order(['code' => 'TAG-OTHER01', 'status' => 'pagado']);
+        $this->order(['code' => 'TAG-SHIP01', 'status' => 'enviado']);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', ['status' => 'pagado', 'q' => 'MATCH']))
+            ->assertOk()
+            ->assertSee('TAG-MATCH01')
+            ->assertSee('TAG-MATCH02')
+            ->assertDontSee('TAG-MATCH03')
+            ->assertDontSee('TAG-OTHER01');
+
+        $response->assertViewHas('statusCounts', function ($counts) {
+            return $counts['pendiente_de_pago'] === 1
+                && $counts['pagado'] === 3
+                && $counts['enviado'] === 1
+                && $counts['cancelado'] === 0
+                && $counts['reembolsado'] === 0;
+        });
+        $response->assertViewHas('openCount', 5);
+        $response->assertViewHas('toShipCount', 3);
+        $response->assertViewHas('totalCount', 5);
+    }
+
+    public function test_la_paginacion_conserva_los_filtros_de_estado_y_busqueda(): void
+    {
+        foreach (range(1, 25) as $position) {
+            $this->order([
+                'code' => 'TAG-PAGE'.str_pad((string) $position, 4, '0', STR_PAD_LEFT),
+                'status' => 'pagado',
+            ]);
+        }
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', [
+                'status' => 'pagado',
+                'q' => 'TAG-PAGE',
+                'page' => 2,
+            ]))
+            ->assertOk()
+            ->assertViewHas('orders', function ($orders) {
+                return $orders->currentPage() === 2
+                    && $orders->total() === 25
+                    && $orders->count() === 5
+                    && str_contains($orders->url(1), 'status=pagado')
+                    && str_contains($orders->url(1), 'q=TAG-PAGE');
+            });
+    }
+
     public function test_filtro_status_muestra_solo_ese_estado(): void
     {
         $this->order(['code' => 'TAG-PAGADO01', 'status' => 'pagado']);

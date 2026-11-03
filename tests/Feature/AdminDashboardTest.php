@@ -170,6 +170,47 @@ class AdminDashboardTest extends TestCase
         });
     }
 
+    public function test_las_ventas_del_mes_respetan_los_bordes_del_mes(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-15 12:00:00'));
+
+        $this->order(['status' => 'pagado', 'total' => 111111, 'created_at' => Carbon::parse('2026-10-31 23:59:59')]);
+        $this->order(['status' => 'pagado', 'total' => 222222, 'created_at' => Carbon::parse('2026-11-01 00:00:00')]);
+        $this->order(['status' => 'pagado', 'total' => 333333, 'created_at' => Carbon::parse('2026-11-30 23:59:59')]);
+        $this->order(['status' => 'pagado', 'total' => 444444, 'created_at' => Carbon::parse('2026-12-01 00:00:00')]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertViewHas('monthSales', 555555)
+            ->assertViewHas('monthOrders', 2);
+    }
+
+    public function test_la_agenda_y_el_stock_bajo_respetan_sus_limites(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-15 12:00:00'));
+
+        foreach (range(1, 10) as $position) {
+            $this->order([
+                'status' => 'pagado',
+                'total' => 1000 * $position,
+                'created_at' => now()->subMinutes(10 - $position),
+            ]);
+        }
+
+        foreach (range(1, 5) as $position) {
+            $this->product(['name' => "Alerta {$position}", 'stock' => 1]);
+        }
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertViewHas('agendaOrders', fn ($orders) => $orders->count() === 8)
+            ->assertViewHas('agendaMeta', '10 pedidos de hoy')
+            ->assertViewHas('lowStockCount', 5)
+            ->assertViewHas('lowStockProducts', fn ($products) => $products->count() === 4);
+    }
+
     public function test_las_barras_de_siete_dias_solo_suman_ventas_consolidadas(): void
     {
         $this->travelTo(Carbon::parse('2026-10-20 11:00:00'));

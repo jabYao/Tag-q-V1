@@ -86,6 +86,9 @@ class HomeMobileTest extends DuskTestCase
                 'marca' => 'Tag Heuer',
                 'movimiento' => 'automatico',
                 'reference' => 'DUSK-'.$index,
+                // Asset local: el E2E comprueba el hueco de imagen sin llamar a
+                // Cloudinary ni depender de la red.
+                'imagenes' => ['/images/tag-q-logo.svg'],
             ]);
 
             // Un producto antiguo produce el estado Disponible; el resto son
@@ -111,6 +114,10 @@ class HomeMobileTest extends DuskTestCase
                 ->waitUntil(
                     'document.querySelector("[data-home-favorites-swiper]")'
                     .'.classList.contains("swiper-initialized")',
+                    10,
+                )
+                ->waitUntil(
+                    'document.querySelector("[data-home-favorites-swiper] [data-favorite-card]") !== null',
                     10,
                 )
                 // La medida de la franja la publica `app.js`; sin ella el hero
@@ -181,10 +188,12 @@ class HomeMobileTest extends DuskTestCase
                     true,
                 )
                 ->assertScript(
-                    'const cards = Array.from(document.querySelectorAll('
+                    '(function () {'
+                    .'const cards = Array.from(document.querySelectorAll('
                     .'"[data-home-products-grid] [data-home-card]"));'
                     .'return cards.length === 6'
-                    .' && cards.every((card) => getComputedStyle(card).display !== "none");',
+                    .' && cards.every((card) => getComputedStyle(card).display !== "none");'
+                    .'})()',
                     true,
                 )
                 ->assertScript(
@@ -194,10 +203,12 @@ class HomeMobileTest extends DuskTestCase
                     true,
                 )
                 ->assertScript(
-                    'const link = document.querySelector("[data-home-ver-todos=recent-mobile]");'
+                    '(function () {'
+                    .'const link = document.querySelector("[data-home-ver-todos=recent-mobile]");'
                     .'const grid = document.querySelector("[data-home-products-grid]");'
                     .'return getComputedStyle(link).display !== "none"'
-                    .' && link.getBoundingClientRect().top >= grid.getBoundingClientRect().bottom;',
+                    .' && link.getBoundingClientRect().top >= grid.getBoundingClientRect().bottom;'
+                    .'})()',
                     true,
                 )
                 // Categorías móviles: tres fichas, una grande arriba y dos
@@ -218,45 +229,59 @@ class HomeMobileTest extends DuskTestCase
                     true,
                 )
                 ->assertScript(
-                    'const cards = document.querySelectorAll("[data-home-category-card]");'
+                    '(function () {'
+                    .'const cards = document.querySelectorAll("[data-home-category-card]");'
                     .'const large = cards[0].getBoundingClientRect();'
                     .'const small = cards[1].getBoundingClientRect();'
                     .'const third = cards[2].getBoundingClientRect();'
                     .'return large.width > small.width * 1.7'
                     .' && large.top < small.top'
-                    .' && Math.abs(small.top - third.top) < 2;',
+                    .' && Math.abs(small.top - third.top) < 2;'
+                    .'})()',
                     true,
                 )
                 // Favoritos: tres fichas mini por pantalla.
                 ->assertScript(
-                    'const swiper = document.querySelector("[data-home-favorites-swiper]");'
+                    '(function () {'
+                    .'const swiper = document.querySelector("[data-home-favorites-swiper]");'
                     .'const slide = swiper.querySelector(".swiper-slide");'
                     .'const ratio = swiper.clientWidth / slide.getBoundingClientRect().width;'
-                    .'return ratio > 2.8 && ratio < 3.2;',
+                    .'return ratio > 2.8 && ratio < 3.2;'
+                    .'})()',
                     true,
                 )
                 // Sin flechas ni indicadores: la marquesina se mueve sola.
                 ->assertScript(
-                    'const section = document.querySelector("[data-home-favorites]");'
+                    '(function () {'
+                    .'const section = document.querySelector("[data-home-favorites]");'
                     .'return section.querySelectorAll('
                     .'"[data-home-favorites-prev], [data-home-favorites-next],'
                     .' [data-home-favorites-pagination], .swiper-button-prev,'
-                    .' .swiper-button-next, .swiper-pagination").length === 0;',
+                    .' .swiper-button-next, .swiper-pagination").length === 0;'
+                    .'})()',
                     true,
                 )
                 ->assertScript(
-                    'const swiper = document.querySelector("[data-home-favorites-swiper]").swiper;'
+                    '(function () {'
+                    .'const swiper = document.querySelector("[data-home-favorites-swiper]").swiper;'
                     .'return swiper.params.loop === true'
                     .' && swiper.params.autoplay.delay === 0'
                     .' && getComputedStyle(swiper.wrapperEl).transitionTimingFunction === "linear"'
-                    .' && swiper.autoplay.running === true;',
+                    .' && swiper.autoplay.running === true;'
+                    .'})()',
                     true,
                 )
                 // La ficha mini esconde la información secundaria y deja el
                 // icono de la bolsa; conserva nombre y precio.
                 ->assertScript(
-                    'const card = document.querySelector("[data-home-favorites-swiper] [data-favorite-card]");'
-                    .'const hidden = (selector) => getComputedStyle(card.querySelector(selector)).display === "none";'
+                    '(function () {'
+                    .'const cards = Array.from(document.querySelectorAll('
+                    .'"[data-home-favorites-swiper] [data-favorite-card]"));'
+                    .'const card = cards.find((el) => el.querySelector("[data-home-card-discount]")) || cards[0];'
+                    .'const hidden = (selector) => {'
+                    .'const el = card.querySelector(selector);'
+                    .'return el === null || getComputedStyle(el).display === "none";'
+                    .'};'
                     .'return hidden("[data-home-card-kicker]")'
                     .' && hidden("[data-home-card-meta]")'
                     .' && hidden("[data-home-card-discount]")'
@@ -264,13 +289,16 @@ class HomeMobileTest extends DuskTestCase
                     .' && hidden("[data-compact-cart-label]")'
                     .' && getComputedStyle(card.querySelector("[data-compact-cart-icon]")).display !== "none"'
                     .' && getComputedStyle(card.querySelector("[data-product-card-name]")).display !== "none"'
-                    .' && getComputedStyle(card.querySelector("[data-home-card-price]")).display !== "none";',
+                    .' && getComputedStyle(card.querySelector("[data-home-card-price]")).display !== "none";'
+                    .'})()',
                     true,
                 )
                 ->assertScript(
-                    'const cards = Array.from(document.querySelectorAll('
+                    '(function () {'
+                    .'const cards = Array.from(document.querySelectorAll('
                     .'"[data-home-favorites-swiper] [data-stock-state=Disponible]"));'
-                    .'return cards.every((chip) => getComputedStyle(chip).display === "none");',
+                    .'return cards.every((chip) => getComputedStyle(chip).display === "none");'
+                    .'})()',
                     true,
                 )
                 // Ver todos de favoritos: visible después del carrusel en móvil.
@@ -281,19 +309,23 @@ class HomeMobileTest extends DuskTestCase
                     true,
                 )
                 ->assertScript(
-                    'const link = document.querySelector("[data-home-ver-todos=favorites-mobile]");'
+                    '(function () {'
+                    .'const link = document.querySelector("[data-home-ver-todos=favorites-mobile]");'
                     .'const swiper = document.querySelector("[data-home-favorites-swiper]");'
                     .'return getComputedStyle(link).display !== "none"'
-                    .' && link.getBoundingClientRect().top >= swiper.getBoundingClientRect().bottom;',
+                    .' && link.getBoundingClientRect().top >= swiper.getBoundingClientRect().bottom;'
+                    .'})()',
                     true,
                 )
                 // En móvil el cierre de favoritos no deja un hueco grande antes
                 // del footer: margen de 16px más el padding inferior del home.
                 ->assertScript(
-                    'const section = document.querySelector("[data-home-favorites]");'
+                    '(function () {'
+                    .'const section = document.querySelector("[data-home-favorites]");'
                     .'const footer = document.querySelector("[data-storefront-footer]");'
                     .'return footer.getBoundingClientRect().top'
-                    .' - section.getBoundingClientRect().bottom <= 56;',
+                    .' - section.getBoundingClientRect().bottom <= 56;'
+                    .'})()',
                     true,
                 );
         });
@@ -310,40 +342,29 @@ class HomeMobileTest extends DuskTestCase
                 ->assertVisible('[data-nav-mobile-account="register"]')
                 // El icono deja de ser tres líneas y se transforma en X.
                 ->waitUntil(
-                    'const toggle = document.querySelector("[data-nav-mobile-toggle]");'
-                    .'return toggle.getAttribute("aria-expanded") === "true";',
+                    '(function () {'
+                    .'const toggle = document.querySelector("[data-nav-mobile-toggle]");'
+                    .'return toggle.getAttribute("aria-expanded") === "true";'
+                    .'})()',
                     10,
                 )
                 ->waitUntil(
-                    'const bars = document.querySelectorAll('
+                    '(function () {'
+                    .'const bars = document.querySelectorAll('
                     .'"[data-nav-mobile-toggle] [data-nav-icon=menu] > span");'
+                    .'const first = getComputedStyle(bars[0]);'
                     .'return bars.length === 3'
-                    .' && getComputedStyle(bars[0]).transform !== "none";',
+                    .' && first.translate !== "none"'
+                    .' && first.rotate === "45deg";'
+                    .'})()',
                     10,
                 )
                 ->assertScript(
-                    'const bars = document.querySelectorAll('
+                    '(function () {'
+                    .'const bars = document.querySelectorAll('
                     .'"[data-nav-mobile-toggle] [data-nav-icon=menu] > span");'
-                    .'return getComputedStyle(bars[1]).opacity === "0";',
-                    true,
-                )
-                // Destacados móviles: dos fichas con foto y nombre, sin precio
-                // ni botón de bolsa.
-                ->waitFor('[data-nav-mobile-featured] [data-nav-featured-compact]', 10)
-                ->assertScript(
-                    'const panel = document.querySelector("[data-nav-mobile-featured]");'
-                    .'return panel.querySelectorAll("[data-nav-featured-product]").length === 2'
-                    .' && panel.querySelectorAll("[data-nav-featured-image]").length === 2'
-                    .' && panel.querySelectorAll("[data-nav-featured-name]").length === 2'
-                    .' && panel.querySelectorAll("[data-nav-featured-price]").length === 0;',
-                    true,
-                )
-                ->assertScript(
-                    'const panel = document.querySelector("[data-nav-mobile-panel]");'
-                    .'const style = getComputedStyle(panel);'
-                    .'return style.overflowY === "auto"'
-                    .' && panel.getBoundingClientRect().height'
-                    .' <= document.documentElement.clientHeight * 0.70 + 1;',
+                    .'return getComputedStyle(bars[1]).opacity === "0";'
+                    .'})()',
                     true,
                 )
                 // Tienda recoge sus categorías en un submenú que solo aparece
@@ -362,6 +383,36 @@ class HomeMobileTest extends DuskTestCase
                 )
                 ->assertVisible('[data-nav-mobile-tienda-submenu]')
                 ->assertVisible('[data-nav-mobile-child="ninos"]')
+                // Destacados móviles dentro de Tienda: dos fichas con foto y
+                // nombre, sin precio ni botón de bolsa.
+                ->waitFor('[data-nav-mobile-featured] [data-nav-featured-compact]', 10)
+                ->waitUntil(
+                    'document.querySelectorAll('
+                    .'"[data-nav-mobile-featured] [data-nav-featured-product]").length === 2',
+                    10,
+                )
+                ->assertScript(
+                    '(function () {'
+                    .'const panel = document.querySelector("[data-nav-mobile-featured]");'
+                    .'return panel.querySelectorAll("[data-nav-featured-product]").length === 2'
+                    .' && panel.querySelectorAll("[data-nav-featured-image]").length === 2'
+                    .' && panel.querySelectorAll("[data-nav-featured-name]").length === 2'
+                    .' && panel.querySelectorAll("[data-nav-featured-price]").length === 0;'
+                    .'})()',
+                    true,
+                )
+                // El panel completo tiene scroll propio y no excede el 70% del
+                // viewport, incluso con el submenú de Tienda abierto.
+                ->assertScript(
+                    '(function () {'
+                    .'const panel = document.querySelector("[data-nav-mobile-panel]");'
+                    .'const style = getComputedStyle(panel);'
+                    .'return style.overflowY === "auto"'
+                    .' && panel.getBoundingClientRect().height'
+                    .' <= document.documentElement.clientHeight * 0.70 + 1;'
+                    .'})()',
+                    true,
+                )
                 ->click('[data-nav-mobile-item="tienda"]')
                 ->waitUntil(
                     'getComputedStyle(document.querySelector('

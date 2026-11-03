@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use App\Models\Brand;
+use App\Models\Category;
 use App\Models\Product;
 use App\Services\ProductImageService;
 use Illuminate\Http\RedirectResponse;
@@ -37,7 +38,7 @@ class ProductController extends Controller
         // Solo el admin puede crear productos (el empleado queda fuera)
         abort_unless(auth()->user()?->isAdmin(), 403);
 
-        $categories = \App\Models\Category::orderBy('name')->get();
+        $categories = Category::orderBy('name')->get();
         $brands = Brand::where('is_active', true)->orderBy('name')->get();
 
         return view('admin.products.create', compact('categories', 'brands'));
@@ -63,7 +64,7 @@ class ProductController extends Controller
 
     public function edit(Product $product): View
     {
-        $categories = \App\Models\Category::orderBy('name')->get();
+        $categories = Category::orderBy('name')->get();
         $brands = Brand::where('is_active', true)
             ->when($product->brand_id, fn ($query) => $query->orWhere('id', $product->brand_id))
             ->orderBy('name')
@@ -132,6 +133,14 @@ class ProductController extends Controller
     {
         // Solo el admin puede eliminar productos (el empleado queda fuera)
         abort_unless(auth()->user()?->isAdmin(), 403);
+
+        // La FK de order_items es restrictOnDelete: borrar un producto vendido
+        // rompería el historial. Se bloquea con un mensaje operativo.
+        if ($product->orderItems()->exists()) {
+            return redirect()
+                ->route('admin.products.index')
+                ->with('error', 'No se puede eliminar un producto con pedidos. Desactívalo en su lugar.');
+        }
 
         if (! empty($product->imagenes)) {
             $this->images->deleteByUrls($product->imagenes);

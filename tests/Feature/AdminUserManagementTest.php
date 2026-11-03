@@ -70,6 +70,30 @@ class AdminUserManagementTest extends TestCase
             ->assertSee('Inactivo');
     }
 
+    public function test_el_listado_resume_usuarios_y_pagina_de_20_en_20(): void
+    {
+        $admin = $this->admin();
+        User::factory()->create(['role' => 'empleado', 'is_active' => true]);
+        User::factory()->create(['role' => 'empleado', 'is_active' => false]);
+        User::factory()->create(['role' => 'cliente', 'is_active' => true]);
+        User::factory()->count(21)->create(['role' => 'cliente', 'is_active' => true]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.index'))
+            ->assertOk()
+            ->assertViewHas('stats', function (array $stats) {
+                return $stats['total'] === 25
+                    && $stats['active'] === 24
+                    && $stats['admins'] === 1
+                    && $stats['employees'] === 1;
+            })
+            ->assertViewHas('users', function ($users) {
+                return $users->perPage() === 20
+                    && $users->total() === 25
+                    && $users->count() === 20;
+            });
+    }
+
     /* ------------------------------------------------------------------ *
      * Crear
      * ------------------------------------------------------------------ */
@@ -232,7 +256,7 @@ class AdminUserManagementTest extends TestCase
         $this->assertTrue($admin->refresh()->is_active);
     }
 
-    public function test_no_se_puede_desactivar_al_ultimo_admin_activo_aunque_no_sea_uno_mismo(): void
+    public function test_un_admin_desactivado_en_paralelo_pierde_la_sesion_y_no_toca_al_ultimo_admin(): void
     {
         $admin = $this->admin();
         $ultimoAdmin = $this->admin();
@@ -243,8 +267,10 @@ class AdminUserManagementTest extends TestCase
 
         $this->actingAs($admin)
             ->patch(route('admin.users.toggle-active', $ultimoAdmin))
-            ->assertSessionHasErrors('user');
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
 
+        $this->assertGuest();
         $this->assertTrue($ultimoAdmin->refresh()->is_active);
     }
 

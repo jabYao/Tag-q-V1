@@ -130,20 +130,20 @@ class OrderCancellationRefundTest extends DuskTestCase
                 ->waitForText('Pedido '.$order->code, 10)
                 // Estado de partida y acción disponible según el estado real.
                 ->assertSee('Pendiente de pago')
-                ->assertSee('Marcar como Pagado')
-                ->assertSee('Cancelar pedido');
+                ->assertSee('Marcar como Pagado', true)
+                ->assertSee('Cancelar pedido', true);
 
-            $this->pulsarBotonConfirmado($browser, 'Cancelar pedido');
+            $this->pulsarBotonConfirmado($browser, 'form[action$="/cancel"] button[type="submit"]');
 
             $browser->waitForText('Pedido cancelado y stock restaurado.', 15)
                 // Recarga el detalle desde el servidor: el estado que se ve es el
                 // persistido, no el mensaje de éxito del redirect.
                 ->visit(self::urlDetalle($order))
                 ->waitForText('Pedido '.$order->code, 10)
-                ->assertSee('Cancelado')
+                ->assertSee('Cancelado', true)
                 ->assertDontSee('Pendiente de pago')
-                ->assertDontSee('Cancelar pedido')
-                ->assertDontSee('Marcar como')
+                ->assertDontSee('Cancelar pedido', true)
+                ->assertDontSee('Marcar como', true)
                 ->assertSee('No hay transiciones disponibles para este estado.');
         });
 
@@ -204,23 +204,23 @@ class OrderCancellationRefundTest extends DuskTestCase
             $browser->visit(self::urlDetalle($order))
                 ->waitForText('Pedido '.$order->code, 10)
                 // Estado de partida y acción disponible para un pago Wompi.
-                ->assertSee('Pagado')
+                ->assertSee('Pagado', true)
                 ->assertSee($transactionId)
-                ->assertSee('Marcar como En preparación')
-                ->assertSee('Reembolsar con Wompi');
+                ->assertSee('Marcar como En preparación', true)
+                ->assertSee('Reembolsar con Wompi', true);
 
             $browser->type('#reason', 'Prueba E2E Sandbox');
 
-            $this->pulsarBotonConfirmado($browser, 'Reembolsar con Wompi');
+            $this->pulsarBotonConfirmado($browser, 'form[action$="/refund"] button[type="submit"]');
 
             // El reembolso cruza a la API de Wompi: se espera el resultado real.
             $browser->waitForText('Reembolso aprobado por Wompi. El pedido quedó reembolsado.', 30)
                 // Recarga el detalle: el estado visible es el persistido.
                 ->visit(self::urlDetalle($order))
                 ->waitForText('Pedido '.$order->code, 10)
-                ->assertSee('Reembolsado')
-                ->assertDontSee('Reembolsar con Wompi')
-                ->assertDontSee('Marcar como')
+                ->assertSee('Reembolsado', true)
+                ->assertDontSee('Reembolsar con Wompi', true)
+                ->assertDontSee('Marcar como', true)
                 ->assertSee('No hay transiciones disponibles para este estado.');
         });
 

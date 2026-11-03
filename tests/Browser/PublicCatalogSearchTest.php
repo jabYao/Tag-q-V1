@@ -71,7 +71,7 @@ class PublicCatalogSearchTest extends DuskTestCase
                 // (`#filter-q`) y el del panel de búsqueda de la navbar. Se
                 // apunta al id estable para no depender del orden del DOM.
                 ->type('#filter-q', self::SEARCH_TERM)
-                ->press('Aplicar filtros')
+                ->click('.catalog-filter-actions button[type="submit"]')
                 // El término coincide sólo con uno: el otro desaparece del listado.
                 ->waitUntilMissing(self::card(self::OTHER_NAME), 10)
                 // La respuesta renderizada conserva el término en el campo `q`.

@@ -14,8 +14,11 @@ class AdminCollectionTest extends TestCase
     use RefreshDatabase;
 
     private Category $category;
+
     private User $admin;
+
     private User $empleado;
+
     private User $cliente;
 
     protected function setUp(): void
@@ -32,7 +35,7 @@ class AdminCollectionTest extends TestCase
     {
         return Product::create(array_merge([
             'category_id' => $this->category->id,
-            'name' => 'Producto ' . $slug,
+            'name' => 'Producto '.$slug,
             'slug' => $slug,
             'precio' => 1000000,
             'stock' => 3,
@@ -58,6 +61,47 @@ class AdminCollectionTest extends TestCase
             ->get(route('admin.collections.index'))
             ->assertOk()
             ->assertSee('Verano');
+    }
+
+    public function test_el_listado_resume_colecciones_y_asignaciones(): void
+    {
+        $primera = $this->product('coleccion-uno');
+        $segunda = $this->product('coleccion-dos');
+
+        $destacada = Collection::create([
+            'name' => 'Destacada',
+            'slug' => 'destacada',
+            'is_active' => true,
+        ]);
+        $destacada->products()->attach([$primera->id, $segunda->id]);
+
+        Collection::create([
+            'name' => 'Borrador',
+            'slug' => 'borrador',
+            'is_active' => false,
+        ]);
+
+        foreach (range(1, 20) as $position) {
+            Collection::create([
+                'name' => "Colección {$position}",
+                'slug' => "coleccion-{$position}",
+                'is_active' => false,
+            ]);
+        }
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.collections.index'))
+            ->assertOk()
+            ->assertViewHas('stats', function (array $stats) {
+                return $stats['total'] === 22
+                    && $stats['active'] === 1
+                    && $stats['products'] === 2;
+            })
+            ->assertViewHas('collections', function ($collections) {
+                return $collections->perPage() === 20
+                    && $collections->total() === 22
+                    && $collections->count() === 20;
+            });
     }
 
     public function test_admin_puede_crear_coleccion_con_campos_persistidos(): void

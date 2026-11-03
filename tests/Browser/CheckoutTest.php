@@ -92,24 +92,24 @@ class CheckoutTest extends DuskTestCase
                 // Agrega 1 unidad desde el componente Livewire de la tarjeta y
                 // espera el mensaje de éxito del propio componente.
                 ->within(self::card(self::PRODUCT_NAME), function (Browser $browser) {
-                    $browser->press('Agregar al carrito')
+                    $browser->click('button[type="submit"]')
                         ->waitForText('Producto agregado al carrito.', 10);
                 })
                 // Carrito: la línea, su cantidad y el enlace al checkout.
                 ->visit('/carrito')
                 ->waitFor(self::cartLine($this->product->id), 10)
-                ->assertSeeIn(self::cartLine($this->product->id), self::PRODUCT_NAME)
+                ->assertSeeIn(self::cartLine($this->product->id), self::PRODUCT_NAME, true)
                 ->assertAttribute(self::cartLine($this->product->id), 'data-cart-quantity', '1')
                 ->assertAttribute('[data-cart-total]', 'data-cart-total', (string) self::PRECIO)
                 ->assertPresent('[data-checkout-link]')
-                ->assertSee('Proceder al checkout')
+                ->assertSee('Proceder al checkout', true)
                 // Checkout: resumen con el producto y su total, y el formulario.
                 ->click('[data-checkout-link]')
                 ->waitForLocation('/checkout', 10)
                 ->assertPathIs('/checkout')
                 ->waitFor('[data-checkout-summary]', 10)
-                ->assertSeeIn('[data-checkout-summary]', self::PRODUCT_NAME)
-                ->assertSeeIn(self::checkoutLine($this->product->id), '× 1')
+                ->assertSeeIn('[data-checkout-summary]', self::PRODUCT_NAME, true)
+                ->assertSeeIn(self::checkoutLine($this->product->id), 'Cantidad 1', true)
                 ->assertAttribute('[data-checkout-total]', 'data-checkout-total', (string) self::PRECIO)
                 ->assertPresent('#checkout-nombre')
                 ->assertPresent('#checkout-email')
@@ -123,11 +123,11 @@ class CheckoutTest extends DuskTestCase
                 ->type('#checkout-telefono', self::SHIPPING['telefono'])
                 ->type('#checkout-direccion', self::SHIPPING['direccion'])
                 ->type('#checkout-ciudad', self::SHIPPING['ciudad'])
-                ->press('Confirmar pedido')
+                ->press('[data-checkout-form] form button[type="submit"]')
                 // Éxito: espera el bloque de confirmación y su texto.
                 ->waitFor('[data-order-success]', 15)
-                ->assertSeeIn('[data-order-success]', '¡Pedido confirmado!')
-                ->assertSeeIn('[data-order-success]', 'contraentrega');
+                ->assertSeeIn('[data-order-success]', '¡Pedido confirmado!', true)
+                ->assertSeeIn('[data-order-success]', 'contraentrega', true);
 
             // El código visible sale de su atributo data-* y se compara luego
             // contra el guardado en la base.

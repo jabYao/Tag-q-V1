@@ -65,6 +65,9 @@ class ProductDetailPurchaseTest extends DuskTestCase
         $this->browse(function (Browser $browser) {
             $browser->visit('/catalogo/'.$this->product->slug)
                 ->waitFor('[data-pd-buy]', 10)
+                // El bloque de compra es un componente Livewire: espera a que
+                // pinte acciones y stock antes de leer el texto renderizado.
+                ->waitFor('[data-pd-buy] .pd-buy-actions', 10)
                 // El título se pinta en mayúsculas por CSS; WebDriver lee el
                 // texto renderizado, así que la comparación ignora mayúsculas.
                 ->assertSee(self::PRODUCT_NAME, true)
