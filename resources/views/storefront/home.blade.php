@@ -67,10 +67,10 @@
          anuncia. En pantallas angostas la coordenada se oculta para que la
          franja no crezca de más. --}}
     <div data-home-hero-spacer class="bg-transparent">
-        <div class="site-container flex flex-col gap-2 py-2 2xl:flex-row 2xl:items-center 2xl:justify-between 2xl:gap-6">
+        <div class="site-container flex flex-col gap-2 py-1.5 2xl:flex-row 2xl:items-center 2xl:justify-between 2xl:gap-6 sm:py-2">
             <p
                 data-home-hero-highlight
-                class="inline-flex w-fit flex-wrap items-center gap-1.5 rounded-[5px] border-2 border-border-soft bg-surface-muted p-2.5 font-display text-[clamp(12px,3.3vw,15px)] uppercase leading-none tracking-[0.15em] text-ink sm:gap-2 sm:p-3"
+                class="inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-[5px] border border-border-soft bg-surface-muted p-1.5 font-display text-[10px] uppercase leading-none tracking-[0.12em] text-ink sm:gap-2 sm:border-2 sm:p-3 sm:text-[clamp(12px,3.3vw,15px)] sm:tracking-[0.15em]"
             >
                 <span data-home-hero-pulse aria-hidden="true"></span>
                 <span class="font-black">DESTACADO</span>
@@ -151,7 +151,7 @@
                  con la animación editorial que vive en `resources/js/app.js`. --}}
             <div
                 data-home-hero-overlay
-                class="pointer-events-none absolute inset-0 z-[3] flex items-center pl-[5vw] pr-5 pb-20 pt-10 sm:pr-10 sm:pb-16 sm:pt-14"
+                class="pointer-events-none absolute inset-0 z-[3] flex items-center pb-14 pl-[5vw] pr-4 pt-6 sm:pb-16 sm:pl-[5vw] sm:pr-10 sm:pt-14"
             >
                 @foreach($heroSlides as $index => $slide)
                     <div
@@ -159,7 +159,7 @@
                         @if($index !== 0) hidden @endif
                         class="pointer-events-auto w-full max-w-2xl"
                     >
-                        <p class="flex items-center gap-3 font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70">
+                        <p class="flex items-center gap-3 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 sm:text-[11px]">
                             <span aria-hidden="true" class="h-px w-8 bg-accent"></span>
                             Colección Tag Q
                         </p>
@@ -167,28 +167,28 @@
                         {{-- Un único <h1> en el hero (la primera diapositiva);
                              las siguientes usan <h2> con las mismas clases. --}}
                         @if($index === 0)
-                            <h1 data-home-hero-title class="mt-5 font-display text-[40px] font-bold uppercase leading-[44px] tracking-[-0.02em] sm:text-[60px] sm:leading-[64px] sm:tracking-[-0.03em] lg:text-[72px] lg:leading-[76px]">
+                            <h1 data-home-hero-title class="mt-3 font-display text-[32px] font-bold uppercase leading-[36px] tracking-[-0.02em] text-white sm:mt-5 sm:text-[60px] sm:leading-[64px] sm:tracking-[-0.03em] lg:text-[72px] lg:leading-[76px]">
                                 {{ $slide['title'] }}
                             </h1>
                         @else
-                            <h2 data-home-hero-title class="mt-5 font-display text-[40px] font-bold uppercase leading-[44px] tracking-[-0.02em] sm:text-[60px] sm:leading-[64px] sm:tracking-[-0.03em] lg:text-[72px] lg:leading-[76px]">
+                            <h2 data-home-hero-title class="mt-3 font-display text-[32px] font-bold uppercase leading-[36px] tracking-[-0.02em] text-white sm:mt-5 sm:text-[60px] sm:leading-[64px] sm:tracking-[-0.03em] lg:text-[72px] lg:leading-[76px]">
                                 {{ $slide['title'] }}
                             </h2>
                         @endif
 
-                        <p data-home-hero-body class="mt-5 max-w-xl font-body text-[15px] leading-6 text-white/75 sm:text-[16px] sm:leading-7">
+                        <p data-home-hero-body class="mt-3 max-w-xl font-body text-[13px] leading-[18px] text-white/75 sm:mt-5 sm:text-[16px] sm:leading-7">
                             {{ $slide['body'] }}
                         </p>
 
                         {{-- Las mismas dos acciones viajan con cada diapositiva. --}}
-                        <div data-home-hero-actions class="mt-8 flex flex-wrap items-center gap-3">
+                        <div data-home-hero-actions class="mt-6 flex flex-wrap items-center gap-3 sm:mt-8">
                             <a
                                 href="{{ route('catalog.index') }}"
-                                class="inline-flex h-12 items-center justify-center rounded bg-accent px-6 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                                class="inline-flex h-10 items-center justify-center rounded bg-accent px-5 font-display text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink sm:h-12 sm:px-6 sm:text-[11px]"
                             >Ver catálogo</a>
                             <a
                                 href="{{ route('cart.index') }}"
-                                class="inline-flex h-12 items-center justify-center rounded border border-white/50 px-6 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:border-white hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                                class="inline-flex h-10 items-center justify-center rounded border border-white/50 px-5 font-display text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:border-white hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink sm:h-12 sm:px-6 sm:text-[11px]"
                             >Ir a mi bolsa</a>
                         </div>
                     </div>
@@ -231,6 +231,20 @@
                 'dama' => 'Categoría Dama',
                 'ninos' => 'Categoría Niños',
             ];
+            $categoryLabels = [
+                'caballero' => 'Caballero',
+                'dama' => 'Dama',
+                'ninos' => 'Niños',
+            ];
+
+            // Categorías de la portada móvil: las tres categorías reales con
+            // imagen. El orden se mezcla en cada render para que la tarjeta
+            // grande y las dos pequeñas cambien de posición al recargar.
+            $mobileCategorySlugs = array_values(array_filter(
+                ['dama', 'caballero', 'ninos'],
+                fn ($slug) => isset($categoryImages[$slug]) && $categories->contains('slug', $slug),
+            ));
+            shuffle($mobileCategorySlugs);
         @endphp
 
         <div class="site-container">
@@ -242,8 +256,9 @@
                     </div>
                     <a
                         data-home-hover
+                        data-home-ver-todos="recent-desktop"
                         href="{{ route('catalog.index') }}"
-                        class="inline-flex h-12 items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        class="hidden h-12 items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:inline-flex"
                     >Ver todos</a>
                 </div>
 
@@ -258,7 +273,7 @@
                     </div>
                 @else
                     <div data-home-products-grid class="w-full">
-                        <div data-home-stagger class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        <div data-home-stagger class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
                         @foreach($products as $product)
                             @include('storefront.partials.product-card', [
                                 'product' => $product,
@@ -268,6 +283,13 @@
                         @endforeach
                         </div>
                     </div>
+
+                    <a
+                        data-home-hover
+                        data-home-ver-todos="recent-mobile"
+                        href="{{ route('catalog.index') }}"
+                        class="mx-auto mt-6 flex h-12 w-fit items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:hidden"
+                    >Ver todos</a>
                 @endif
             </section>
         </div>
@@ -376,8 +398,45 @@
                     'col-span-2 row-span-1',
                 ];
             @endphp
+            {{-- Portada móvil de categorías: solo por debajo de `lg`. Muestra
+                 las tres categorías reales con imagen, una grande arriba y dos
+                 pequeñas abajo. El orden se mezcla en cada render. En desktop
+                 se conserva intacta la galería bento de siempre. --}}
+            @if($mobileCategorySlugs !== [])
+                <section data-home-categories aria-label="Categorías" class="mb-14 lg:hidden">
+                    <div data-home-reveal class="mb-7 border-b border-border-soft pb-5">
+                        <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">Explora</p>
+                        <h2 class="mt-2 font-display text-[32px] font-bold uppercase leading-[36px] tracking-[-0.01em] text-ink sm:text-[40px] sm:leading-[44px] lg:text-[48px] lg:leading-[52px] lg:tracking-[-0.02em]">Categorías</h2>
+                    </div>
+
+                    <div data-home-stagger class="grid grid-cols-2 auto-rows-[130px] gap-3">
+                        @foreach($mobileCategorySlugs as $slug)
+                            <a
+                                data-home-category-card
+                                data-home-reveal
+                                data-home-reveal-media
+                                data-home-hover
+                                href="{{ route('catalog.index', ['categoria' => $slug]) }}"
+                                class="group relative block overflow-hidden rounded-lg border border-border-soft bg-surface-muted transition-colors hover:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 {{ $loop->first ? 'col-span-2 row-span-2' : 'col-span-1 row-span-1' }}"
+                            >
+                                <img
+                                    src="{{ CloudinaryUrl::webp($categoryImages[$slug]) }}"
+                                    alt="{{ $categoryAlts[$slug] ?? $slug }}"
+                                    loading="lazy"
+                                    class="absolute inset-0 h-full w-full object-cover"
+                                >
+                                <span class="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/10 to-transparent"></span>
+                                <span class="pointer-events-none absolute inset-x-0 bottom-0 truncate px-4 py-3 font-display font-semibold uppercase tracking-[0.12em] text-white {{ $loop->first ? 'text-[13px]' : 'text-[11px]' }}">
+                                    {{ $categoryLabels[$slug] ?? $slug }}
+                                </span>
+                            </a>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
+
             @if($galleryItems !== [])
-                <section data-home-gallery aria-label="Galería de la colección" class="mb-20">
+                <section data-home-gallery aria-label="Galería de la colección" class="mb-20 hidden lg:block">
                     <div data-home-reveal class="mb-7 border-b border-border-soft pb-5">
                         <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">Galería</p>
                         <h2 class="mt-2 font-display text-[32px] font-bold uppercase leading-[36px] tracking-[-0.01em] text-ink sm:text-[40px] sm:leading-[44px] lg:text-[48px] lg:leading-[52px] lg:tracking-[-0.02em]">La colección en imágenes</h2>
@@ -425,8 +484,9 @@
                         <div class="flex flex-wrap items-center gap-3">
                             <a
                                 data-home-hover
+                                data-home-ver-todos="favorites-desktop"
                                 href="{{ route('catalog.index') }}"
-                                class="inline-flex h-12 items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                class="hidden h-12 items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:inline-flex"
                             >Ver todos</a>
 
                             <div class="flex items-center gap-2">
@@ -470,6 +530,13 @@
                         </div>
 
                         <div data-home-favorites-pagination class="mt-6 flex justify-center"></div>
+
+                        <a
+                            data-home-hover
+                            data-home-ver-todos="favorites-mobile"
+                            href="{{ route('catalog.index') }}"
+                            class="mx-auto mt-5 flex h-12 w-fit items-center rounded border border-border-soft bg-white px-5 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:hidden"
+                        >Ver todos</a>
                     </div>
                 </section>
             @endif

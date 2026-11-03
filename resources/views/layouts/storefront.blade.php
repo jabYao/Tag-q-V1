@@ -19,10 +19,10 @@
          que se neutraliza con `motion-reduce:` para quien prefiere movimiento
          reducido. Solo el bloque de anuncios es región viva (`role="status"`),
          así el cambio se anuncia a lectores de pantalla; el teléfono queda
-         fuera de esa región —fijo a la derecha en escritorio y en su propia
-         línea en móvil— para que nunca desaparezca ni se anuncie en cada
-         rotación. Usa Alpine (ya cargado por Vite) y el `[x-cloak]` que aporta
-         Livewire; no agrega dependencias ni assets externos. --}}
+         fuera de esa región y solo se muestra desde `sm`, fijo a la derecha en
+         escritorio. En móvil los anuncios se centran y el teléfono se oculta
+         por pedido del dueño. Usa Alpine (ya cargado por Vite) y el `[x-cloak]`
+         que aporta Livewire; no agrega dependencias ni assets externos. --}}
     <div
         data-shipping-topbar
         data-shipping-rotation="4000"
@@ -40,10 +40,10 @@
         {{-- La barra conserva el fondo de borde a borde, pero su contenido usa
              el contenedor global `site-container` (90vw): así los anuncios y el
              teléfono quedan alineados con la navbar, el `<main>` y el pie, en
-             lugar de tocar el borde real del viewport. En móvil los anuncios y
-             el teléfono se apilan en dos líneas, con el teléfono empujado a la
-             derecha por su propio `ml-auto`. --}}
-        <div class="site-container flex flex-col items-center gap-1 py-2 sm:flex-row sm:gap-8">
+             lugar de tocar el borde real del viewport. En móvil solo quedan los
+             anuncios, centrados; desde `sm` el teléfono aparece a la derecha
+             empujado por su propio `ml-auto`. --}}
+        <div class="site-container flex flex-col items-center gap-1 py-1.5 sm:flex-row sm:gap-8 sm:py-2">
             {{-- Anuncios rotativos: única región viva del top bar. La luz queda
                  fuera de los mensajes para que no herede su fade; los dos slots
                  comparten celda de grid y se alinean a la izquierda. --}}
@@ -52,15 +52,15 @@
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
-                class="flex w-full min-w-0 items-center gap-2 sm:flex-1"
+                class="relative flex w-full min-w-0 items-center justify-center gap-2 sm:flex-1 sm:justify-start"
             >
                 <span
                     data-shipping-light
                     aria-hidden="true"
-                    class="h-3 w-3 shrink-0 rounded-full bg-secondary"
+                    class="absolute left-0 top-1/2 h-3 w-3 shrink-0 -translate-y-1/2 rounded-full bg-secondary sm:static sm:translate-y-0"
                 ></span>
 
-                <div class="grid min-w-0 flex-1 justify-items-start">
+                <div class="grid min-w-0 flex-1 justify-items-center sm:justify-items-start">
                     {{-- Mensaje 1: envíos nacionales, junto a la bandera de Colombia
                          en SVG (determinista en todos los sistemas; el emoji no
                          renderiza en Windows) con nombre accesible. --}}
@@ -73,7 +73,7 @@
                         x-transition:leave="transition ease-in duration-200 motion-reduce:transition-none"
                         x-transition:leave-start="opacity-100 translate-y-0"
                         x-transition:leave-end="opacity-0 -translate-y-1 motion-reduce:translate-y-0"
-                        class="col-start-1 row-start-1 flex min-w-0 items-center justify-start gap-2 text-left text-[11px] uppercase tracking-[0.2em] sm:text-xs"
+                        class="col-start-1 row-start-1 flex min-w-0 items-center justify-center gap-2 text-center text-[10px] uppercase tracking-[0.16em] sm:justify-start sm:text-left sm:text-[11px] sm:tracking-[0.2em]"
                     >
                         <svg
                             data-shipping-flag
@@ -101,7 +101,7 @@
                         x-transition:leave="transition ease-in duration-200 motion-reduce:transition-none"
                         x-transition:leave-start="opacity-100 translate-y-0"
                         x-transition:leave-end="opacity-0 -translate-y-1 motion-reduce:translate-y-0"
-                        class="col-start-1 row-start-1 flex min-w-0 items-center justify-start gap-2 text-left text-[11px] uppercase tracking-[0.2em] sm:text-xs"
+                        class="col-start-1 row-start-1 flex min-w-0 items-center justify-center gap-2 text-center text-[10px] uppercase tracking-[0.16em] sm:justify-start sm:text-left sm:text-[11px] sm:tracking-[0.2em]"
                     >
                         <span>REALIZAMOS TUS ENVÍOS CONTRAENTREGA</span>
                     </p>
@@ -114,7 +114,7 @@
                 data-shipping-phone
                 href="tel:+573113059507"
                 aria-label="Llámanos al +57 311 305 9507"
-                class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11px] tracking-[0.15em] text-white/90 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary-hover"
+                class="ml-auto hidden shrink-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11px] tracking-[0.15em] text-white/90 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary-hover sm:inline-flex"
             >
                 <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
@@ -468,7 +468,7 @@
                  accesible vive en `aria-label` y en `title`, y el destino no
                  cambia. Cada icono mide 24px (`h-6 w-6`) para equilibrar el
                  tamaño de las categorías. --}}
-            <div data-nav-utilities class="flex items-center justify-end gap-0.5 sm:gap-1">
+            <div data-nav-utilities class="flex items-center justify-end gap-0 pr-2 sm:gap-1 sm:pr-0">
                 {{-- Buscar: abre el panel de búsqueda bajo la navbar, que
                      reutiliza el filtro `q` del catálogo. Sigue siendo
                      solo-icono con nombre accesible y expone su estado.
@@ -494,9 +494,11 @@
                      autenticado ve pedidos, su cierre de sesión y —solo si la
                      autorización existente lo permite— el panel. --}}
                 <div
-                    class="relative"
+                    data-nav-account
+                    class="relative hidden lg:block"
                     x-data="{ open: false }"
                     @keydown.escape.window="open = false"
+                    @click.outside="open = false"
                 >
                     <button
                         type="button"
@@ -504,6 +506,7 @@
                         aria-label="Cuenta"
                         title="Cuenta"
                         aria-haspopup="true"
+                        aria-controls="storefront-account-menu"
                         :aria-expanded="open"
                         @click="open = ! open"
                         class="inline-flex items-center justify-center rounded p-2 text-white hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -515,24 +518,30 @@
                     </button>
 
                     <div
+                        id="storefront-account-menu"
                         data-nav-account-menu
                         x-show="open"
                         x-cloak
-                        @click.outside="open = false"
-                        class="absolute right-0 z-20 mt-1 w-56 rounded border border-gray-200 bg-white py-1 shadow-lg"
+                        x-transition:enter="transition ease-out duration-150 motion-reduce:transition-none"
+                        x-transition:enter-start="origin-top-right scale-95 opacity-0 motion-reduce:scale-100 motion-reduce:opacity-100"
+                        x-transition:enter-end="origin-top-right scale-100 opacity-100"
+                        x-transition:leave="transition ease-in duration-100 motion-reduce:transition-none"
+                        x-transition:leave-start="origin-top-right scale-100 opacity-100"
+                        x-transition:leave-end="origin-top-right scale-95 opacity-0 motion-reduce:scale-100 motion-reduce:opacity-100"
+                        class="absolute right-0 top-full z-[70] mt-2 w-60 max-w-[calc(100vw-2rem)] origin-top-right rounded-lg border border-border-soft bg-white py-1.5 shadow-xl ring-1 ring-black/5"
                     >
                         @auth
                             @if(auth()->user()->canAccessAdmin())
-                                <a href="{{ route('admin.products.index') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Panel</a>
+                                <a href="{{ route('admin.products.index') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Panel</a>
                             @endif
-                            <a href="{{ route('customer.orders.index') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Mis pedidos</a>
+                            <a href="{{ route('customer.orders.index') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Mis pedidos</a>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
-                                <button type="submit" class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Cerrar sesión</button>
+                                <button type="submit" class="block w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Cerrar sesión</button>
                             </form>
                         @else
-                            <a href="{{ route('login') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Iniciar sesión</a>
-                            <a href="{{ route('register') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Crear cuenta</a>
+                            <a href="{{ route('login') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Iniciar sesión</a>
+                            <a href="{{ route('register') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Crear cuenta</a>
                         @endauth
                     </div>
                 </div>
@@ -574,13 +583,15 @@
             </div>
         </div>
 
-        {{-- Panel móvil: mismo menú primario, con Niños accesible directamente. --}}
+        {{-- Panel móvil: mismo menú primario, con Niños accesible directamente
+             y el acceso a la cuenta, que en móvil deja el navbar. Se limita a
+             `70dvh` y hace scroll propio para no cubrir todo el viewport. --}}
         <div
             id="storefront-mobile-menu"
             data-nav-mobile-panel
             x-show="mobileOpen"
             x-cloak
-            class="site-container mt-3 flex flex-col gap-1 border-t border-white/20 pt-3 lg:hidden"
+            class="site-container mt-3 flex max-h-[70dvh] flex-col gap-1 overflow-y-auto overscroll-contain border-t border-white/20 pb-4 pt-3 lg:hidden"
         >
             {{-- En móvil Tienda alterna (tap) el mismo panel a ancho completo;
                  el hover no existe en táctil. `Ver todo` sigue llevando al
@@ -619,6 +630,24 @@
             @foreach(config('tagq.subcategories', []) as $slug => $label)
                 <a data-nav-mobile-child="{{ $slug }}" href="{{ route('catalog.index', ['subcategoria' => $slug]) }}" class="rounded px-3 py-2 pl-6 text-sm text-white/70 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">{{ $label }}</a>
             @endforeach
+
+            <div data-nav-mobile-account-group class="mt-3 border-t border-white/20 pt-3">
+                <p class="px-3 pb-1 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">Cuenta</p>
+
+                @auth
+                    @if(auth()->user()->canAccessAdmin())
+                        <a data-nav-mobile-account="admin" href="{{ route('admin.products.index') }}" class="block rounded px-3 py-2.5 text-sm text-white/85 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Panel</a>
+                    @endif
+                    <a data-nav-mobile-account="orders" href="{{ route('customer.orders.index') }}" class="block rounded px-3 py-2.5 text-sm text-white/85 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Mis pedidos</a>
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button data-nav-mobile-account="logout" type="submit" class="block w-full rounded px-3 py-2.5 text-left text-sm text-white/85 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Cerrar sesión</button>
+                    </form>
+                @else
+                    <a data-nav-mobile-account="login" href="{{ route('login') }}" class="block rounded px-3 py-2.5 text-sm text-white/85 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Iniciar sesión</a>
+                    <a data-nav-mobile-account="register" href="{{ route('register') }}" class="block rounded px-3 py-2.5 text-sm text-white/85 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Crear cuenta</a>
+                @endauth
+            </div>
         </div>
 
         {{-- T11 — Fondo del panel de búsqueda: atenúa solo el área que queda

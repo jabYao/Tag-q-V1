@@ -95,7 +95,7 @@
              naranja `secondary` de la referencia (fondo blanco, letra, borde y
              punto naranjas) y el descuento conserva el fondo primario. --}}
         <div class="pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-2 p-2">
-            <span data-home-card-stock data-product-card-stock @class([
+            <span data-home-card-stock data-product-card-stock data-stock-state="{{ $estado }}" @class([
                 'inline-flex min-w-0 items-center gap-1.5 rounded border px-2 py-1 font-display text-[10px] font-semibold uppercase tracking-[0.12em] shadow-sm backdrop-blur-sm',
                 'border-secondary bg-white text-secondary' => $estado === 'Nuevo',
                 'border-ink/10 bg-white text-ink' => $estado !== 'Nuevo',

@@ -45,8 +45,13 @@
                 wire:target="add"
                 class="inline-flex h-10 w-full items-center justify-center rounded bg-accent px-4 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted"
             >
-                <span wire:loading.remove wire:target="add">Agregar al carrito</span>
-                <span wire:loading wire:target="add">Agregando&hellip;</span>
+                <svg data-compact-cart-icon aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="hidden h-4 w-4">
+                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+                <span data-compact-cart-label wire:loading.remove wire:target="add">Agregar al carrito</span>
+                <span data-compact-cart-label wire:loading wire:target="add">Agregando&hellip;</span>
             </button>
         </form>
 

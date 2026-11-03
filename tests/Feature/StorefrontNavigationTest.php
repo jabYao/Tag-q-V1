@@ -492,7 +492,7 @@ class StorefrontNavigationTest extends TestCase
         $this->assertFalse($phone->hasAttribute('x-transition'), 'El teléfono no se anima ni rota');
     }
 
-    public function test_el_top_bar_alinea_los_anuncios_y_agrega_una_luz_secundaria_que_parpadea(): void
+    public function test_el_top_bar_centra_los_anuncios_en_movil_y_agrega_una_luz_secundaria_que_parpadea(): void
     {
         $html = $this->get(route('catalog.index'))->assertOk()->getContent();
 
@@ -511,6 +511,21 @@ class StorefrontNavigationTest extends TestCase
             $this->assertContains($class, $lightClasses, "La luz aplica {$class}");
         }
 
+        // En móvil la luz sale del flujo para que el texto quede centrado de
+        // verdad en el viewport; desde `sm` vuelve a acompañar al anuncio.
+        foreach (['absolute', 'left-0', 'top-1/2', '-translate-y-1/2', 'sm:static', 'sm:translate-y-0'] as $class) {
+            $this->assertContains($class, $lightClasses, "La luz aplica {$class}");
+        }
+
+        $announcementClasses = preg_split(
+            '/\s+/',
+            trim((string) $xpath->query('//*[@data-shipping-announcements]')->item(0)?->getAttribute('class')),
+            -1,
+            PREG_SPLIT_NO_EMPTY,
+        );
+
+        $this->assertContains('relative', $announcementClasses, 'El bloque de anuncios ancla la luz en móvil');
+
         $this->assertSame(
             0,
             $xpath->query('//*[@data-shipping-message]//*[@data-shipping-light]')->length,
@@ -524,10 +539,13 @@ class StorefrontNavigationTest extends TestCase
 
             $classes = preg_split('/\s+/', trim((string) $message->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
 
-            $this->assertContains('justify-start', $classes, "El slot {$slot} se alinea a la izquierda");
-            $this->assertContains('text-left', $classes, "El slot {$slot} alinea su texto a la izquierda");
-            $this->assertNotContains('justify-center', $classes, "El slot {$slot} ya no se centra");
-            $this->assertNotContains('text-center', $classes, "El slot {$slot} ya no centra su texto");
+            // En móvil el anuncio se centra para no quedar pegado a la luz;
+            // desde `sm` recupera la alineación izquierda junto al teléfono.
+            $this->assertContains('justify-center', $classes, "El slot {$slot} se centra en móvil");
+            $this->assertContains('text-center', $classes, "El slot {$slot} centra su texto en móvil");
+            $this->assertContains('sm:justify-start', $classes, "El slot {$slot} se alinea a la izquierda desde sm");
+            $this->assertContains('sm:text-left', $classes, "El slot {$slot} alinea su texto a la izquierda desde sm");
+            $this->assertNotContains('justify-start', $classes, "El slot {$slot} no fuerza la izquierda en móvil");
         }
 
         $css = file_get_contents(base_path('resources/css/app.css'));
@@ -552,11 +570,11 @@ class StorefrontNavigationTest extends TestCase
             $node = $xpath->query('//*[@data-shipping-message="'.$slot.'"]')->item(0);
 
             $this->assertNotNull($node, "El slot {$slot} existe");
-            $this->assertStringContainsString(
-                'tracking-[0.2em]',
-                (string) $node->getAttribute('class'),
-                "El slot {$slot} ensancha el espaciado entre letras"
-            );
+
+            $classes = preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+            $this->assertContains('tracking-[0.16em]', $classes, "El slot {$slot} usa un tracking compacto en móvil");
+            $this->assertContains('sm:tracking-[0.2em]', $classes, "El slot {$slot} ensancha el espaciado desde sm");
         }
     }
 
@@ -588,16 +606,18 @@ class StorefrontNavigationTest extends TestCase
         $this->assertNotContains('w-full', $classes, 'El layout ya no ocupa todo el ancho: se acota a 90vw');
         $this->assertNotContains('px-2', $classes, 'El aire lateral lo aporta `site-container`, no un padding propio');
         $this->assertNotContains('px-4', $classes, 'El layout no usa el padding horizontal ancho anterior');
-        $this->assertContains('flex-col', $classes, 'En móvil los anuncios y el teléfono se apilan en dos líneas');
+        $this->assertContains('flex-col', $classes, 'En móvil los anuncios ocupan su propia línea');
+        $this->assertContains('sm:flex-row', $classes, 'Desde sm el teléfono se suma a la misma fila');
 
-        // El teléfono persistente queda alineado a la derecha del contenedor
-        // también en móvil: su propia línea con auto-margen izquierdo lo empuja
-        // contra el borde interior de la barra.
+        // El teléfono persistente se oculta en móvil (pedido del dueño) y
+        // reaparece desde `sm`, alineado a la derecha del contenedor.
         $phone = $xpath->query('//*[@data-shipping-topbar]//a[@data-shipping-phone]')->item(0);
         $this->assertNotNull($phone, 'El teléfono persistente existe');
 
         $phoneClasses = preg_split('/\s+/', trim((string) $phone->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
 
+        $this->assertContains('hidden', $phoneClasses, 'El teléfono no ocupa espacio en móvil');
+        $this->assertContains('sm:inline-flex', $phoneClasses, 'El teléfono reaparece desde sm');
         $this->assertContains('ml-auto', $phoneClasses, 'El teléfono se alinea a la derecha del contenedor');
         $this->assertContains('shrink-0', $phoneClasses, 'El teléfono conserva su tamaño sin comprimirse');
     }
@@ -657,7 +677,7 @@ class StorefrontNavigationTest extends TestCase
      */
     private function xpathDe(string $html): \DOMXPath
     {
-        $document = new \DOMDocument();
+        $document = new \DOMDocument;
         $previous = libxml_use_internal_errors(true);
         $document->loadHTML('<?xml encoding="UTF-8">'.$html);
         libxml_clear_errors();
@@ -1013,10 +1033,16 @@ class StorefrontNavigationTest extends TestCase
         );
 
         // Las utilidades siguen visibles a la derecha también en móvil: son la
-        // tercera celda de la rejilla, alineada al final.
+        // tercera celda de la rejilla, alineada al final. La cuenta deja el
+        // navbar por debajo de `lg` y vive en el menú hamburguesa.
         $this->assertInstanceOf(\DOMElement::class, $right, 'La columna derecha existe');
         $this->assertTrue($right->hasAttribute('data-nav-utilities'), 'Las utilidades viven en la columna derecha');
-        $this->assertSame(3, $xpath->query('.//*[@data-nav-utility]', $right)->length, 'Los tres iconos siguen a la derecha en móvil');
+        $this->assertSame(3, $xpath->query('.//*[@data-nav-utility]', $right)->length, 'Los tres controles viven en la columna derecha');
+
+        $account = $xpath->query('.//*[@data-nav-account]', $right)->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $account, 'La cuenta vive dentro de las utilidades');
+        $this->assertContains('hidden', preg_split('/\s+/', trim((string) $account->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY), 'La cuenta se oculta en móvil');
+        $this->assertContains('lg:block', preg_split('/\s+/', trim((string) $account->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY), 'La cuenta vuelve en escritorio');
 
         // Las rutas y el panel móvil no cambian con el reordenamiento.
         $this->assertSame(3, substr_count($html, 'data-nav-mobile-item'), 'El menú móvil conserva los tres primarios');
@@ -1034,6 +1060,82 @@ class StorefrontNavigationTest extends TestCase
             'href="'.route('cart.index').'"',
             $html,
             'La bolsa conserva su destino al carrito'
+        );
+    }
+
+    public function test_la_cuenta_ocupa_el_menu_hamburguesa_en_movil_y_el_dropdown_en_escritorio(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+        $xpath = $this->xpathDe($html);
+
+        // La cuenta del navbar solo existe desde `lg`; en móvil sus enlaces
+        // viven dentro del panel hamburguesa, que ahora tiene scroll propio.
+        $account = $xpath->query('//*[@data-nav-account]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $account, 'El contenedor de cuenta existe');
+        $accountClasses = preg_split('/\s+/', trim((string) $account->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $this->assertContains('hidden', $accountClasses, 'La cuenta se oculta por debajo de lg');
+        $this->assertContains('lg:block', $accountClasses, 'La cuenta reaparece en escritorio');
+
+        $panel = $xpath->query('//*[@data-nav-mobile-panel]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $panel, 'El panel móvil existe');
+        $panelClasses = preg_split('/\s+/', trim((string) $panel->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $this->assertContains('max-h-[70dvh]', $panelClasses, 'El panel móvil no cubre todo el viewport');
+        $this->assertContains('overflow-y-auto', $panelClasses, 'El panel móvil hace scroll propio');
+        $this->assertContains('overscroll-contain', $panelClasses, 'El scroll no se propaga al documento');
+
+        $mobileAccount = $xpath->query('//*[@data-nav-mobile-panel]//*[@data-nav-mobile-account-group]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $mobileAccount, 'La cuenta aparece en el menú hamburguesa');
+        $this->assertSame(
+            2,
+            $xpath->query('.//*[@data-nav-mobile-account]', $mobileAccount)->length,
+            'El invitado recibe Iniciar sesión y Crear cuenta en el menú',
+        );
+        $this->assertSame(
+            route('login'),
+            $xpath->query('.//*[@data-nav-mobile-account="login"]', $mobileAccount)->item(0)?->getAttribute('href'),
+        );
+        $this->assertSame(
+            route('register'),
+            $xpath->query('.//*[@data-nav-mobile-account="register"]', $mobileAccount)->item(0)?->getAttribute('href'),
+        );
+
+        // El dropdown de escritorio corrige su presentación: aparece bajo el
+        // botón, con transición corta y una capa por encima del contenido.
+        $menu = $xpath->query('//*[@data-nav-account-menu]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $menu, 'El dropdown de cuenta existe');
+        $this->assertSame('storefront-account-menu', $menu->getAttribute('id'));
+        $this->assertSame('open', $menu->getAttribute('x-show'));
+
+        $menuClasses = preg_split('/\s+/', trim((string) $menu->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        foreach (['absolute', 'right-0', 'top-full', 'z-[70]', 'rounded-lg', 'bg-white', 'shadow-xl'] as $class) {
+            $this->assertContains($class, $menuClasses, "El dropdown aplica {$class}");
+        }
+        $this->assertSame(
+            'transition ease-out duration-150 motion-reduce:transition-none',
+            $menu->getAttribute('x-transition:enter'),
+            'El dropdown entra con una transición corta',
+        );
+
+        // Cliente autenticado: los mismos enlaces de sesión, también en el
+        // menú móvil; el cierre de sesión sigue siendo un POST.
+        $this->actingAs(User::factory()->create(['role' => 'cliente']));
+        $xpath = $this->xpathDe($this->get(route('catalog.index'))->assertOk()->getContent());
+        $mobileAccount = $xpath->query('//*[@data-nav-mobile-account-group]')->item(0);
+
+        $this->assertSame(
+            route('customer.orders.index'),
+            $xpath->query('.//*[@data-nav-mobile-account="orders"]', $mobileAccount)->item(0)?->getAttribute('href'),
+            'El cliente ve Mis pedidos en el menú móvil',
+        );
+        $this->assertSame(
+            'POST',
+            strtoupper((string) $xpath->query('.//form[@action="'.route('logout').'"]', $mobileAccount)->item(0)?->getAttribute('method')),
+            'Cerrar sesión sigue siendo un POST autenticado',
+        );
+        $this->assertSame(
+            1,
+            $xpath->query('.//*[@data-nav-mobile-account="logout"]', $mobileAccount)->length,
+            'El menú móvil ofrece cerrar sesión',
         );
     }
 

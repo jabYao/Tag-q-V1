@@ -14,14 +14,15 @@ use Tests\DuskTestCase;
  * Protege los arreglos visuales que no se pueden comprobar desde PHPUnit:
  *
  * - La navbar no desborda a 390 px: la marca, el menú y las utilidades caben y
- *   la bolsa termina dentro del viewport.
- * - La franja del destacado y el hero cierran en el borde inferior: el hero
- *   descuenta el alto real de la franja (`--storefront-hero-spacer-h`) y la
- *   paginación queda visible, no fuera de la pantalla.
- * - Las flechas del hero se ocultan bajo `sm` (el CSS de Swiper gana a las
- *   utilidades de Tailwind, por eso la regla vive en `app.css`).
- * - La grilla de recientes conserva una columna, la decisión del dueño para
- *   este tamaño.
+ *   la bolsa termina dentro del viewport. El teléfono y la cuenta se ocultan;
+ *   la cuenta vive dentro del menú hamburguesa, que tiene scroll propio.
+ * - La franja DESTACADO es compacta y el hero mide 62dvh, así que la siguiente
+ *   sección asoma en el primer viewport y la paginación queda visible.
+ * - La grilla de recientes usa dos columnas y su "Ver todos" va después.
+ * - La portada móvil de categorías muestra tres fichas (una grande y dos
+ *   pequeñas) y reemplaza a la galería de escritorio, que queda oculta.
+ * - El carrusel de favoritos muestra tres fichas mini por pantalla, con la
+ *   información secundaria oculta y el "Ver todos" después del carrusel.
  *
  * Cómo ejecutarlo (mismas condiciones que el resto de tests/Browser):
  *   1. Chromedriver disponible: `php artisan dusk:chrome-driver --detect`.
@@ -45,31 +46,56 @@ class HomeMobileTest extends DuskTestCase
     /** Alto del viewport de referencia. */
     private const VIEWPORT_HEIGHT = 844;
 
-    /** Productos recientes que debe pintar la grilla. */
-    private const PRODUCTS_ON_HOME = 4;
+    /**
+     * Productos del catálogo: cuatro llenan recientes y ocho permiten que el
+     * carrusel de favoritos active el bucle con tres fichas visibles.
+     */
+    private const PRODUCTS_ON_HOME = 8;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $category = Category::create([
+        // Las tres categorías reales de la portada móvil, con sus slugs de
+        // filtro. Los productos cuelgan de Caballero.
+        $caballero = Category::create([
             'name' => 'Caballero Home Móvil E2E',
-            'slug' => 'caballero-home-movil-e2e',
+            'slug' => 'caballero',
+        ]);
+
+        Category::create([
+            'name' => 'Dama Home Móvil E2E',
+            'slug' => 'dama',
+        ]);
+
+        Category::create([
+            'name' => 'Niños Home Móvil E2E',
+            'slug' => 'ninos',
         ]);
 
         foreach (range(1, self::PRODUCTS_ON_HOME) as $index) {
-            Product::create([
-                'category_id' => $category->id,
+            $product = Product::create([
+                'category_id' => $caballero->id,
                 'name' => 'Dusk Home Móvil '.$index,
                 'slug' => 'dusk-home-movil-'.$index,
                 'precio' => 100000 * $index,
+                'precio_oferta' => $index % 2 === 0 ? 80000 * $index : null,
                 'stock' => 5,
                 'is_active' => true,
+                'marca' => 'Tag Heuer',
+                'movimiento' => 'automatico',
+                'reference' => 'DUSK-'.$index,
             ]);
+
+            // Un producto antiguo produce el estado Disponible; el resto son
+            // Nuevos. Así el test comprueba qué chips conserva la ficha mini.
+            if ($index === self::PRODUCTS_ON_HOME) {
+                $product->forceFill(['created_at' => now()->subDays(60)])->save();
+            }
         }
     }
 
-    public function test_el_home_movil_no_desborda_y_el_hero_cierra_en_el_viewport(): void
+    public function test_el_home_movil_es_compacto_y_responsive(): void
     {
         $this->browse(function (Browser $browser) {
             $browser->resize(self::VIEWPORT_WIDTH, self::VIEWPORT_HEIGHT)
@@ -79,6 +105,11 @@ class HomeMobileTest extends DuskTestCase
                 // pantalla, y este test mide el layout sin scrollear.
                 ->waitUntil(
                     'document.querySelector("[data-home-products-grid] [data-home-card]") !== null',
+                    10,
+                )
+                ->waitUntil(
+                    'document.querySelector("[data-home-favorites-swiper]")'
+                    .'.classList.contains("swiper-initialized")',
                     10,
                 )
                 // La medida de la franja la publica `app.js`; sin ella el hero
@@ -102,16 +133,30 @@ class HomeMobileTest extends DuskTestCase
                     .' <= document.documentElement.clientWidth + 1;',
                     true,
                 )
+                // Teléfono y cuenta salen del navbar en móvil.
                 ->assertScript(
                     'return getComputedStyle('
-                    .'document.querySelector("[data-home-hero-prev]")'
+                    .'document.querySelector("[data-shipping-phone]")'
                     .').display === "none";',
                     true,
                 )
                 ->assertScript(
                     'return getComputedStyle('
-                    .'document.querySelector("[data-home-hero-next]")'
+                    .'document.querySelector("[data-nav-account]")'
                     .').display === "none";',
+                    true,
+                )
+                // La franja DESTACADO no consume el viewport.
+                ->assertScript(
+                    'return document.querySelector("[data-home-hero-spacer]")'
+                    .'.getBoundingClientRect().height <= 72;',
+                    true,
+                )
+                // El hero mide 62dvh y cierra dentro del primer viewport.
+                ->assertScript(
+                    'return document.querySelector("[data-home-hero]")'
+                    .'.getBoundingClientRect().height'
+                    .' <= document.documentElement.clientHeight * 0.70 + 1;',
                     true,
                 )
                 ->assertScript(
@@ -126,10 +171,114 @@ class HomeMobileTest extends DuskTestCase
                     .' <= document.documentElement.clientHeight + 1;',
                     true,
                 )
+                // Recientes: dos columnas y Ver todos móvil después de la grilla.
                 ->assertScript(
                     'return getComputedStyle('
                     .'document.querySelector("[data-home-products-grid] > div")'
-                    .').gridTemplateColumns.split(" ").length === 1;',
+                    .').gridTemplateColumns.split(" ").length === 2;',
+                    true,
+                )
+                ->assertScript(
+                    'return getComputedStyle('
+                    .'document.querySelector("[data-home-ver-todos=recent-desktop]")'
+                    .').display === "none";',
+                    true,
+                )
+                ->assertScript(
+                    'const link = document.querySelector("[data-home-ver-todos=recent-mobile]");'
+                    .'const grid = document.querySelector("[data-home-products-grid]");'
+                    .'return getComputedStyle(link).display !== "none"'
+                    .' && link.getBoundingClientRect().top >= grid.getBoundingClientRect().bottom;',
+                    true,
+                )
+                // Categorías móviles: tres fichas, una grande arriba y dos
+                // pequeñas abajo; la galería de escritorio queda oculta.
+                ->assertScript(
+                    'return document.querySelectorAll("[data-home-category-card]").length === 3;',
+                    true,
+                )
+                ->assertScript(
+                    'return document.querySelector("[data-home-categories] h2")'
+                    .'.textContent.trim() === "Categorías";',
+                    true,
+                )
+                ->assertScript(
+                    'return getComputedStyle('
+                    .'document.querySelector("[data-home-gallery]")'
+                    .').display === "none";',
+                    true,
+                )
+                ->assertScript(
+                    'const cards = document.querySelectorAll("[data-home-category-card]");'
+                    .'const large = cards[0].getBoundingClientRect();'
+                    .'const small = cards[1].getBoundingClientRect();'
+                    .'const third = cards[2].getBoundingClientRect();'
+                    .'return large.width > small.width * 1.7'
+                    .' && large.top < small.top'
+                    .' && Math.abs(small.top - third.top) < 2;',
+                    true,
+                )
+                // Favoritos: tres fichas mini por pantalla.
+                ->assertScript(
+                    'const swiper = document.querySelector("[data-home-favorites-swiper]");'
+                    .'const slide = swiper.querySelector(".swiper-slide");'
+                    .'const ratio = swiper.clientWidth / slide.getBoundingClientRect().width;'
+                    .'return ratio > 2.8 && ratio < 3.2;',
+                    true,
+                )
+                // La ficha mini esconde la información secundaria y deja el
+                // icono de la bolsa; conserva nombre y precio.
+                ->assertScript(
+                    'const card = document.querySelector("[data-home-favorites-swiper] [data-favorite-card]");'
+                    .'const hidden = (selector) => getComputedStyle(card.querySelector(selector)).display === "none";'
+                    .'return hidden("[data-home-card-kicker]")'
+                    .' && hidden("[data-home-card-meta]")'
+                    .' && hidden("[data-home-card-discount]")'
+                    .' && hidden("[data-home-card-price-before]")'
+                    .' && hidden("[data-compact-cart-label]")'
+                    .' && getComputedStyle(card.querySelector("[data-compact-cart-icon]")).display !== "none"'
+                    .' && getComputedStyle(card.querySelector("[data-product-card-name]")).display !== "none"'
+                    .' && getComputedStyle(card.querySelector("[data-home-card-price]")).display !== "none";',
+                    true,
+                )
+                ->assertScript(
+                    'const cards = Array.from(document.querySelectorAll('
+                    .'"[data-home-favorites-swiper] [data-stock-state=Disponible]"));'
+                    .'return cards.every((chip) => getComputedStyle(chip).display === "none");',
+                    true,
+                )
+                // Ver todos de favoritos: visible después del carrusel en móvil.
+                ->assertScript(
+                    'return getComputedStyle('
+                    .'document.querySelector("[data-home-ver-todos=favorites-desktop]")'
+                    .').display === "none";',
+                    true,
+                )
+                ->assertScript(
+                    'const link = document.querySelector("[data-home-ver-todos=favorites-mobile]");'
+                    .'const swiper = document.querySelector("[data-home-favorites-swiper]");'
+                    .'return getComputedStyle(link).display !== "none"'
+                    .' && link.getBoundingClientRect().top >= swiper.getBoundingClientRect().bottom;',
+                    true,
+                );
+        });
+    }
+
+    public function test_el_menu_movil_alberga_la_cuenta_y_hace_scroll_propio(): void
+    {
+        $this->browse(function (Browser $browser) {
+            $browser->resize(self::VIEWPORT_WIDTH, self::VIEWPORT_HEIGHT)
+                ->visit('/')
+                ->click('[data-nav-mobile-toggle]')
+                ->waitFor('[data-nav-mobile-account="login"]', 10)
+                ->assertVisible('[data-nav-mobile-account="login"]')
+                ->assertVisible('[data-nav-mobile-account="register"]')
+                ->assertScript(
+                    'const panel = document.querySelector("[data-nav-mobile-panel]");'
+                    .'const style = getComputedStyle(panel);'
+                    .'return style.overflowY === "auto"'
+                    .' && panel.getBoundingClientRect().height'
+                    .' <= document.documentElement.clientHeight * 0.70 + 1;',
                     true,
                 );
         });

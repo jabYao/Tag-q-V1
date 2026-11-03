@@ -392,24 +392,112 @@ class StorefrontHomeTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | Categorías fuera del home (pedido del dueño)
+    | Portada móvil de categorías (pedido del dueño)
     |--------------------------------------------------------------------------
     |
-    | La franja de categorías se retiró del home: después del hero el primer
-    | bloque es "Productos recientes". El catálogo conserva sus filtros por
-    | categoría y la galería bento sigue usando fotos de categorías reales.
+    | Después de "Productos recientes" el home recupera las tres categorías
+    | reales con imagen solo por debajo de `lg`: una tarjeta grande arriba y dos
+    | pequeñas abajo, en orden aleatorio en cada render. La galería bento de
+    | escritorio queda intacta y se oculta en móvil.
     */
 
-    public function test_el_home_ya_no_renderiza_la_seccion_de_categorias(): void
+    public function test_el_home_muestra_las_tres_categorias_solo_en_movil_y_conserva_la_galeria_de_escritorio(): void
     {
         $this->category('Caballero', 'caballero');
         $this->category('Dama', 'dama');
-        $this->product($this->category('Accesorios', 'accesorios'));
+        $this->category('Niños', 'ninos');
 
-        $this->get('/')->assertOk()
-            ->assertDontSee('data-home-categories', false)
-            ->assertDontSee('data-category-image', false)
-            ->assertDontSee('data-category-label', false);
+        $html = $this->get('/')->assertOk()->getContent();
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        $sections = $xpath->query('//*[@data-home-categories]');
+        $this->assertSame(1, $sections->length, 'La portada móvil de categorías existe una sola vez');
+
+        $section = $sections->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $section);
+
+        $this->assertSame(
+            'Categorías',
+            trim($xpath->query('.//h2', $section)->item(0)?->textContent ?? ''),
+            'La sección móvil se llama Categorías',
+        );
+
+        $classes = $this->classesOf($section);
+        $this->assertContains('lg:hidden', $classes, 'La portada de categorías solo se muestra en móvil');
+        $this->assertContains('mb-14', $classes, 'La portada conserva el ritmo vertical del home');
+
+        $cards = $xpath->query('.//*[@data-home-category-card]', $section);
+        $this->assertSame(3, $cards->length, 'La portada móvil muestra las tres categorías con imagen');
+
+        $expected = [
+            route('catalog.index', ['categoria' => 'caballero']),
+            route('catalog.index', ['categoria' => 'dama']),
+            route('catalog.index', ['categoria' => 'ninos']),
+        ];
+        $hrefs = [];
+
+        foreach ($cards as $index => $card) {
+            $hrefs[] = $card->getAttribute('href');
+            $cardClasses = $this->classesOf($card);
+
+            if ($index === 0) {
+                $this->assertContains('col-span-2', $cardClasses, 'La primera categoría ocupa el ancho completo');
+                $this->assertContains('row-span-2', $cardClasses, 'La primera categoría es la ficha grande');
+            } else {
+                $this->assertContains('col-span-1', $cardClasses, 'Las otras dos categorías comparten la fila');
+                $this->assertContains('row-span-1', $cardClasses, 'Las otras dos categorías son fichas pequeñas');
+            }
+
+            $image = $xpath->query('.//img', $card)->item(0);
+            $this->assertNotNull($image, 'Cada categoría móvil trae su imagen');
+            $this->assertStringContainsString(
+                '/image/upload/f_webp,q_auto/',
+                $image->getAttribute('src'),
+                'Las imágenes usan la entrega WebP de Cloudinary',
+            );
+        }
+
+        sort($hrefs);
+        sort($expected);
+
+        $this->assertSame($expected, $hrefs, 'Cada tarjeta enlaza el filtro real de una categoría distinta');
+
+        // La galería de escritorio no cambia: conserva su contenido y solo se
+        // oculta por debajo del breakpoint `lg`.
+        $gallery = $xpath->query('//*[@data-home-gallery]')->item(0);
+        $this->assertNotNull($gallery, 'La galería de escritorio sigue existiendo');
+        $this->assertStringContainsString('La colección en imágenes', $gallery->textContent);
+
+        $galleryClasses = $this->classesOf($gallery);
+        $this->assertContains('hidden', $galleryClasses, 'La galería se oculta en móvil');
+        $this->assertContains('lg:block', $galleryClasses, 'La galería reaparece en escritorio');
+    }
+
+    public function test_el_orden_de_las_categorias_moviles_cambia_al_recargar(): void
+    {
+        $this->category('Caballero', 'caballero');
+        $this->category('Dama', 'dama');
+        $this->category('Niños', 'ninos');
+
+        $orders = [];
+
+        for ($render = 0; $render < 12; $render++) {
+            $html = $this->get('/')->assertOk()->getContent();
+            $xpath = new \DOMXPath($this->documentOf($html));
+
+            $order = [];
+            foreach ($xpath->query('//*[@data-home-category-card]') as $card) {
+                $order[] = $card->getAttribute('href');
+            }
+
+            $orders[] = implode('|', $order);
+        }
+
+        $this->assertGreaterThan(
+            1,
+            count(array_unique($orders)),
+            'El orden de las tres categorías se mezcla en cada render',
+        );
     }
 
     public function test_productos_recientes_es_el_primer_bloque_despues_del_hero(): void
@@ -427,16 +515,18 @@ class StorefrontHomeTest extends TestCase
         $this->assertNotNull($body, 'El cuerpo del home existe');
         $this->assertNotNull($products, 'La sección de productos recientes existe');
 
-        // El cuerpo no contiene la franja de categorías y su primer <section>
-        // es productos recientes: no hay otro bloque entre el hero y él.
-        $this->assertSame(0, $xpath->query('.//*[@data-home-categories]', $body)->length);
-
+        // El primer <section> del cuerpo es productos recientes: la portada
+        // móvil de categorías, cuando exista, vive más abajo.
         $firstSection = $xpath->query('.//section', $body)->item(0);
         $this->assertNotNull($firstSection, 'El cuerpo del home tiene secciones');
         $this->assertTrue(
             $firstSection->hasAttribute('data-home-products'),
             'Productos recientes es el primer bloque del cuerpo',
         );
+
+        foreach ($xpath->query('.//*[@data-home-categories]', $body) as $categories) {
+            $this->assertNotSame($firstSection, $categories, 'La portada de categorías no reemplaza al primer bloque');
+        }
 
         // El hero va antes que el cuerpo del home y queda fuera de él.
         $this->assertSame(0, $xpath->query('.//*[@data-home-hero]', $body)->length);
@@ -527,6 +617,57 @@ class StorefrontHomeTest extends TestCase
         foreach ($active as $product) {
             $response->assertSee($product->name);
         }
+    }
+
+    public function test_los_productos_recientes_usan_dos_columnas_en_movil_y_su_ver_todos_va_despues_de_la_grilla(): void
+    {
+        $category = $this->category();
+
+        foreach (range(1, 4) as $position) {
+            $this->product($category, [
+                'name' => "Grilla Móvil {$position}",
+                'slug' => "grilla-movil-{$position}",
+            ]);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $xpath = new \DOMXPath($this->documentOf($html));
+
+        $grid = $xpath->query('//*[@data-home-products-grid]//*[@data-home-stagger]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $grid, 'La grilla de recientes existe');
+
+        $gridClasses = $this->classesOf($grid);
+        $this->assertContains('grid-cols-2', $gridClasses, 'En móvil la grilla usa dos columnas');
+        $this->assertContains('gap-3', $gridClasses, 'En móvil la separación se reduce');
+        $this->assertContains('sm:grid-cols-2', $gridClasses, 'La tablet conserva dos columnas');
+        $this->assertContains('lg:grid-cols-3', $gridClasses, 'El escritorio conserva tres columnas');
+        $this->assertContains('xl:grid-cols-4', $gridClasses, 'Las pantallas anchas conservan cuatro columnas');
+        $this->assertSame(4, $xpath->query('.//*[@data-home-card]', $grid)->length, 'La grilla mantiene sus cuatro recientes');
+
+        $mobile = $xpath->query('//a[@data-home-ver-todos="recent-mobile"]')->item(0);
+        $desktop = $xpath->query('//a[@data-home-ver-todos="recent-desktop"]')->item(0);
+
+        $this->assertInstanceOf(\DOMElement::class, $mobile, 'Existe el Ver todos móvil de recientes');
+        $this->assertInstanceOf(\DOMElement::class, $desktop, 'Existe el Ver todos de escritorio de recientes');
+
+        $mobileClasses = $this->classesOf($mobile);
+        $this->assertContains('sm:hidden', $mobileClasses, 'El Ver todos móvil se oculta desde sm');
+        $this->assertSame(route('catalog.index'), $mobile->getAttribute('href'));
+
+        $desktopClasses = $this->classesOf($desktop);
+        $this->assertContains('hidden', $desktopClasses, 'El Ver todos de escritorio se oculta en móvil');
+        $this->assertContains('sm:inline-flex', $desktopClasses, 'El Ver todos de escritorio reaparece desde sm');
+
+        $this->assertGreaterThan(
+            strpos($html, 'data-home-products-grid') + strlen('data-home-products-grid'),
+            strpos($html, 'data-home-ver-todos="recent-mobile"'),
+            'En móvil el Ver todos va después de la grilla',
+        );
+        $this->assertLessThan(
+            strpos($html, 'data-home-products-grid'),
+            strpos($html, 'data-home-ver-todos="recent-desktop"'),
+            'En escritorio el Ver todos vive en el encabezado, antes de la grilla',
+        );
     }
 
     /*
@@ -1648,6 +1789,43 @@ class StorefrontHomeTest extends TestCase
         );
     }
 
+    public function test_en_movil_el_destacado_es_compacto_y_el_hero_mide_62dvh(): void
+    {
+        $css = (string) file_get_contents(base_path('resources/css/app.css'));
+        $html = $this->get('/')->assertOk()->getContent();
+
+        // La franja DESTACADO deja de heredar el alto de la navbar y se reduce
+        // a su contenido; el hero usa 62dvh con suelo y techo para dejar ver
+        // la siguiente sección en el primer viewport.
+        $this->assertMatchesRegularExpression(
+            '/@media \(max-width: 639\.98px\)\s*\{.*?\[data-home-hero-spacer\]\s*\{[^}]*min-height:\s*0/s',
+            $css,
+            'La franja del destacado no conserva el alto de la navbar en móvil',
+        );
+        $this->assertMatchesRegularExpression(
+            '/@media \(max-width: 639\.98px\)\s*\{.*?\[data-home-hero-viewport\]\s*\{[^}]*height:\s*clamp\(22rem,\s*62dvh,\s*34rem\)/s',
+            $css,
+            'El hero móvil mide 62dvh con suelo y techo',
+        );
+
+        $document = $this->documentOf($html);
+        $xpath = new \DOMXPath($document);
+
+        $pill = $xpath->query('//*[@data-home-hero-highlight]')->item(0);
+        $this->assertNotNull($pill);
+        $pillClasses = $this->classesOf($pill);
+        $this->assertContains('text-[10px]', $pillClasses, 'El destacado móvil usa texto de 10px');
+        $this->assertContains('p-1.5', $pillClasses, 'El destacado móvil es más bajo');
+
+        $pulse = $xpath->query('.//*[@data-home-hero-pulse]', $pill)->item(0);
+        $this->assertNotNull($pulse);
+        $this->assertStringContainsString(
+            'width: 0.875rem',
+            $css,
+            'La señal del destacado se empequeñece en móvil',
+        );
+    }
+
     public function test_el_alto_del_hero_se_calcula_con_la_cabecera_del_storefront(): void
     {
         $css = file_get_contents(base_path('resources/css/app.css'));
@@ -1735,14 +1913,16 @@ class StorefrontHomeTest extends TestCase
         $pillClasses = $this->classesOf($pill);
 
         $this->assertContains('border-border-soft', $pillClasses, 'La pastilla usa el borde del sistema (checkout)');
-        $this->assertContains('border-2', $pillClasses, 'El borde es de 2px');
+        $this->assertContains('border', $pillClasses, 'En móvil el borde es fino para no inflar la franja');
+        $this->assertContains('sm:border-2', $pillClasses, 'Desde sm el borde recupera 2px');
         $this->assertContains('rounded-[5px]', $pillClasses, 'La pastilla usa un radio de 5px');
         $this->assertContains('bg-surface-muted', $pillClasses, 'La pastilla usa el gris suave del sistema');
-        $this->assertContains('p-2.5', $pillClasses, 'La pastilla usa el paso 2.5 de Tailwind (10px) en móvil');
+        $this->assertContains('p-1.5', $pillClasses, 'La pastilla es compacta en móvil (6px)');
         $this->assertContains('sm:p-3', $pillClasses, 'La pastilla recupera 12px desde sm');
         $this->assertNotContains('rounded-none', $pillClasses, 'La pastilla ya no es de esquina viva');
         $this->assertNotContains('rounded-full', $pillClasses, 'La pastilla no es de extremos redondeados');
-        $this->assertContains('text-[clamp(12px,3.3vw,15px)]', $pillClasses, 'El texto de la pastilla escala de 12px a 15px');
+        $this->assertContains('text-[10px]', $pillClasses, 'En móvil el texto de la pastilla baja a 10px');
+        $this->assertContains('sm:text-[clamp(12px,3.3vw,15px)]', $pillClasses, 'El texto escala de 12px a 15px desde sm');
 
         $texto = preg_replace('/\s+/', ' ', trim($pill->textContent));
 
@@ -1984,7 +2164,7 @@ class StorefrontHomeTest extends TestCase
         $js = file_get_contents(base_path('resources/js/app.js'));
         $this->assertNotFalse($js, 'Debe existir resources/js/app.js');
 
-        foreach (['slideChange', 'realIndex', 'reducedMotion.matches', "from 'swiper'"] as $snippet) {
+        foreach (['slideChangeTransitionStart', 'realIndex', 'reducedMotion.matches', "from 'swiper'"] as $snippet) {
             $this->assertStringContainsString($snippet, $js, "app.js debe seguir conteniendo {$snippet}");
         }
 
@@ -2083,11 +2263,21 @@ class StorefrontHomeTest extends TestCase
 
         // GSAP es la herramienta; el copy se decide por el índice real de Swiper.
         $this->assertStringContainsString('gsap.timeline(', $js, 'La entrada del hero usa GSAP');
-        $this->assertStringContainsString("swiper.on('slideChange'", $js, 'La entrada se dispara en cada cambio de slide');
+        $this->assertStringContainsString(
+            "swiper.on('slideChangeTransitionStart'",
+            $js,
+            'La entrada se dispara cuando la transición empieza, no a mitad del gesto',
+        );
         $this->assertStringContainsString('swiper.realIndex', $js, 'El copy usa el índice real de Swiper');
 
         // El copy inactivo se retira antes de entrar el nuevo: sin solaparse.
         $this->assertStringContainsString('copy.hidden = !active;', $js, 'Solo el copy activo queda visible');
+
+        // La misma diapositiva no vuelve a animarse si el loopFix reemite el
+        // evento; el tacto pausa el autoplay y lo reanuda al soltar.
+        foreach (['lastEnteredIndex', "swiper.on('touchStart'", "swiper.on('touchEnd'", 'canHover.matches'] as $guard) {
+            $this->assertStringContainsString($guard, $js, "La coreografía del hero incluye {$guard}");
+        }
     }
 
     public function test_la_animacion_del_hero_respeta_el_movimiento_reducido(): void
@@ -2159,10 +2349,11 @@ class StorefrontHomeTest extends TestCase
     |--------------------------------------------------------------------------
     |
     | El home cierra con un carrusel de ocho productos como máximo, ordenado por
-    | unidades vendidas en pedidos consolidados. Se muestran cinco tarjetas a la
-    | vez en escritorio y el carrusel se apoya en Swiper, ya presente en el
-    | proyecto. Sin ventas suficientes se muestran los productos reales que haya:
-    | nunca se inventan fichas para completar el número.
+    | unidades vendidas en pedidos consolidados. Se muestran tres tarjetas mini
+    | por pantalla en móvil, dos en tablet y tres en escritorio; el carrusel se
+    | apoya en Swiper, ya presente en el proyecto. Sin ventas suficientes se
+    | muestran los productos reales que haya: nunca se inventan fichas para
+    | completar el número.
     */
 
     public function test_los_favoritos_muestran_los_ocho_mas_vendidos_antes_del_footer(): void
@@ -2324,7 +2515,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringContainsString('data-home-favorites', $html);
     }
 
-    public function test_el_carrusel_de_favoritos_muestra_cinco_en_escritorio_y_respeta_movimiento_reducido(): void
+    public function test_el_carrusel_de_favoritos_muestra_tres_en_movil_dos_en_tablet_y_tres_en_escritorio(): void
     {
         $js = file_get_contents(base_path('resources/js/app.js'));
         $css = file_get_contents(base_path('resources/css/app.css'));
@@ -2341,14 +2532,116 @@ class StorefrontHomeTest extends TestCase
             $this->assertStringContainsString($marker, $js, "app.js inicializa {$marker}");
         }
 
+        // Móvil: tres miniaturas por pantalla; tablet: dos; escritorio: tres.
         $this->assertMatchesRegularExpression(
-            '/1280:\s*\{[^}]*slidesPerView:\s*5/s',
+            '/slidesPerView:\s*3,/',
             $js,
-            'En escritorio el carrusel muestra cinco tarjetas',
+            'El carrusel arranca con tres tarjetas visibles en móvil',
+        );
+        $this->assertMatchesRegularExpression(
+            '/640:\s*\{[^}]*slidesPerView:\s*2/s',
+            $js,
+            'Desde 640 px el carrusel muestra dos tarjetas',
+        );
+        $this->assertMatchesRegularExpression(
+            '/1024:\s*\{[^}]*slidesPerView:\s*3/s',
+            $js,
+            'Desde 1024 px el carrusel vuelve a tres tarjetas',
+        );
+        $this->assertStringNotContainsString('slidesPerView: 5', $js, 'El carrusel ya no muestra cinco tarjetas');
+        $this->assertStringNotContainsString('1280:', $js, 'El carrusel ya no tiene un breakpoint propio de 1280');
+
+        // Avance de una en una y bucle solo cuando hay diapositivas suficientes
+        // para no repetir una ficha en la misma pantalla.
+        $this->assertMatchesRegularExpression('/slidesPerGroup:\s*1,/', $js, 'El carrusel avanza de una en una');
+        $this->assertMatchesRegularExpression(
+            '/loop:\s*slideCount\s*>=?\s*6/',
+            $js,
+            'El bucle solo se activa con al menos seis diapositivas',
         );
         $this->assertStringContainsString('prefersReducedMotion() ? 0 : 300', $js);
         $this->assertStringContainsString('[data-home-favorites-pagination]', $css);
         $this->assertStringContainsString('swiper-button-disabled', $css);
+    }
+
+    public function test_los_favoritos_usan_una_ficha_mini_en_movil_y_su_ver_todos_va_despues_del_carrusel(): void
+    {
+        $category = $this->category();
+
+        foreach (range(1, 8) as $position) {
+            $this->product($category, [
+                'name' => "Favorito Mini {$position}",
+                'slug' => "favorito-mini-{$position}",
+                'marca' => 'Tag Heuer',
+                'movimiento' => 'automatico',
+                'reference' => "REF-MINI-{$position}",
+                'precio' => 300000,
+                'precio_oferta' => 240000,
+                'stock' => 2,
+            ]);
+        }
+
+        $html = $this->get('/')->assertOk()->getContent();
+        $document = $this->documentOf($html);
+        $xpath = new \DOMXPath($document);
+
+        $favorites = $xpath->query('//*[@data-home-favorites]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $favorites, 'La sección de favoritos existe');
+
+        $mobile = $xpath->query('.//a[@data-home-ver-todos="favorites-mobile"]', $favorites)->item(0);
+        $desktop = $xpath->query('.//a[@data-home-ver-todos="favorites-desktop"]', $favorites)->item(0);
+
+        $this->assertInstanceOf(\DOMElement::class, $mobile, 'Existe el Ver todos móvil de favoritos');
+        $this->assertInstanceOf(\DOMElement::class, $desktop, 'Existe el Ver todos de escritorio de favoritos');
+
+        $this->assertContains('sm:hidden', $this->classesOf($mobile), 'El Ver todos móvil se oculta desde sm');
+        $this->assertContains('hidden', $this->classesOf($desktop), 'El Ver todos de escritorio se oculta en móvil');
+        $this->assertContains('sm:inline-flex', $this->classesOf($desktop), 'El Ver todos de escritorio reaparece desde sm');
+
+        $favoritesHtml = (string) $document->saveHTML($favorites);
+        $this->assertGreaterThan(
+            strpos($favoritesHtml, 'data-home-favorites-swiper'),
+            strpos($favoritesHtml, 'data-home-ver-todos="favorites-mobile"'),
+            'En móvil el Ver todos va después del carrusel',
+        );
+        $this->assertLessThan(
+            strpos($favoritesHtml, 'data-home-favorites-swiper'),
+            strpos($favoritesHtml, 'data-home-ver-todos="favorites-desktop"'),
+            'En escritorio el Ver todos vive en el encabezado, antes del carrusel',
+        );
+
+        // La ficha mini conserva foto, nombre, precio final y botón; esconde
+        // kicker, referencia, descuento y precio tachado, y deja solo el icono
+        // de la bolsa. La regla está acotada al carrusel de favoritos.
+        $css = (string) file_get_contents(base_path('resources/css/app.css'));
+        $this->assertMatchesRegularExpression(
+            '/\[data-home-favorites-swiper\][^{]*\[data-home-card-kicker\][^{]*\[data-home-card-meta\][^{]*\[data-home-card-discount\][^{]*\[data-home-card-price-before\][^{]*\{[^}]*display:\s*none/s',
+            $css,
+            'La ficha mini esconde la información secundaria en móvil',
+        );
+        $this->assertMatchesRegularExpression(
+            '/\[data-home-favorites-swiper\][^{]*\[data-compact-cart-label\][^{]*\{[^}]*display:\s*none/s',
+            $css,
+            'La ficha mini esconde la etiqueta del botón',
+        );
+        $this->assertMatchesRegularExpression(
+            '/\[data-home-favorites-swiper\][^{]*\[data-compact-cart-icon\][^{]*\{[^}]*display:\s*block/s',
+            $css,
+            'La ficha mini muestra el icono de la bolsa',
+        );
+        $this->assertMatchesRegularExpression(
+            '/\[data-home-favorites-swiper\][^{]*\[data-home-card-stock\]\[data-stock-state=\'Disponible\'\][^{]*\{[^}]*display:\s*none/s',
+            $css,
+            'La ficha mini solo conserva Nuevo o Agotado',
+        );
+
+        // Los datos siguen en el HTML: la reducción es visual, no de contenido.
+        $first = $xpath->query('.//*[@data-favorite-card]', $favorites)->item(0);
+        $this->assertNotNull($first);
+        $firstHtml = (string) $document->saveHTML($first);
+        foreach (['data-home-card-kicker', 'data-home-card-reference', 'data-home-card-discount', 'data-home-card-price-before', 'data-compact-cart-icon'] as $hook) {
+            $this->assertStringContainsString($hook, $firstHtml, "La ficha conserva {$hook} en el HTML");
+        }
     }
 
     public function test_los_botones_ver_todos_del_home_van_sin_flecha(): void

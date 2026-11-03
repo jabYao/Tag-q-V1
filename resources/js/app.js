@@ -147,6 +147,7 @@ function initHomeHeroSlider(section) {
      * y el respeto a `prefers-reduced-motion` siguen intactos.
      */
     const copies = Array.from(section.querySelectorAll('[data-home-hero-copy]'));
+    const allMedia = Array.from(section.querySelectorAll('[data-home-hero-photo]'));
 
     /** Capas que entran escalonadas dentro de un bloque de copy. */
     const copyLayers = (copy) => [
@@ -196,7 +197,9 @@ function initHomeHeroSlider(section) {
         const copy = copyFor(index);
         const layers = copy ? copyLayers(copy) : [];
 
-        settle(media ? [media] : []);
+        // Limpiar también las imágenes que no son la activa evita que un tween
+        // viejo quede a medias y provoque un salto al volver a una diapositiva.
+        settle(allMedia);
         settle(layers);
 
         if (reducedMotion.matches) {
@@ -224,9 +227,25 @@ function initHomeHeroSlider(section) {
         });
     };
 
-    swiper.on('slideChange', () => {
+    /*
+     * La entrada se dispara al empezar la transición, no en `slideChange`.
+     * `slideChange` ocurre a mitad del arrastre cuando el índice cruza el
+     * umbral: cambiar el copy y reiniciar GSAP en ese punto hacía que el gesto
+     * pareciera un salto. `slideChangeTransitionStart` solo llega cuando el
+     * carrusel ya va a moverse de verdad (al soltar, con autoplay o al pulsar
+     * un control). El guard evita repetir la misma animación si el loopFix
+     * vuelve a emitir el evento para el mismo slide.
+     */
+    let lastEnteredIndex = null;
+
+    swiper.on('slideChangeTransitionStart', () => {
         const index = swiper.realIndex;
 
+        if (index === lastEnteredIndex) {
+            return;
+        }
+
+        lastEnteredIndex = index;
         showCopy(index);
         enterActive(index);
     });
@@ -234,15 +253,20 @@ function initHomeHeroSlider(section) {
     // La carga inicial también entra: el hero arranca con la primera diapositiva.
     showCopy(swiper.realIndex);
     enterActive(swiper.realIndex);
+    lastEnteredIndex = swiper.realIndex;
 
     const pause = () => swiper.autoplay && swiper.autoplay.stop();
+    const canHover = window.matchMedia('(hover: hover)');
 
     const resume = () => {
         if (!swiper.autoplay || reducedMotion.matches) {
             return;
         }
 
-        if (section.matches(':hover') || section.contains(document.activeElement)) {
+        // En táctil el `:hover` puede quedarse pegado después del toque y el
+        // foco del botón también permanece; ninguno debe impedir que el
+        // autoplay vuelva tras soltar el dedo.
+        if (canHover.matches && (section.matches(':hover') || section.contains(document.activeElement))) {
             return;
         }
 
@@ -253,6 +277,8 @@ function initHomeHeroSlider(section) {
     section.addEventListener('mouseleave', resume);
     section.addEventListener('focusin', pause);
     section.addEventListener('focusout', resume);
+    swiper.on('touchStart', pause);
+    swiper.on('touchEnd', resume);
 
     reducedMotion.addEventListener('change', (event) => {
         if (!event.matches) {
@@ -273,12 +299,13 @@ document.querySelectorAll('[data-home-hero-slider]').forEach((section) => initHo
 /**
  * Carrusel de favoritos (`data-home-favorites`).
  *
- * Muestra cinco tarjetas a la vez en escritorio y avanza de una en una, así
- * cada posición queda llena aunque el total no sea múltiplo de cinco. En móvil
- * deja ver un asomo más sutil de la siguiente ficha (`1.08`) para invitar al
- * gesto sin cortar de más la insignia; en tablet muestra dos y en portátil,
- * tres. Sin autoplay: el visitante decide cuándo moverse. La paginación se
- * puede pulsar y las flechas tienen nombre accesible.
+ * Móvil muestra tres fichas mini por pantalla (la ficha reduce su información
+ * por CSS), tablet dos y escritorio tres; siempre avanza de una en una. El
+ * bucle se activa solo cuando hay diapositivas suficientes para llenar el
+ * carrusel sin repetir una misma ficha en pantalla (`slides >= 6`): con menos
+ * el recorrido se detiene en los extremos. Sin autoplay: el visitante decide
+ * cuándo moverse. La paginación se puede pulsar y las flechas tienen nombre
+ * accesible.
  *
  * Con `prefers-reduced-motion: reduce` la velocidad del desplazamiento es cero
  * desde el arranque, y se actualiza si la preferencia cambia con la página
@@ -292,12 +319,15 @@ function initHomeFavoritesSlider(section) {
     }
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const slideCount = container.querySelectorAll('.swiper-slide').length;
 
     const swiper = new Swiper(container, {
         modules: [Navigation, Pagination],
-        slidesPerView: 1.08,
+        slidesPerView: 3,
         slidesPerGroup: 1,
-        spaceBetween: 16,
+        spaceBetween: 10,
+        loop: slideCount >= 6,
+        loopAdditionalSlides: 1,
         speed: prefersReducedMotion() ? 0 : 300,
         watchOverflow: true,
         navigation: {
@@ -311,7 +341,6 @@ function initHomeFavoritesSlider(section) {
         breakpoints: {
             640: { slidesPerView: 2, spaceBetween: 20 },
             1024: { slidesPerView: 3, spaceBetween: 20 },
-            1280: { slidesPerView: 5, spaceBetween: 24 },
         },
     });
 
