@@ -278,6 +278,15 @@ class HomeMobileTest extends DuskTestCase
                     .'return getComputedStyle(link).display !== "none"'
                     .' && link.getBoundingClientRect().top >= swiper.getBoundingClientRect().bottom;',
                     true,
+                )
+                // En móvil el cierre de favoritos no deja un hueco grande antes
+                // del footer: margen de 16px más el padding inferior del home.
+                ->assertScript(
+                    'const section = document.querySelector("[data-home-favorites]");'
+                    .'const footer = document.querySelector("[data-storefront-footer]");'
+                    .'return footer.getBoundingClientRect().top'
+                    .' - section.getBoundingClientRect().bottom <= 56;',
+                    true,
                 );
         });
     }

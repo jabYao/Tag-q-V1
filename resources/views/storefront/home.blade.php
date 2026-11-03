@@ -472,9 +472,11 @@
                  ordena por unidades vendidas en pedidos consolidados y limita a
                  ocho; el carrusel muestra tres a la vez y avanza solo en bucle.
                  Los productos sin ventas solo completan el cupo cuando el
-                 catálogo no llega a ocho, nunca se inventan fichas. --}}
+                 catálogo no llega a ocho, nunca se inventan fichas. En móvil el
+                 margen inferior se reduce para no dejar un hueco grande antes
+                 del footer; desde `sm` conserva el ritmo del home. --}}
             @if($favoriteProducts->isNotEmpty())
-                <section data-home-favorites aria-labelledby="home-favorites-title" class="mb-20">
+                <section data-home-favorites aria-labelledby="home-favorites-title" class="mb-4 sm:mb-20">
                     <div data-home-reveal class="mb-7 flex flex-col gap-5 border-b border-border-soft pb-5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
                         <div>
                             <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">Favoritos</p>

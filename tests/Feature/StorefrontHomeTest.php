@@ -2407,6 +2407,14 @@ class StorefrontHomeTest extends TestCase
         $this->assertSame('Favoritos', trim($xpath->query('.//p', $section)->item(0)?->textContent ?? ''));
         $this->assertStringContainsString('Los más vendidos', $section->textContent);
 
+        // En móvil el cierre no deja el hueco de 80px antes del footer; desde
+        // `sm` recupera el mismo ritmo vertical del resto del home.
+        $sectionClasses = preg_split('/\s+/', trim((string) $section->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('mb-4', $sectionClasses, 'En móvil favoritos cierra con un margen menor antes del footer');
+        $this->assertContains('sm:mb-20', $sectionClasses, 'Desde tablet conserva el ritmo vertical del home');
+        $this->assertNotContains('mb-20', $sectionClasses, 'El margen grande ya no se aplica también en móvil');
+
         $this->assertSame(
             1,
             $xpath->query('.//*[@data-home-favorites-swiper]', $section)->length,
