@@ -16,12 +16,26 @@ use Livewire\Component;
  * right after page load.
  *
  * Selection is deterministic and read-only: only active products, ordered by
- * the newest `created_at` and `id` descending as the tiebreaker, capped at four.
+ * the newest `created_at` and `id` descending as the tiebreaker, capped at four
+ * on desktop and two when the mobile menu requests the compact variant.
  */
 class FeaturedProductsMenu extends Component
 {
-    /** Maximum number of featured products shown in the mega menu. */
+    /** Maximum number of featured products shown in the desktop mega menu. */
     public const MAX_PRODUCTS = 4;
+
+    /** Maximum number of featured products shown in the mobile menu. */
+    public const MOBILE_MAX_PRODUCTS = 2;
+
+    /**
+     * Mobile variant: only two products, each with its photo and name.
+     */
+    public bool $compact = false;
+
+    public function mount(bool $compact = false): void
+    {
+        $this->compact = $compact;
+    }
 
     public function render()
     {
@@ -42,7 +56,7 @@ class FeaturedProductsMenu extends Component
             ->where('is_active', true)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->limit(self::MAX_PRODUCTS)
+            ->limit($this->compact ? self::MOBILE_MAX_PRODUCTS : self::MAX_PRODUCTS)
             ->get();
     }
 }

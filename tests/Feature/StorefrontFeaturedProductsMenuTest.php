@@ -108,6 +108,46 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
             ->assertViewHas('products', fn ($products) => $products->count() === 4);
     }
 
+    public function test_la_variante_movil_muestra_solo_dos_productos_con_foto_y_nombre(): void
+    {
+        $category = $this->category();
+
+        foreach (range(1, 4) as $position) {
+            $this->product($category, [
+                'name' => "Compacto {$position}",
+                'slug' => "compacto-{$position}",
+                'precio' => 100000 * $position,
+                'reference' => "CMP-{$position}",
+                'imagenes' => ["https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/compacto-{$position}.jpg"],
+            ]);
+        }
+
+        $component = Livewire::test(FeaturedProductsMenu::class, ['compact' => true]);
+        $html = $component->html();
+
+        $component->assertViewHas('products', fn ($products) => $products->pluck('name')->all() === [
+            'Compacto 4',
+            'Compacto 3',
+        ]);
+
+        $document = new \DOMDocument;
+        @$document->loadHTML($html);
+        $xpath = new \DOMXPath($document);
+
+        $this->assertSame(1, $xpath->query('//*[@data-nav-featured-compact]')->length, 'La variante móvil declara su lista compacta');
+        $this->assertSame(2, $xpath->query('//*[@data-nav-featured-product]')->length, 'La variante móvil muestra solo dos productos');
+        $this->assertSame(2, $xpath->query('//*[@data-nav-featured-image]')->length, 'Cada producto conserva su foto');
+        $this->assertSame(2, $xpath->query('//*[@data-nav-featured-name]')->length, 'Cada producto conserva su nombre');
+
+        // Solo foto y nombre: sin precio, estado, referencia ni botón de bolsa.
+        $this->assertSame(0, $xpath->query('//*[@data-nav-featured-price]')->length, 'La variante móvil no muestra precios');
+        $this->assertSame(0, $xpath->query('//*[@data-product-card]')->length, 'La variante móvil no reutiliza la tarjeta completa');
+        $this->assertSame(0, $xpath->query('//*[@data-home-card-stock]')->length, 'La variante móvil no muestra estado de stock');
+        $this->assertSame(0, $xpath->query('//*[@data-variant="compact"]')->length, 'La variante móvil no muestra el botón de bolsa');
+        $this->assertStringNotContainsString('COP', $html);
+        $this->assertStringNotContainsString('REF.', $html);
+    }
+
     public function test_el_menu_ordena_por_created_at_mas_reciente_y_desempata_por_id_descendente(): void
     {
         $category = $this->category();

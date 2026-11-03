@@ -980,17 +980,29 @@ class StorefrontNavigationTest extends TestCase
 
         $xpath = $this->xpathDe($html);
 
-        foreach (['search', 'user', 'bag'] as $icon) {
+        // Buscador y bolsa bajan un poco de tamaño y grosor solo en móvil; desde
+        // `sm` vuelven a 24 px con el trazo original. La cuenta conserva 24 px.
+        foreach (['search', 'bag'] as $icon) {
             $node = $xpath->query('//*[@data-nav-utilities]//*[@data-nav-icon="'.$icon.'"]')->item(0);
             $this->assertNotNull($node, "El icono utilitario {$icon} existe");
 
             $classes = preg_split('/\s+/', trim((string) $node->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
 
-            $this->assertContains('h-6', $classes, "El icono {$icon} mide 24px de alto");
-            $this->assertContains('w-6', $classes, "El icono {$icon} mide 24px de ancho");
-            $this->assertNotContains('h-5', $classes, "El icono {$icon} ya no usa 20px de alto");
-            $this->assertNotContains('w-5', $classes, "El icono {$icon} ya no usa 20px de ancho");
+            foreach (['h-[22px]', 'w-[22px]', 'stroke-[1.5]', 'sm:h-6', 'sm:w-6', 'sm:stroke-[1.75]'] as $class) {
+                $this->assertContains($class, $classes, "El icono {$icon} aplica {$class}");
+            }
+
+            $this->assertNotContains('h-6', $classes, "El icono {$icon} no arranca en 24px");
+            $this->assertNotContains('w-6', $classes, "El icono {$icon} no arranca en 24px de ancho");
         }
+
+        $user = $xpath->query('//*[@data-nav-utilities]//*[@data-nav-icon="user"]')->item(0);
+        $this->assertNotNull($user, 'El icono utilitario user existe');
+
+        $userClasses = preg_split('/\s+/', trim((string) $user->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+        $this->assertContains('h-6', $userClasses, 'La cuenta conserva 24px de alto');
+        $this->assertContains('w-6', $userClasses, 'La cuenta conserva 24px de ancho');
     }
 
     public function test_las_etiquetas_primarias_crecen_a_text_sm_sin_perder_mayusculas(): void
@@ -1507,6 +1519,41 @@ class StorefrontNavigationTest extends TestCase
                 "El ítem móvil {$item} usa Space Grotesk (token --font-display de DESIGN.md)"
             );
         }
+    }
+
+    public function test_el_boton_movil_se_transforma_en_una_x_al_abrir_el_menu(): void
+    {
+        $html = $this->get(route('catalog.index'))->assertOk()->getContent();
+
+        $xpath = $this->xpathDe($html);
+        $toggle = $xpath->query('//*[@data-nav-mobile-toggle]')->item(0);
+
+        $this->assertNotNull($toggle, 'El botón móvil existe');
+        $this->assertSame(
+            "mobileOpen ? 'Cerrar menú' : 'Abrir menú'",
+            $toggle->getAttribute(':aria-label'),
+            'El nombre accesible anuncia abrir o cerrar según el estado'
+        );
+
+        $icon = $xpath->query('.//*[@data-nav-icon="menu"]', $toggle)->item(0);
+        $this->assertNotNull($icon, 'El botón conserva su icono de menú');
+        $this->assertSame('span', strtolower($icon->tagName), 'El icono se dibuja con líneas animables');
+
+        $bars = $xpath->query('./span', $icon);
+
+        $this->assertSame(3, $bars->length, 'El icono conserva sus tres líneas');
+        $this->assertStringContainsString('rotate-45', $bars->item(0)->getAttribute(':class'), 'La línea superior gira hacia la X');
+        $this->assertStringContainsString('opacity-0', $bars->item(1)->getAttribute(':class'), 'La línea central desaparece');
+        $this->assertStringContainsString('-rotate-45', $bars->item(2)->getAttribute(':class'), 'La línea inferior gira hacia la X');
+
+        foreach ($bars as $bar) {
+            $this->assertStringContainsString('transition-', $bar->getAttribute('class'));
+            $this->assertStringContainsString('motion-reduce:transition-none', $bar->getAttribute('class'));
+        }
+
+        $this->assertStringContainsString('transition-transform', $bars->item(0)->getAttribute('class'));
+        $this->assertStringContainsString('transition-opacity', $bars->item(1)->getAttribute('class'));
+        $this->assertStringContainsString('transition-transform', $bars->item(2)->getAttribute('class'));
     }
 
     public function test_el_submenu_movil_de_tienda_recoge_las_categorias_y_se_abre_con_tienda(): void

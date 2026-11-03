@@ -308,6 +308,36 @@ class HomeMobileTest extends DuskTestCase
                 ->waitFor('[data-nav-mobile-account="login"]', 10)
                 ->assertVisible('[data-nav-mobile-account="login"]')
                 ->assertVisible('[data-nav-mobile-account="register"]')
+                // El icono deja de ser tres líneas y se transforma en X.
+                ->waitUntil(
+                    'const toggle = document.querySelector("[data-nav-mobile-toggle]");'
+                    .'return toggle.getAttribute("aria-expanded") === "true";',
+                    10,
+                )
+                ->waitUntil(
+                    'const bars = document.querySelectorAll('
+                    .'"[data-nav-mobile-toggle] [data-nav-icon=menu] > span");'
+                    .'return bars.length === 3'
+                    .' && getComputedStyle(bars[0]).transform !== "none";',
+                    10,
+                )
+                ->assertScript(
+                    'const bars = document.querySelectorAll('
+                    .'"[data-nav-mobile-toggle] [data-nav-icon=menu] > span");'
+                    .'return getComputedStyle(bars[1]).opacity === "0";',
+                    true,
+                )
+                // Destacados móviles: dos fichas con foto y nombre, sin precio
+                // ni botón de bolsa.
+                ->waitFor('[data-nav-mobile-featured] [data-nav-featured-compact]', 10)
+                ->assertScript(
+                    'const panel = document.querySelector("[data-nav-mobile-featured]");'
+                    .'return panel.querySelectorAll("[data-nav-featured-product]").length === 2'
+                    .' && panel.querySelectorAll("[data-nav-featured-image]").length === 2'
+                    .' && panel.querySelectorAll("[data-nav-featured-name]").length === 2'
+                    .' && panel.querySelectorAll("[data-nav-featured-price]").length === 0;',
+                    true,
+                )
                 ->assertScript(
                     'const panel = document.querySelector("[data-nav-mobile-panel]");'
                     .'const style = getComputedStyle(panel);'

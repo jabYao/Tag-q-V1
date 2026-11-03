@@ -421,21 +421,32 @@
 
                 {{-- Botón del menú móvil: solo por debajo de `lg`, a la
                      izquierda, compartiendo la celda con las categorías de
-                     escritorio. --}}
+                     escritorio. Las tres líneas se transforman en una X cuando
+                     el panel está abierto para indicar que se cierra ahí. --}}
                 <button
                     type="button"
                     data-nav-mobile-toggle
                     aria-controls="storefront-mobile-menu"
                     :aria-expanded="mobileOpen"
+                    :aria-label="mobileOpen ? 'Cerrar menú' : 'Abrir menú'"
                     aria-label="Abrir menú"
                     @click="mobileOpen = ! mobileOpen"
                     class="inline-flex items-center justify-center rounded p-2 text-white hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
                 >
-                    <svg data-nav-icon="menu" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
-                        <line x1="3" y1="6" x2="21" y2="6" />
-                        <line x1="3" y1="12" x2="21" y2="12" />
-                        <line x1="3" y1="18" x2="21" y2="18" />
-                    </svg>
+                    <span data-nav-icon="menu" aria-hidden="true" class="relative block h-6 w-6">
+                        <span
+                            class="absolute left-0 top-[5px] h-0.5 w-6 origin-center rounded-full bg-current transition-transform duration-200 motion-reduce:transition-none"
+                            :class="mobileOpen ? 'translate-y-[6px] rotate-45' : ''"
+                        ></span>
+                        <span
+                            class="absolute left-0 top-[11px] h-0.5 w-6 rounded-full bg-current transition-opacity duration-200 motion-reduce:transition-none"
+                            :class="mobileOpen ? 'opacity-0' : 'opacity-100'"
+                        ></span>
+                        <span
+                            class="absolute left-0 top-[17px] h-0.5 w-6 origin-center rounded-full bg-current transition-transform duration-200 motion-reduce:transition-none"
+                            :class="mobileOpen ? '-translate-y-[6px] -rotate-45' : ''"
+                        ></span>
+                    </span>
                 </button>
             </div>
 
@@ -484,7 +495,7 @@
                     @click="openSearch()"
                     class="inline-flex items-center justify-center rounded p-2 text-white hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
-                    <svg data-nav-icon="search" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
+                    <svg data-nav-icon="search" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-[22px] w-[22px] stroke-[1.5] sm:h-6 sm:w-6 sm:stroke-[1.75]">
                         <circle cx="11" cy="11" r="8" />
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
@@ -566,7 +577,7 @@
                     @click.prevent="window.matchMedia('(min-width: 768px)').matches ? window.dispatchEvent(new CustomEvent('cart-drawer-open')) : window.location.assign($el.href)"
                     class="relative inline-flex items-center justify-center rounded p-2 text-white hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
-                    <svg data-nav-icon="bag" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6">
+                    <svg data-nav-icon="bag" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-[22px] w-[22px] stroke-[1.5] sm:h-6 sm:w-6 sm:stroke-[1.75]">
                         <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
                         <line x1="3" y1="6" x2="21" y2="6" />
                         <path d="M16 10a4 4 0 0 1-8 0" />
@@ -644,7 +655,7 @@
                 class="mt-1 rounded border border-border-soft bg-surface p-4 shadow-sm"
             >
                 <div data-nav-mobile-featured>
-                    <livewire:storefront.featured-products-menu lazy="on-load" />
+                    <livewire:storefront.featured-products-menu lazy="on-load" :compact="true" />
                 </div>
             </div>
             <a data-nav-mobile-item="damas" href="{{ route('catalog.index', ['categoria' => 'dama']) }}" class="rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">DAMAS</a>
