@@ -7,26 +7,19 @@ use Tests\TestCase;
 /**
  * Páginas legales públicas del storefront.
  *
- * Las siete rutas legales existen como destinos reales y navegables, pero su
- * contenido todavía no está aprobado: cada una muestra solo su título y un
- * aviso explícito de que el texto está pendiente. No se inventan políticas,
- * direcciones, correos ni plazos. Las páginas usan el layout público
- * `layouts.storefront`, así que heredan navbar, footer, Livewire y assets del
- * shell compartido.
+ * Las siete rutas sirven textos reales en español conforme al marco
+ * colombiano, con fecha de actualización, versión, aviso de borrador mientras
+ * falten datos del vendedor, enlace a la SIC y navegación entre documentos.
  *
  * El footer de escritorio conserva exactamente cuatro columnas directas:
- * marca, navegación, "Compra y envío" y la nueva columna "Legal" con los
- * siete enlaces. Los cinco controles sociales deshabilitados viven dentro de
- * la columna de marca, sin encabezado ni copy visibles.
- *
- * No toca base de datos: son vistas estáticas servidas con `Route::view`, sin
- * controlador ni paquete nuevos.
+ * marca, navegación, "Compra y envío" y "Legal" con los siete enlaces más el
+ * enlace visible a la SIC. Los controles sociales deshabilitados viven dentro
+ * de la columna de marca.
  */
 class LegalPagesTest extends TestCase
 {
     /**
-     * Mapa canónico de las páginas legales: nombre de ruta, URL y título
-     * visible que debe conservarse.
+     * Mapa canónico: ruta, URL, título visible y clave del documento.
      *
      * @return array<int, array{0: string, 1: string, 2: string, 3: string}>
      */
@@ -43,11 +36,12 @@ class LegalPagesTest extends TestCase
         ];
     }
 
-    /**
-     * Cada ruta legal responde 200, conserva su título y declara que el
-     * contenido está pendiente, dentro del shell público del storefront.
-     */
-    public function test_cada_pagina_legal_es_publica_y_avisa_que_el_contenido_esta_pendiente(): void
+    private function html(string $routeName): string
+    {
+        return $this->get(route($routeName))->assertOk()->getContent();
+    }
+
+    public function test_cada_pagina_legal_es_publica_y_sirve_contenido_real(): void
     {
         foreach ($this->legalPages() as [$name, $url, $title, $key]) {
             $response = $this->get($url)->assertOk();
@@ -55,8 +49,9 @@ class LegalPagesTest extends TestCase
             $response->assertSee('data-legal-page="'.$key.'"', false)
                 ->assertSee('data-legal-title', false)
                 ->assertSee($title)
-                ->assertSee('data-legal-pending', false)
-                ->assertSee('El contenido de esta página está pendiente.')
+                ->assertSee('data-legal-updated', false)
+                ->assertSee('data-legal-body', false)
+                ->assertDontSee('data-legal-pending', false)
                 ->assertSee('data-storefront-nav', false)
                 ->assertSee('data-storefront-footer', false);
 
@@ -64,10 +59,109 @@ class LegalPagesTest extends TestCase
         }
     }
 
-    /**
-     * El footer expone los siete enlaces legales como rutas reales.
-     */
-    public function test_el_footer_enlaza_las_siete_paginas_legales(): void
+    public function test_las_paginas_legales_enlazan_entre_si_ya_la_sic(): void
+    {
+        $html = $this->html('legal.privacy');
+
+        foreach ($this->legalPages() as [$name, $url, $title, $key]) {
+            $this->assertStringContainsString('href="'.route($name).'"', $html, "La página legal enlaza {$name}");
+            $this->assertStringContainsString($title, $html, "La navegación legal muestra {$title}");
+        }
+
+        $this->assertStringContainsString('data-legal-sic', $html, 'La página legal expone el enlace a la SIC');
+        $this->assertStringContainsString('href="'.config('legal.sic.url').'"', $html, 'El enlace apunta a la SIC configurada');
+    }
+
+    public function test_el_borrador_se_avisa_mientras_falten_datos_del_vendedor(): void
+    {
+        $html = $this->html('legal.privacy');
+
+        $this->assertStringContainsString('data-legal-draft', $html);
+        $this->assertStringContainsString('Borrador', $html);
+        $this->assertStringContainsString('revisión por un abogado', $html);
+    }
+
+    public function test_el_borrador_desaparece_con_datos_completos_y_revision_aprobada(): void
+    {
+        config()->set('legal.draft', false);
+        config()->set('legal.seller.name', 'Vendedor de Prueba');
+        config()->set('legal.seller.document', '900123456-7');
+        config()->set('legal.seller.address', 'Calle 1 # 2-3');
+        config()->set('legal.seller.city', 'Bogotá');
+        config()->set('legal.seller.email', 'ventas@example.com');
+
+        $html = $this->html('legal.privacy');
+
+        $this->assertStringNotContainsString('data-legal-draft', $html);
+        $this->assertStringContainsString('Vendedor de Prueba', $html);
+    }
+
+    public function test_privacidad_cubre_contenido_minimo_derechos_y_plazos(): void
+    {
+        $html = $this->html('legal.privacy');
+
+        foreach ([
+            'Ley 1581 de 2012',
+            'Decreto 1074 de 2015',
+            '10 días hábiles',
+            '15 días hábiles',
+            'derecho a conocer',
+            'Superintendencia de Industria y Comercio',
+            'transferencias internacionales',
+        ] as $needle) {
+            $this->assertStringContainsString($needle, $html, "Privacidad incluye: {$needle}");
+        }
+    }
+
+    public function test_terminos_cubre_retracto_garantia_y_acuse_de_recibo(): void
+    {
+        $html = $this->html('legal.terms');
+
+        foreach ([
+            'Ley 1480 de 2011',
+            'Ley 2439 de 2024',
+            'cinco (5) días hábiles',
+            'un (1) año',
+            'acuse de recibo',
+            'reversión',
+        ] as $needle) {
+            $this->assertStringContainsString($needle, $html, "Términos incluye: {$needle}");
+        }
+    }
+
+    public function test_cookies_inventaria_solo_las_cookies_reales(): void
+    {
+        $html = $this->html('legal.cookies');
+
+        foreach (['tag-q-session', 'XSRF-TOKEN', 'Wompi', 'No utilizamos cookies de analítica ni de publicidad'] as $needle) {
+            $this->assertStringContainsString($needle, $html, "Cookies incluye: {$needle}");
+        }
+    }
+
+    public function test_devoluciones_envios_pagos_y_contacto_cubren_los_plazos_legales(): void
+    {
+        $returns = $this->html('legal.returns');
+        foreach (['retracto', 'garantía', 'quince (15) días calendario'] as $needle) {
+            $this->assertStringContainsString($needle, $returns, "Devoluciones incluye: {$needle}");
+        }
+
+        $shipping = $this->html('legal.shipping');
+        foreach (['treinta (30) días calendario', 'Contraentrega'] as $needle) {
+            $this->assertStringContainsString($needle, $shipping, "Envíos incluye: {$needle}");
+        }
+
+        $payments = $this->html('legal.payments');
+        foreach (['Wompi', 'contraentrega', 'No almacenamos'] as $needle) {
+            $this->assertStringContainsString($needle, $payments, "Pagos incluye: {$needle}");
+        }
+
+        $contact = $this->html('legal.contact');
+        foreach (['PQRS', 'radicado', 'Superintendencia de Industria y Comercio'] as $needle) {
+            $this->assertStringContainsString($needle, $contact, "Contacto incluye: {$needle}");
+        }
+    }
+
+    public function test_el_footer_enlaza_las_siete_paginas_legales_y_la_sic(): void
     {
         $html = $this->get(route('legal.privacy'))->assertOk()->getContent();
 
@@ -75,14 +169,10 @@ class LegalPagesTest extends TestCase
             $this->assertStringContainsString('href="'.route($name).'"', $html, "El footer enlaza {$name}");
             $this->assertStringContainsString($title, $html, "El footer muestra el enlace {$title}");
         }
+
+        $this->assertStringContainsString('data-footer-link="sic"', $html);
     }
 
-    /**
-     * El footer conserva exactamente cuatro columnas directas de escritorio
-     * —marca, navegación, compra y envío, legal— y mantiene los cinco
-     * controles sociales deshabilitados dentro de la columna de marca, sin
-     * rótulo ni copy visibles.
-     */
     public function test_el_footer_mantiene_cuatro_columnas_y_conserva_redes_y_whatsapp(): void
     {
         $html = $this->get(route('legal.terms'))->assertOk()->getContent();
@@ -95,15 +185,12 @@ class LegalPagesTest extends TestCase
             );
         }
 
-        // Los controles sociales siguen presentes como sub-bloque de la
-        // marca, sin encabezado visible ni copy descriptivo.
         $this->assertSame(1, substr_count($html, 'data-footer-block="social"'));
         $this->assertStringNotContainsString('Muy pronto compartiremos aquí nuestras redes sociales y nuestro WhatsApp.', $html);
         $this->assertStringNotContainsString('>Redes y WhatsApp<', $html);
 
         $this->assertSame(3, substr_count($html, 'data-footer-social='), 'Solo quedan Instagram, Facebook y WhatsApp');
         foreach (['instagram', 'facebook', 'whatsapp'] as $social) {
-            // Siguen siendo botones deshabilitados, no enlaces con URL inventada.
             $this->assertMatchesRegularExpression(
                 '#<button[^>]*disabled[^>]*data-footer-social="'.$social.'"#s',
                 $html,
@@ -124,24 +211,18 @@ class LegalPagesTest extends TestCase
         $this->assertStringContainsString('data-whatsapp-icon', $socialMarkup);
         $this->assertStringContainsString('data-whatsapp-handset', $socialMarkup);
 
-        // El sub-bloque social vive dentro de la columna de marca, antes de
-        // la navegación, la compra y envío y la columna legal.
         $brandPosition = strpos($html, 'data-footer-block="brand"');
         $socialPosition = strpos($html, 'data-footer-block="social"');
         $navigationPosition = strpos($html, 'data-footer-block="navigation"');
         $this->assertTrue($brandPosition < $socialPosition && $socialPosition < $navigationPosition, 'Los controles sociales viven dentro de la columna de marca, antes de la navegación');
     }
 
-    /**
-     * La marca y el copyright del footer no cambian con la columna legal nueva.
-     */
     public function test_el_footer_conserva_la_marca_y_el_copyright(): void
     {
         $html = $this->get(route('legal.cookies'))->assertOk()->getContent();
 
         $this->assertStringContainsString('data-footer-brand', $html);
         $this->assertStringContainsString('data-footer-brand-mark', $html);
-        // El asset ya se sirve blanco: el pie no necesita invertirlo por CSS.
         $this->assertStringContainsString('h-8 w-auto shrink-0"', $html);
         $this->assertStringContainsString('font-jost text-[40px]', $html);
         $this->assertStringNotContainsString('brightness-0 invert', $html);

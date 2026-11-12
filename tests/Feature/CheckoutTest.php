@@ -13,6 +13,7 @@ use App\Services\CheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
@@ -72,6 +73,19 @@ class CheckoutTest extends TestCase
     private function cart(): CartService
     {
         return app(CartService::class);
+    }
+
+    /**
+     * Componente de checkout con las dos aceptaciones legales marcadas.
+     *
+     * El consentimiento tiene pruebas propias en ConsentTest; aquí se marca
+     * para aislar el comportamiento del pedido, el stock y los totales.
+     */
+    private function checkout(): Testable
+    {
+        return Livewire::test(CheckoutForm::class)
+            ->set('acceptTerms', true)
+            ->set('acceptPrivacy', true);
     }
 
     /**
@@ -156,7 +170,7 @@ class CheckoutTest extends TestCase
         $product = $this->product(['precio' => 1290000, 'stock' => 5]);
         $this->cart()->addToSession($product->id, 2);
 
-        $component = Livewire::test(CheckoutForm::class)
+        $component = $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasNoErrors();
@@ -198,6 +212,8 @@ class CheckoutTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(CheckoutForm::class)
+            ->set('acceptTerms', true)
+            ->set('acceptPrivacy', true)
             ->set($this->shipping(['nombre' => 'Cliente Autenticado']))
             ->call('confirm')
             ->assertHasNoErrors();
@@ -228,7 +244,7 @@ class CheckoutTest extends TestCase
         $this->cart()->addToSession($uno->id, 2);
         $this->cart()->addToSession($dos->id, 1);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasNoErrors();
@@ -257,11 +273,11 @@ class CheckoutTest extends TestCase
         $product = $this->product(['stock' => 5]);
         $this->cart()->addToSession($product->id, 1);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->call('confirm')
             ->assertHasErrors(['nombre', 'email', 'telefono', 'direccion', 'ciudad']);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping(['email' => 'no-es-un-correo']))
             ->call('confirm')
             ->assertHasErrors('email');
@@ -274,7 +290,7 @@ class CheckoutTest extends TestCase
 
     public function test_carrito_vacio_rechaza_el_checkout(): void
     {
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasErrors('cart')
@@ -292,7 +308,7 @@ class CheckoutTest extends TestCase
         // El stock baja entre el armado del carrito y la confirmación.
         $product->update(['stock' => 1]);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasErrors('cart');
@@ -310,7 +326,7 @@ class CheckoutTest extends TestCase
 
         $product->update(['is_active' => false]);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasErrors('cart');
@@ -337,7 +353,7 @@ class CheckoutTest extends TestCase
 
         $escaso->update(['stock' => 1]);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasErrors('cart');
@@ -354,7 +370,7 @@ class CheckoutTest extends TestCase
         $product = $this->product(['precio' => 300000, 'stock' => 2]);
         $this->cart()->addToSession($product->id, 2);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasNoErrors();
@@ -372,10 +388,10 @@ class CheckoutTest extends TestCase
         $segundo = $this->product(['stock' => 5]);
 
         $this->cart()->addToSession($primero->id, 1);
-        Livewire::test(CheckoutForm::class)->set($this->shipping())->call('confirm')->assertHasNoErrors();
+        $this->checkout()->set($this->shipping())->call('confirm')->assertHasNoErrors();
 
         $this->cart()->addToSession($segundo->id, 1);
-        Livewire::test(CheckoutForm::class)->set($this->shipping())->call('confirm')->assertHasNoErrors();
+        $this->checkout()->set($this->shipping())->call('confirm')->assertHasNoErrors();
 
         $codes = Order::pluck('code')->all();
 
@@ -399,7 +415,7 @@ class CheckoutTest extends TestCase
         $product = $this->product(['stock' => 5]);
         $this->cart()->addToSession($product->id, 1);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasNoErrors();
@@ -440,7 +456,7 @@ class CheckoutTest extends TestCase
             $product = $this->product(['stock' => 5]);
             $this->cart()->addToSession($product->id, 1);
 
-            Livewire::test(CheckoutForm::class)
+            $this->checkout()
                 ->set($this->shipping())
                 ->call('confirm')
                 ->assertHasNoErrors();
@@ -470,7 +486,7 @@ class CheckoutTest extends TestCase
             $product = $this->product(['stock' => 5]);
             $this->cart()->addToSession($product->id, 1);
 
-            Livewire::test(CheckoutForm::class)
+            $this->checkout()
                 ->set($this->shipping())
                 ->call('confirm')
                 ->assertHasErrors('cart');
@@ -497,7 +513,7 @@ class CheckoutTest extends TestCase
         $product = $this->product(['precio' => 189900, 'precio_oferta' => 132930, 'stock' => 5]);
         $this->cart()->addToSession($product->id, 2);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasNoErrors();

@@ -9,6 +9,7 @@ use App\Http\Requests\VerifyRegistrationRequest;
 use App\Mail\RegistrationVerificationCode;
 use App\Models\RegistrationVerification;
 use App\Models\User;
+use App\Services\ConsentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,15 @@ class RegistrationController extends Controller
         );
 
         Mail::to($data['email'])->send(new RegistrationVerificationCode($code));
+
+        // La aceptación se registra antes de crear el usuario, ligada al correo.
+        // Al verificar el código se asocia al usuario sin alterar la evidencia.
+        app(ConsentService::class)->recordPair(
+            ConsentService::SOURCE_REGISTER,
+            null,
+            null,
+            $data['email'],
+        );
 
         $request->session()->put(self::SESSION_EMAIL, $data['email']);
 
@@ -121,13 +131,15 @@ class RegistrationController extends Controller
 
         // La contraseña pendiente ya está hasheada; el cast "hashed" del User no la vuelve a hashear.
         DB::transaction(function () use ($pending) {
-            User::create([
+            $user = User::create([
                 'name' => $pending->name,
                 'email' => $pending->email,
                 'password' => $pending->password,
                 'role' => 'cliente',
                 'is_active' => true,
             ]);
+
+            app(ConsentService::class)->linkToUser($pending->email, $user);
 
             $pending->delete();
         });

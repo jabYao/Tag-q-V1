@@ -7,6 +7,7 @@ use App\Services\CartService;
 use App\Services\CheckoutService;
 use App\Services\OrderNotificationService;
 use App\Services\WompiService;
+use App\Support\Legal;
 use Livewire\Component;
 
 /**
@@ -49,6 +50,12 @@ class CheckoutForm extends Component
     /** Página pública del pedido (token en el path): destino al terminar el pago. */
     public string $orderUrl = '';
 
+    /** Aceptación expresa de los términos y condiciones. */
+    public bool $acceptTerms = false;
+
+    /** Aceptación expresa de la política de privacidad. */
+    public bool $acceptPrivacy = false;
+
     protected function rules(): array
     {
         return [
@@ -58,6 +65,8 @@ class CheckoutForm extends Component
             'direccion' => ['required', 'string', 'max:255'],
             'ciudad' => ['required', 'string', 'max:255'],
             'paymentMethod' => ['required', 'in:contraentrega,wompi'],
+            'acceptTerms' => ['accepted'],
+            'acceptPrivacy' => ['accepted'],
         ];
     }
 
@@ -71,6 +80,8 @@ class CheckoutForm extends Component
             'direccion.required' => 'La dirección es obligatoria.',
             'ciudad.required' => 'La ciudad es obligatoria.',
             'paymentMethod.in' => 'Selecciona un método de pago válido.',
+            'acceptTerms.accepted' => 'Debes aceptar los términos y condiciones.',
+            'acceptPrivacy.accepted' => 'Debes aceptar la política de privacidad.',
         ];
     }
 
@@ -103,7 +114,7 @@ class CheckoutForm extends Component
                 'telefono' => $validated['telefono'],
                 'direccion' => $validated['direccion'],
                 'ciudad' => $validated['ciudad'],
-            ], $this->user());
+            ], $this->user(), $validated['acceptTerms'], $validated['acceptPrivacy']);
         } catch (\RuntimeException $e) {
             $this->addError('cart', $e->getMessage());
 
@@ -143,7 +154,7 @@ class CheckoutForm extends Component
                 'telefono' => $validated['telefono'],
                 'direccion' => $validated['direccion'],
                 'ciudad' => $validated['ciudad'],
-            ], $this->user());
+            ], $this->user(), $validated['acceptTerms'], $validated['acceptPrivacy']);
         } catch (\RuntimeException $e) {
             $this->addError('wompi', $e->getMessage());
 
@@ -162,11 +173,15 @@ class CheckoutForm extends Component
     {
         $lines = app(CartService::class)->lines($this->user());
         $subtotal = (int) $lines->sum('subtotal');
+        $shippingCost = max(0, (int) config('legal.shipping.cost', 0));
 
         return view('livewire.checkout.checkout-form', [
             'lines' => $lines,
             'subtotal' => $subtotal,
-            'total' => $subtotal,
+            'shippingCost' => $shippingCost,
+            'total' => $subtotal + $shippingCost,
+            'deliveryDays' => (int) config('legal.delivery.max_days', 30),
+            'deliveryDeadline' => Legal::deliveryDeadline(),
         ]);
     }
 

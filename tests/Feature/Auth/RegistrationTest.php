@@ -21,6 +21,8 @@ class RegistrationTest extends TestCase
             'email' => 'ana@example.com',
             'password' => 'secreto123',
             'password_confirmation' => 'secreto123',
+            'accept_terms' => '1',
+            'accept_privacy' => '1',
         ], $overrides);
     }
 
@@ -68,7 +70,24 @@ class RegistrationTest extends TestCase
             ->assertSee('name="name"', false)
             ->assertSee('name="email"', false)
             ->assertSee('name="password"', false)
-            ->assertSee('name="password_confirmation"', false);
+            ->assertSee('name="password_confirmation"', false)
+            ->assertSee('data-consent="terms"', false)
+            ->assertSee('data-consent="privacy"', false)
+            ->assertSee('href="'.route('legal.terms').'"', false)
+            ->assertSee('href="'.route('legal.privacy').'"', false);
+    }
+
+    public function test_el_formulario_de_registro_no_premarca_las_casillas_de_consentimiento(): void
+    {
+        $html = $this->get(route('register'))->assertOk()->getContent();
+
+        preg_match_all('/<input[^>]*data-consent="(?:terms|privacy)"[^>]*>/', $html, $matches);
+
+        $this->assertCount(2, $matches[0], 'El registro muestra dos casillas de consentimiento');
+
+        foreach ($matches[0] as $input) {
+            $this->assertStringNotContainsString('checked', $input, 'Las casillas nunca vienen premarcadas');
+        }
     }
 
     public function test_la_pantalla_de_verificacion_renderiza_para_el_correo_pendiente(): void
@@ -96,7 +115,7 @@ class RegistrationTest extends TestCase
         Mail::fake();
 
         $this->post(route('register.store'), [])
-            ->assertSessionHasErrors(['name', 'email', 'password']);
+            ->assertSessionHasErrors(['name', 'email', 'password', 'accept_terms', 'accept_privacy']);
 
         Mail::assertNothingSent();
     }

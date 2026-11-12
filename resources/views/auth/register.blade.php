@@ -79,6 +79,55 @@
                         >
                     </div>
 
+                    <fieldset class="auth-field">
+                        <legend class="auth-label">Aceptación legal</legend>
+
+                        <div class="flex flex-col gap-3">
+                            <div>
+                                <label class="flex cursor-pointer items-start gap-3 font-body text-sm leading-6 text-ink-soft">
+                                    <input
+                                        type="checkbox"
+                                        name="accept_terms"
+                                        value="1"
+                                        data-consent="terms"
+                                        @checked(old('accept_terms'))
+                                        class="mt-1 h-[18px] w-[18px] shrink-0 accent-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    >
+                                    <span>
+                                        Acepto los
+                                        <a href="{{ route('legal.terms') }}" target="_blank" rel="noopener" class="auth-link">términos y condiciones</a>.
+                                    </span>
+                                </label>
+                                @error('accept_terms')
+                                    <p class="auth-error" role="alert">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div>
+                                <label class="flex cursor-pointer items-start gap-3 font-body text-sm leading-6 text-ink-soft">
+                                    <input
+                                        type="checkbox"
+                                        name="accept_privacy"
+                                        value="1"
+                                        data-consent="privacy"
+                                        @checked(old('accept_privacy'))
+                                        class="mt-1 h-[18px] w-[18px] shrink-0 accent-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    >
+                                    <span>
+                                        Acepto la
+                                        <a href="{{ route('legal.privacy') }}" target="_blank" rel="noopener" class="auth-link">política de privacidad</a>
+                                        y autorizo el tratamiento de mis datos.
+                                    </span>
+                                </label>
+                                @error('accept_privacy')
+                                    <p class="auth-error" role="alert">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <p class="auth-hint">Las casillas no vienen marcadas. Tu aceptación queda registrada con fecha, versión y hash del documento.</p>
+                    </fieldset>
+
                     <button type="submit" class="auth-submit">Crear cuenta</button>
 
                     <p class="auth-hint text-center">

@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Models\RegistrationVerification;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -28,6 +27,8 @@ class RegisterRequest extends FormRequest
                     ->where(fn ($query) => $query->where('expires_at', '>', now())),
             ],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'accept_terms' => ['accepted'],
+            'accept_privacy' => ['accepted'],
         ];
     }
 
@@ -44,6 +45,8 @@ class RegisterRequest extends FormRequest
             'password.required' => 'La contraseña es obligatoria.',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
             'password.confirmed' => 'La confirmación de la contraseña no coincide.',
+            'accept_terms.accepted' => 'Debes aceptar los términos y condiciones.',
+            'accept_privacy.accepted' => 'Debes aceptar la política de privacidad.',
         ];
     }
 }

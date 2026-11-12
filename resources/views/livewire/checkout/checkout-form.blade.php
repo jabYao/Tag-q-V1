@@ -281,6 +281,49 @@
                         @error('paymentMethod') <p class="{{ $errorClass }}" role="alert">{{ $message }}</p> @enderror
                     </fieldset>
 
+                    <fieldset data-checkout-consent class="mt-8 border-t border-border-soft pt-6">
+                        <legend class="{{ $labelClass }}">Aceptación legal</legend>
+
+                        <div class="mt-3 flex flex-col gap-4">
+                            <div>
+                                <label class="flex cursor-pointer items-start gap-3 font-body text-sm leading-6 text-ink-soft">
+                                    <input
+                                        type="checkbox"
+                                        data-consent="terms"
+                                        wire:model="acceptTerms"
+                                        class="mt-1 h-[18px] w-[18px] shrink-0 accent-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    >
+                                    <span>
+                                        Acepto los
+                                        <a href="{{ route('legal.terms') }}" target="_blank" rel="noopener" class="text-primary underline underline-offset-4">términos y condiciones</a>.
+                                    </span>
+                                </label>
+                                @error('acceptTerms') <p class="{{ $errorClass }}" role="alert">{{ $message }}</p> @enderror
+                            </div>
+
+                            <div>
+                                <label class="flex cursor-pointer items-start gap-3 font-body text-sm leading-6 text-ink-soft">
+                                    <input
+                                        type="checkbox"
+                                        data-consent="privacy"
+                                        wire:model="acceptPrivacy"
+                                        class="mt-1 h-[18px] w-[18px] shrink-0 accent-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    >
+                                    <span>
+                                        Acepto la
+                                        <a href="{{ route('legal.privacy') }}" target="_blank" rel="noopener" class="text-primary underline underline-offset-4">política de privacidad</a>
+                                        y autorizo el tratamiento de mis datos para las finalidades descritas.
+                                    </span>
+                                </label>
+                                @error('acceptPrivacy') <p class="{{ $errorClass }}" role="alert">{{ $message }}</p> @enderror
+                            </div>
+                        </div>
+
+                        <p class="mt-3 font-body text-xs leading-5 text-ink-muted">
+                            Las casillas no vienen marcadas. Tu aceptación queda registrada con la fecha, la versión y el hash del documento.
+                        </p>
+                    </fieldset>
+
                     <button type="submit" class="mt-8 w-full {{ $primaryButtonClass }}">
                         Confirmar pedido
                     </button>
@@ -301,6 +344,9 @@
                                     <p class="mt-1 font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-soft">
                                         Cantidad {{ $line['quantity'] }}
                                     </p>
+                                    <p data-checkout-unit-price="{{ $line['unit_price'] }}" class="mt-1 font-body text-xs leading-5 text-ink-soft">
+                                        Precio unitario: $ {{ number_format($line['unit_price'], 0, ',', '.') }}
+                                    </p>
                                 </div>
                                 <p class="shrink-0 font-display text-sm font-semibold tabular-nums text-ink">
                                     $ {{ number_format($line['subtotal'], 0, ',', '.') }}
@@ -317,6 +363,17 @@
                             </dd>
                         </div>
 
+                        <div class="flex items-center justify-between gap-4">
+                            <dt class="font-body text-sm text-ink-soft">Envío</dt>
+                            <dd data-checkout-shipping="{{ $shippingCost }}" class="font-display text-sm font-semibold tabular-nums text-ink">
+                                @if ($shippingCost > 0)
+                                    $ {{ number_format($shippingCost, 0, ',', '.') }} COP
+                                @else
+                                    Sin costo
+                                @endif
+                            </dd>
+                        </div>
+
                         <div class="flex items-end justify-between gap-4 border-t border-border-soft pt-4">
                             <dt class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-soft">Total</dt>
                             <dd data-checkout-total="{{ $total }}" class="font-display text-[24px] font-semibold leading-[30px] tabular-nums text-ink">
@@ -325,9 +382,29 @@
                         </div>
                     </dl>
 
-                    <p class="mt-6 border border-border-soft bg-surface-subtle p-4 font-body text-xs leading-5 text-ink-soft">
-                        Pago contraentrega o con Wompi. Confirmaremos tu pedido por correo.
-                    </p>
+                    <div data-checkout-delivery="{{ $deliveryDeadline }}" class="mt-6 border border-border-soft bg-surface-subtle p-4">
+                        <p class="font-body text-sm leading-6 text-ink-soft">
+                            Plazo máximo de entrega: <strong class="font-semibold text-ink">{{ $deliveryDays }} días calendario</strong>,
+                            contados desde la confirmación del pago, con entrega estimada hasta el <strong class="font-semibold text-ink">{{ $deliveryDeadline }}</strong>.
+                        </p>
+                        <p class="mt-2 font-body text-xs leading-5 text-ink-muted">
+                            Pago contraentrega o con Wompi. Recibirás un acuse de recibo por correo con el detalle del pedido.
+                        </p>
+                    </div>
+
+                    <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
+                        <button
+                            type="button"
+                            data-checkout-print
+                            onclick="window.print()"
+                            class="{{ $ghostLinkClass }}"
+                        >
+                            Imprimir o guardar en PDF
+                        </button>
+
+                        <a href="{{ route('cart.index') }}" class="{{ $ghostLinkClass }}">Editar carrito</a>
+                        <a href="{{ route('catalog.index') }}" class="{{ $ghostLinkClass }}">Cancelar</a>
+                    </div>
                 </section>
             </div>
         @endif

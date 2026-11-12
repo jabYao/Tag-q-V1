@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
@@ -71,6 +72,16 @@ class WompiPaymentTest extends TestCase
         config()->set('services.wompi.integrity_secret', self::INTEGRITY_SECRET);
         config()->set('services.wompi.events_secret', self::EVENTS_SECRET);
         config()->set('services.wompi.api_url', 'https://sandbox.wompi.co/v1');
+    }
+
+    /**
+     * Componente de checkout con las dos aceptaciones legales marcadas.
+     */
+    private function checkout(): Testable
+    {
+        return Livewire::test(CheckoutForm::class)
+            ->set('acceptTerms', true)
+            ->set('acceptPrivacy', true);
     }
 
     private function product(array $overrides = []): Product
@@ -459,7 +470,7 @@ class WompiPaymentTest extends TestCase
         $product = $this->product(['precio' => 1290000, 'stock' => 5]);
         $this->cart()->addToSession($product->id, 2);
 
-        $component = Livewire::test(CheckoutForm::class)
+        $component = $this->checkout()
             ->set($this->shipping())
             ->set('paymentMethod', 'wompi')
             ->call('confirm')
@@ -529,7 +540,7 @@ class WompiPaymentTest extends TestCase
         $product = $this->product(['stock' => 5]);
         $this->cart()->addToSession($product->id, 1);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->set('paymentMethod', 'wompi')
             ->call('confirm')
@@ -1130,7 +1141,7 @@ class WompiPaymentTest extends TestCase
         $this->cart()->addToSession($product->id, 1);
 
         // Sin seleccionar Wompi, el default sigue siendo contraentrega.
-        $component = Livewire::test(CheckoutForm::class)
+        $component = $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasNoErrors();

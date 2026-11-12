@@ -42,11 +42,43 @@
             </tbody>
             <tfoot>
                 <tr>
+                    <td colspan="3" style="padding: 8px; font-weight: bold;">Subtotal productos</td>
+                    <td style="padding: 8px; font-weight: bold;">{{ number_format($subtotal, 0, ',', '.') }} COP</td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding: 8px;">Envío</td>
+                    <td style="padding: 8px;">{{ number_format($shippingCost, 0, ',', '.') }} COP</td>
+                </tr>
+                <tr>
                     <td colspan="3" style="padding: 8px; font-weight: bold;">Total</td>
                     <td style="padding: 8px; font-weight: bold;">{{ number_format($total, 0, ',', '.') }} COP</td>
                 </tr>
             </tfoot>
         </table>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 24px;">
+            <tbody>
+                <tr>
+                    <th style="padding: 6px 8px; text-align: left; color: #374151;">Fecha del pedido</th>
+                    <td style="padding: 6px 8px;">{{ $orderDate }}</td>
+                </tr>
+                <tr>
+                    <th style="padding: 6px 8px; text-align: left; color: #374151;">Medio de pago</th>
+                    <td style="padding: 6px 8px;">{{ $paymentMethodLabel }}</td>
+                </tr>
+                <tr>
+                    <th style="padding: 6px 8px; text-align: left; color: #374151;">Plazo máximo de entrega</th>
+                    <td style="padding: 6px 8px;">{{ $deliveryDays }} días calendario (hasta {{ $deliveryDeadline }})</td>
+                </tr>
+            </tbody>
+        </table>
+
+        @if ($isCreated)
+            <p style="font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+                Este correo es el <strong>acuse de recibo</strong> de tu pedido. Si detectas un error en los
+                datos, el medio de pago o el valor, escríbenos antes de pagar para corregirlo.
+            </p>
+        @endif
 
         @if (! empty($orderUrl))
             <p style="font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
