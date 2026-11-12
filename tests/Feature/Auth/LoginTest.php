@@ -16,7 +16,20 @@ class LoginTest extends TestCase
     {
         $this->get(route('login'))
             ->assertOk()
-            ->assertSeeLivewire(Login::class);
+            ->assertSeeLivewire(Login::class)
+            ->assertSee('data-auth="login"', false)
+            ->assertSee('data-storefront-nav', false)
+            ->assertSee('data-storefront-footer', false)
+            ->assertSee('Inicia sesión')
+            ->assertSee('Crear cuenta');
+    }
+
+    public function test_el_login_muestra_el_mensaje_de_cuenta_creada(): void
+    {
+        $this->withSession(['status' => 'Tu cuenta fue creada correctamente. Ya puedes iniciar sesión.'])
+            ->get(route('login'))
+            ->assertOk()
+            ->assertSee('Tu cuenta fue creada correctamente. Ya puedes iniciar sesión.');
     }
 
     public function test_el_script_de_livewire_usa_https_detras_del_proxy_de_railway(): void

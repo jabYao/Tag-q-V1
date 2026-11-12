@@ -545,6 +545,9 @@
                             @if(auth()->user()->canAccessAdmin())
                                 <a href="{{ route('admin.products.index') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Panel</a>
                             @endif
+                            @if(auth()->user()->isCliente())
+                                <a data-nav-account="account" href="{{ route('customer.account.edit') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Mi cuenta</a>
+                            @endif
                             <a href="{{ route('customer.orders.index') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 hover:text-black focus:outline-none focus-visible:bg-gray-100">Mis pedidos</a>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
@@ -645,17 +648,19 @@
                 @endforeach
             </div>
 
-            {{-- Panel móvil: mismos destacados reales, en flujo dentro del menú
-                 desplegable y alternado con tap (nunca hover). --}}
+            {{-- Panel de destacados dentro del menú desplegable, alternado con
+                 tap (nunca hover). En teléfonos no se muestra: Tienda deja
+                 solo las categorías y los relojes reaparecen desde `sm`, de
+                 modo que tablet y escritorio conservan el mismo contenido. --}}
             <div
                 id="storefront-tienda-mega-menu-mobile"
                 data-nav-mobile-mega-panel
                 x-show="megaOpen"
                 x-cloak
-                class="mt-1 rounded border border-border-soft bg-surface p-4 shadow-sm"
+                class="mt-1 hidden rounded border border-border-soft bg-surface p-4 shadow-sm sm:block"
             >
                 <div data-nav-mobile-featured>
-                    <livewire:storefront.featured-products-menu lazy="on-load" :compact="true" />
+                    <livewire:storefront.featured-products-menu lazy="on-load" />
                 </div>
             </div>
             <a data-nav-mobile-item="damas" href="{{ route('catalog.index', ['categoria' => 'dama']) }}" class="rounded px-3 py-2 font-display text-sm font-medium uppercase tracking-[0.15em] text-white/90 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">DAMAS</a>
@@ -667,6 +672,9 @@
                 @auth
                     @if(auth()->user()->canAccessAdmin())
                         <a data-nav-mobile-account="admin" href="{{ route('admin.products.index') }}" class="block rounded px-3 py-2.5 text-sm text-white/85 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Panel</a>
+                    @endif
+                    @if(auth()->user()->isCliente())
+                        <a data-nav-mobile-account="account" href="{{ route('customer.account.edit') }}" class="block rounded px-3 py-2.5 text-sm text-white/85 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Mi cuenta</a>
                     @endif
                     <a data-nav-mobile-account="orders" href="{{ route('customer.orders.index') }}" class="block rounded px-3 py-2.5 text-sm text-white/85 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:bg-white/10">Mis pedidos</a>
                     <form method="POST" action="{{ route('logout') }}">
@@ -891,6 +899,11 @@
                         {{-- Cuenta: mismas condiciones de autorización que la
                              navegación principal del encabezado. --}}
                         @auth
+                            @if(auth()->user()->isCliente())
+                                <li>
+                                    <a data-footer-link="account" href="{{ route('customer.account.edit') }}" class="text-gray-300 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#00052c]">Mi cuenta</a>
+                                </li>
+                            @endif
                             <li>
                                 <a data-footer-link="orders" href="{{ route('customer.orders.index') }}" class="text-gray-300 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#00052c]">Mis pedidos</a>
                             </li>

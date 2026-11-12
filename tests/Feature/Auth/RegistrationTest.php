@@ -60,11 +60,26 @@ class RegistrationTest extends TestCase
     {
         $this->get(route('register'))
             ->assertOk()
+            ->assertSee('data-auth="register"', false)
+            ->assertSee('data-storefront-nav', false)
+            ->assertSee('data-storefront-footer', false)
             ->assertSee('Crear cuenta')
+            ->assertSee('Mínimo 8 caracteres.')
             ->assertSee('name="name"', false)
             ->assertSee('name="email"', false)
             ->assertSee('name="password"', false)
             ->assertSee('name="password_confirmation"', false);
+    }
+
+    public function test_la_pantalla_de_verificacion_renderiza_para_el_correo_pendiente(): void
+    {
+        $this->withSession(['registration_email' => 'ana@example.com'])
+            ->get(route('register.verify'))
+            ->assertOk()
+            ->assertSee('data-auth="verify"', false)
+            ->assertSee('ana@example.com')
+            ->assertSee('name="code"', false)
+            ->assertSee('Verificar código');
     }
 
     public function test_un_usuario_autenticado_no_ve_el_registro(): void

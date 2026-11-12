@@ -21,11 +21,13 @@ class AddToCart extends Component
 
     /**
      * Presentación del componente. `full` es la vista por defecto (catálogo,
-     * con selector de cantidad), `compact` la variante del home (un único botón
-     * con icono de bolsa que agrega exactamente una unidad) y `editorial` la
-     * del detalle: escalón de cantidad y CTA a lo ancho del riel de compra. Las
-     * tres conservan la misma validación de stock. Se fija al montar y no puede
-     * cambiarse desde el cliente.
+     * con selector de cantidad), `compact` la variante del catálogo y los
+     * favoritos (un único botón con icono de bolsa que agrega exactamente una
+     * unidad), `bag` el cuadro `+` de «Productos recientes» (misma acción de
+     * una unidad, superpuesta a la foto) y `editorial` la del detalle: escalón
+     * de cantidad y CTA a lo ancho del riel de compra. Las cuatro conservan la
+     * misma validación de stock. Se fija al montar y no puede cambiarse desde
+     * el cliente.
      */
     #[Locked]
     public string $variant = 'full';
@@ -36,7 +38,7 @@ class AddToCart extends Component
     public function mount(int|Product $product, string $variant = 'full'): void
     {
         $this->productId = $product instanceof Product ? $product->id : $product;
-        $this->variant = in_array($variant, ['compact', 'editorial'], true) ? $variant : 'full';
+        $this->variant = in_array($variant, ['compact', 'bag', 'editorial'], true) ? $variant : 'full';
     }
 
     protected function messages(): array
@@ -52,9 +54,9 @@ class AddToCart extends Component
     {
         $this->addedMessage = '';
 
-        // La variante compacta del home agrega siempre una sola unidad: no
-        // expone un campo de cantidad y no depende de lo que envíe el cliente.
-        if ($this->variant === 'compact') {
+        // Las variantes de una unidad (home y catálogo) no exponen cantidad:
+        // el servidor la fuerza a 1 sin importar lo que envíe el cliente.
+        if (in_array($this->variant, ['compact', 'bag'], true)) {
             $this->quantity = 1;
         }
 

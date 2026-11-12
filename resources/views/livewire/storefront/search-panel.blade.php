@@ -33,7 +33,6 @@
     - `data-search-product`           cada tarjeta de producto.
     - `data-search-collection`        cada fila de colección.
 --}}
-@use('App\Support\CloudinaryUrl')
 <div>
     <form
         data-nav-search-form
@@ -157,24 +156,7 @@
                         </p>
                     @else
                         @foreach($products as $product)
-                            @php $imagenes = $product->imagenes ?? []; $imagen = $imagenes[0] ?? null; @endphp
-                            <article data-search-product class="group flex flex-col overflow-hidden rounded border border-border-soft bg-surface transition-colors hover:border-primary">
-                                <a href="{{ route('catalog.show', $product) }}" class="flex flex-1 flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-                                    <div class="relative aspect-square w-full overflow-hidden bg-surface-muted">
-                                        @if($imagen)
-                                            <img src="{{ CloudinaryUrl::webp($imagen) }}" alt="{{ $product->name }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105">
-                                        @else
-                                            <div class="flex h-full w-full items-center justify-center font-display text-[11px] uppercase tracking-[0.15em] text-ink-muted">Sin imagen</div>
-                                        @endif
-                                    </div>
-
-                                    <div class="flex flex-1 flex-col gap-1 p-3">
-                                        <span class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-muted">{{ $product->category?->name ?? 'Sin categoría' }}</span>
-                                        <h3 class="font-body text-[15px] leading-6 text-ink">{{ $product->name }}</h3>
-                                        <p class="mt-auto pt-2 font-display text-[15px] font-bold tabular-nums text-ink">$ {{ number_format($product->precioFinal(), 0, ',', '.') }} COP</p>
-                                    </div>
-                                </a>
-                            </article>
+                            @include('storefront.partials.result-product-card', ['product' => $product])
                         @endforeach
                     @endif
                 </div>

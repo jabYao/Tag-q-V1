@@ -383,21 +383,17 @@ class HomeMobileTest extends DuskTestCase
                 )
                 ->assertVisible('[data-nav-mobile-tienda-submenu]')
                 ->assertVisible('[data-nav-mobile-child="ninos"]')
-                // Destacados móviles dentro de Tienda: dos fichas con foto y
-                // nombre, sin precio ni botón de bolsa.
-                ->waitFor('[data-nav-mobile-featured] [data-nav-featured-compact]', 10)
-                ->waitUntil(
-                    'document.querySelectorAll('
-                    .'"[data-nav-mobile-featured] [data-nav-featured-product]").length === 2',
-                    10,
-                )
+                // En móvil Tienda muestra solo las categorías. El panel de
+                // relojes sigue en el DOM para tablet y escritorio, pero aquí
+                // no debe ocupar espacio ni mostrar tarjetas.
                 ->assertScript(
                     '(function () {'
-                    .'const panel = document.querySelector("[data-nav-mobile-featured]");'
-                    .'return panel.querySelectorAll("[data-nav-featured-product]").length === 2'
-                    .' && panel.querySelectorAll("[data-nav-featured-image]").length === 2'
-                    .' && panel.querySelectorAll("[data-nav-featured-name]").length === 2'
-                    .' && panel.querySelectorAll("[data-nav-featured-price]").length === 0;'
+                    .'const panel = document.querySelector("[data-nav-mobile-mega-panel]");'
+                    .'const featured = document.querySelector("[data-nav-mobile-featured]");'
+                    .'return panel !== null'
+                    .' && featured !== null'
+                    .' && getComputedStyle(panel).display === "none"'
+                    .' && featured.getClientRects().length === 0;'
                     .'})()',
                     true,
                 )
@@ -420,5 +416,81 @@ class HomeMobileTest extends DuskTestCase
                     10,
                 );
         });
+    }
+
+    public function test_el_menu_de_tienda_muestra_cuatro_tarjetas_en_tablet_y_escritorio(): void
+    {
+        $this->browse(function (Browser $browser) {
+            // Tablet: el menú hamburguesa alberga la misma grilla del buscador;
+            // a 820 px `sm` la deja en dos columnas.
+            $browser->resize(820, 1180)
+                ->visit('/')
+                ->click('[data-nav-mobile-toggle]')
+                ->waitFor('[data-nav-mobile-item="tienda"]', 10)
+                ->click('[data-nav-mobile-item="tienda"]')
+                ->waitFor('[data-nav-mobile-featured] [data-nav-featured-grid]', 10)
+                ->waitUntil(
+                    'document.querySelectorAll('
+                    .'"[data-nav-mobile-featured] [data-nav-featured-product]").length === 4',
+                    10,
+                )
+                ->assertScript($this->featuredMenuPresentationScript('[data-nav-mobile-featured]', 2), true);
+
+            // Escritorio: el mega menú muestra las mismas cuatro tarjetas en
+            // cuatro columnas.
+            $browser->resize(1440, 900)
+                ->visit('/')
+                ->waitUntil(
+                    'document.querySelector('
+                    .'"[data-nav-mega-panel] [data-nav-featured-product]") !== null',
+                    10,
+                )
+                ->click('[data-nav-primary-item="tienda"]')
+                ->waitUntil(
+                    'getComputedStyle('
+                    .'document.querySelector("[data-nav-mega-panel]")).display !== "none";',
+                    10,
+                )
+                ->waitUntil(
+                    'document.querySelectorAll('
+                    .'"[data-nav-mega-panel] [data-nav-featured-product]").length === 4',
+                    10,
+                )
+                ->assertScript($this->featuredMenuPresentationScript('[data-nav-mega-panel]', 4), true);
+        });
+    }
+
+    /**
+     * JavaScript que comprueba la presentación de tablet/escritorio: cuatro
+     * tarjetas visibles, categoría, nombre, precio y borde del buscador, enlace
+     * al detalle y ninguna etiqueta de descuento.
+     */
+    private function featuredMenuPresentationScript(string $panelSelector, int $expectedColumns): string
+    {
+        return '(function () {'
+            .'const panel = document.querySelector("'.$panelSelector.'");'
+            .'if (!panel) { return false; }'
+            .'const cards = Array.from(panel.querySelectorAll("[data-nav-featured-product]"));'
+            .'const images = Array.from(panel.querySelectorAll("[data-nav-featured-image]"));'
+            .'const prices = Array.from(panel.querySelectorAll("[data-nav-featured-price]"));'
+            .'const categories = Array.from(panel.querySelectorAll("[data-nav-featured-category]"));'
+            .'const grid = panel.querySelector("[data-nav-featured-grid]");'
+            .'const framed = (el) => {'
+            .'const style = getComputedStyle(el);'
+            .'return style.borderTopWidth !== "0px" && style.borderRadius !== "0px";'
+            .'};'
+            .'return cards.length === 4'
+            .' && cards.every((card) => card.getClientRects().length > 0)'
+            .' && categories.length === 4'
+            .' && categories.every((category) => category.textContent.trim().length > 0)'
+            .' && panel.querySelectorAll("[data-nav-featured-name]").length === 4'
+            .' && images.length === 4'
+            .' && prices.length === 4'
+            .' && prices.every((price) => getComputedStyle(price).display !== "none")'
+            .' && panel.querySelectorAll("[data-nav-featured-discount]").length === 0'
+            .' && getComputedStyle(grid).gridTemplateColumns.split(" ").length === '.$expectedColumns
+            .' && cards.every(framed)'
+            .' && cards.every((card) => card.querySelector("a[href]") !== null);'
+            .'})()';
     }
 }

@@ -19,12 +19,41 @@ class DemoCatalogSeederTest extends TestCase
     {
         $this->seed(DemoCatalogSeeder::class);
 
-        $this->assertSame(8, Product::count());
-        $this->assertSame(3, Brand::count());
+        $this->assertSame(13, Product::count());
+        $this->assertSame(5, Brand::count());
         $this->assertSame(4, Category::count());
         $this->assertSame(3, Collection::count());
 
-        $this->assertSame(8, Product::where('is_active', true)->count());
+        $this->assertSame(13, Product::where('is_active', true)->count());
+    }
+
+    public function test_incluye_los_relojes_nuevos_con_imagenes_de_cloudinary(): void
+    {
+        $this->seed(DemoCatalogSeeder::class);
+
+        $nuevos = [
+            'casio-g-shock-transparente-naranja' => 'casio',
+            'swatch-essentials-colorblock' => 'swatch',
+            'swatch-neon-chrono-verde-rosa' => 'swatch',
+            'rolex-daytona-carbono' => 'rolex',
+            'loto-kids-dinosaurio-azul' => 'loto',
+        ];
+
+        foreach ($nuevos as $slug => $brandSlug) {
+            $product = Product::where('slug', $slug)->first();
+
+            $this->assertNotNull($product, "Falta el producto {$slug}");
+            $this->assertTrue($product->is_active);
+            $this->assertSame($brandSlug, $product->brand?->slug);
+            $this->assertCount(2, $product->imagenes);
+
+            foreach ($product->imagenes as $url) {
+                $this->assertStringStartsWith('https://res.cloudinary.com/', $url);
+            }
+        }
+
+        $this->assertDatabaseHas('brands', ['slug' => 'casio', 'name' => 'Casio']);
+        $this->assertDatabaseHas('brands', ['slug' => 'swatch', 'name' => 'Swatch']);
     }
 
     public function test_incluye_productos_con_descuento_real(): void
@@ -93,8 +122,8 @@ class DemoCatalogSeederTest extends TestCase
         $this->seed(DemoCatalogSeeder::class);
         $this->seed(DemoCatalogSeeder::class);
 
-        $this->assertSame(8, Product::count());
-        $this->assertSame(3, Brand::count());
+        $this->assertSame(13, Product::count());
+        $this->assertSame(5, Brand::count());
         $this->assertSame(3, Collection::count());
     }
 
@@ -103,7 +132,7 @@ class DemoCatalogSeederTest extends TestCase
         $this->seed(DemoCatalogSeeder::class);
 
         $this->assertSame(
-            8,
+            13,
             Collection::where('slug', 'nuevos-ingresos')->firstOrFail()->products()->count()
         );
 

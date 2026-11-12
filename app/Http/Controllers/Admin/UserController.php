@@ -14,11 +14,13 @@ class UserController extends Controller
 {
     public function index(): View
     {
-        $users = User::orderBy('name')->paginate(20);
+        $users = User::whereIn('role', ['admin', 'empleado'])
+            ->orderBy('name')
+            ->paginate(20);
 
         $stats = [
-            'total' => User::count(),
-            'active' => User::where('is_active', true)->count(),
+            'total' => User::whereIn('role', ['admin', 'empleado'])->count(),
+            'active' => User::whereIn('role', ['admin', 'empleado'])->where('is_active', true)->count(),
             'admins' => User::where('role', 'admin')->where('is_active', true)->count(),
             'employees' => User::where('role', 'empleado')->where('is_active', true)->count(),
         ];
@@ -43,11 +45,15 @@ class UserController extends Controller
 
     public function edit(User $user): View
     {
+        $this->ensureTeamMember($user);
+
         return view('admin.users.edit', compact('user'));
     }
 
     public function update(UpdateUserRequest $request, User $user): RedirectResponse
     {
+        $this->ensureTeamMember($user);
+
         $data = $request->validated();
 
         // El último admin activo no puede perder su rol: dejaría el panel sin acceso.
@@ -57,11 +63,6 @@ class UserController extends Controller
                 ->withErrors(['role' => 'No puedes cambiar el rol del último administrador activo.']);
         }
 
-        // Sin contraseña nueva se conserva la actual (nunca se reexpone).
-        if (blank($data['password'] ?? null)) {
-            unset($data['password']);
-        }
-
         $user->update($data);
 
         return redirect()->route('admin.users.index')->with('success', 'Usuario actualizado');
@@ -69,6 +70,8 @@ class UserController extends Controller
 
     public function toggleActive(Request $request, User $user): RedirectResponse
     {
+        $this->ensureTeamMember($user);
+
         if ($user->is($request->user())) {
             return redirect()
                 ->route('admin.users.index')
@@ -87,5 +90,10 @@ class UserController extends Controller
         return redirect()
             ->route('admin.users.index')
             ->with('success', $user->isActive() ? 'Usuario activado' : 'Usuario desactivado');
+    }
+
+    private function ensureTeamMember(User $user): void
+    {
+        abort_unless($user->canAccessAdmin(), 404);
     }
 }

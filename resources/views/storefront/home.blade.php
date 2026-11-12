@@ -272,13 +272,29 @@
                         >Explorar el catálogo</a>
                     </div>
                 @else
-                    <div data-home-products-grid class="w-full">
+                    {{-- La grilla se reduce a 75vw desde tablet para que la foto
+                         1:1 mida lo mismo que la referencia final (255 px a
+                         1440 px). El encabezado de la sección sigue alineado al
+                         `site-container` del home; en teléfono la grilla
+                         conserva el 90vw para que los chips no se pisen. --}}
+                    <div data-home-products-grid class="mx-auto w-full sm:w-[75vw]">
                         <div data-home-stagger class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
                         @foreach($products as $product)
                             @include('storefront.partials.product-card', [
                                 'product' => $product,
                                 'cardAttribute' => 'data-home-card',
                                 'wireKeyPrefix' => 'home',
+                                'overlayBag' => true,
+                                // La foto llena el marco como en la
+                                // referencia final: foto original sin
+                                // `e_trim` + `object-cover`, sin relleno.
+                                'fillPhoto' => true,
+                                // Con más de una foto, la segunda aparece al
+                                // pasar el mouse sobre la tarjeta.
+                                'hoverImage' => true,
+                                // Recientes prueba la tarjeta sin borde; el
+                                // resto de usos conserva el marco negro.
+                                'borderless' => true,
                                 // Móvil lista seis recientes; escritorio conserva
                                 // las cuatro primeras para mantener el ritmo
                                 // original de la grilla.
@@ -505,6 +521,14 @@
                                             'product' => $favoriteProduct,
                                             'cardAttribute' => 'data-favorite-card',
                                             'wireKeyPrefix' => 'favorite',
+                                            // Favoritos adopta la presentación de
+                                            // «Productos recientes»: bolsa `+`
+                                            // sobre la foto, foto original a todo
+                                            // el marco y tarjeta sin borde. La
+                                            // segunda foto no se activa aquí.
+                                            'overlayBag' => true,
+                                            'fillPhoto' => true,
+                                            'borderless' => true,
                                         ])
                                     </div>
                                 @endforeach

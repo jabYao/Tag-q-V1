@@ -323,6 +323,55 @@ class PublicCartTest extends TestCase
     }
 
     /**
+     * Variante `bag` de «Productos recientes»: el cuadro `+` superpuesto a la
+     * foto agrega exactamente una unidad por clic, igual que la variante
+     * compacta, y tampoco expone el selector de cantidad. Cambia solo la
+     * presentación; la validación y el carrito no se bifurcan.
+     */
+    public function test_variante_bolsa_agrega_una_unidad_aunque_se_manipule_la_cantidad(): void
+    {
+        $product = $this->product(['stock' => 5]);
+
+        Livewire::test(AddToCart::class, ['product' => $product, 'variant' => 'bag'])
+            ->assertSet('quantity', 1)
+            ->assertSee('data-variant="bag"', false)
+            ->assertSee('data-bag-plus', false)
+            ->assertSee('h-10 w-10', false)
+            ->assertDontSee('data-compact-cart-label', false)
+            ->assertDontSee('type="number"', false)
+            ->set('quantity', 4)
+            ->call('add')
+            ->assertHasNoErrors()
+            ->assertSet('quantity', 1)
+            ->assertSee('Producto agregado al carrito.');
+
+        $session = $this->cart()->getSessionCart();
+
+        $this->assertCount(1, $session, 'La bolsa del home agrega una única línea');
+        $this->assertSame($product->id, $session[0]['product_id']);
+        $this->assertSame(1, $session[0]['quantity'], 'La bolsa del home agrega exactamente una unidad');
+
+        // Agotado: el cuadro queda deshabilitado y lo anuncia.
+        $soldOut = $this->product(['stock' => 0]);
+
+        $disabledBag = Livewire::test(AddToCart::class, ['product' => $soldOut, 'variant' => 'bag'])
+            ->assertSee('data-add-to-cart="false"', false)
+            ->assertSee('aria-label="'.$soldOut->name.' no disponible"', false);
+
+        // `wire:loading.attr="disabled"` siempre está en el marcado: la
+        // aserción tiene que mirar el atributo real del botón, no el texto.
+        $document = new \DOMDocument;
+        libxml_use_internal_errors(true);
+        $document->loadHTML($disabledBag->html());
+        libxml_clear_errors();
+
+        $button = (new \DOMXPath($document))->query('//button')->item(0);
+
+        $this->assertInstanceOf(\DOMElement::class, $button);
+        $this->assertTrue($button->hasAttribute('disabled'), 'La bolsa agotada queda deshabilitada de verdad');
+    }
+
+    /**
      * Variante editorial del detalle: conserva el selector de cantidad y el
      * mismo límite de stock que la variante completa. El riel solo cambia la
      * presentación; la validación y el carrito no se bifurcan.

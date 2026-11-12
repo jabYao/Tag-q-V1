@@ -25,6 +25,7 @@
     $isCollections = str_starts_with($routeName, 'admin.collections.');
     $isBrands = str_starts_with($routeName, 'admin.brands.');
     $isUsers = str_starts_with($routeName, 'admin.users.');
+    $isCustomers = str_starts_with($routeName, 'admin.customers.');
 @endphp
 
 <a class="admin-skip" href="#admin-contenido">Saltar al contenido</a>
@@ -94,6 +95,13 @@
                         @if($isUsers) aria-current="page" @endif
                     >
                         <span>Equipo</span>
+                    </a>
+                    <a
+                        class="admin-nav__link @if($isCustomers) is-active @endif"
+                        href="{{ route('admin.customers.index') }}"
+                        @if($isCustomers) aria-current="page" @endif
+                    >
+                        <span>Clientes</span>
                     </a>
                 </div>
             @endif

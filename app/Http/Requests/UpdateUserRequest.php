@@ -19,8 +19,7 @@ class UpdateUserRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
-            'role' => ['required', Rule::in(['admin', 'empleado', 'cliente'])],
-            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'role' => ['required', Rule::in(['admin', 'empleado'])],
         ];
     }
 
@@ -33,8 +32,6 @@ class UpdateUserRequest extends FormRequest
             'email.unique' => 'Ese correo ya está registrado.',
             'role.required' => 'El rol es obligatorio.',
             'role.in' => 'El rol seleccionado no es válido.',
-            'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
-            'password.confirmed' => 'La confirmación de la contraseña no coincide.',
         ];
     }
 }

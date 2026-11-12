@@ -14,6 +14,8 @@ use Tests\DuskTestCase;
  * Verifica en un navegador real el flujo: /catalogo lista los productos
  * activos, el campo `q` busca por coincidencia parcial y, al pulsar
  * "Aplicar filtros", sólo queda el producto que coincide con el término.
+ * También comprueba que cambiar «Ordenar por» reordena la grilla por Livewire
+ * sin recargar la página.
  *
  * Cómo ejecutarlo (no se ejecuta si falta algo de esto):
  *   1. Chromedriver disponible: `php artisan dusk:chrome-driver --detect`
@@ -79,6 +81,34 @@ class PublicCatalogSearchTest extends DuskTestCase
                 ->assertPresent(self::card(self::MATCHING_NAME))
                 ->assertSee(self::MATCHING_NAME)
                 ->assertDontSee(self::OTHER_NAME);
+        });
+    }
+
+    public function test_el_orden_se_aplica_al_cambiar_la_opcion_sin_recargar(): void
+    {
+        $this->browse(function (Browser $browser) {
+            $browser->visit('/catalogo')
+                ->waitFor('#catalog-sort')
+                // `recientes` deja primero el producto creado después.
+                ->assertScript(
+                    'return document.querySelector("[data-catalog-item]")'
+                    .'.dataset.productName === '.json_encode(self::OTHER_NAME).';',
+                    true,
+                )
+                // Si hubiera una recarga completa, este marcador se perdería.
+                ->script('window.__catalogMarker = true;');
+
+            $browser->select('#catalog-sort', 'precio_desc')
+                ->waitUntil(
+                    'window.location.search.includes("orden=precio_desc")',
+                    10,
+                )
+                ->waitUntil(
+                    'document.querySelector("[data-catalog-item]")'
+                    .'.dataset.productName === '.json_encode(self::MATCHING_NAME),
+                    10,
+                )
+                ->assertScript('return window.__catalogMarker === true;', true);
         });
     }
 

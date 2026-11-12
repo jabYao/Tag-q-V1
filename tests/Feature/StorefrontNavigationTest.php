@@ -226,6 +226,52 @@ class StorefrontNavigationTest extends TestCase
             ->assertSee('Pedido '.$order->code);
     }
 
+    public function test_solo_el_cliente_recibe_el_enlace_a_mi_cuenta(): void
+    {
+        $accountUrl = route('customer.account.edit');
+
+        $this->get(route('catalog.index'))
+            ->assertOk()
+            ->assertDontSee('href="'.$accountUrl.'"', false)
+            ->assertDontSee('Mi cuenta');
+
+        $cliente = User::factory()->create(['role' => 'cliente']);
+
+        $this->actingAs($cliente)
+            ->get(route('catalog.index'))
+            ->assertOk()
+            ->assertSee('href="'.$accountUrl.'"', false)
+            ->assertSee('Mi cuenta');
+
+        foreach (['empleado', 'admin'] as $role) {
+            $this->actingAs(User::factory()->create(['role' => $role]))
+                ->get(route('catalog.index'))
+                ->assertOk()
+                ->assertDontSee('href="'.$accountUrl.'"', false)
+                ->assertDontSee('Mi cuenta');
+        }
+    }
+
+    public function test_las_paginas_de_mi_cuenta_usan_el_shell_compartido(): void
+    {
+        $cliente = User::factory()->create(['role' => 'cliente']);
+        $this->actingAs($cliente);
+
+        $catalogUrl = route('catalog.index');
+        $cartUrl = route('cart.index');
+
+        foreach ([
+            route('customer.account.edit'),
+            route('customer.account.password.edit'),
+        ] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee('data-storefront-nav', false)
+                ->assertSee('href="'.$catalogUrl.'"', false)
+                ->assertSee('href="'.$cartUrl.'"', false)
+                ->assertSee('MI CUENTA');
+        }
+    }
+
     public function test_las_paginas_publicas_no_exponen_enlaces_del_panel(): void
     {
         $product = $this->product();

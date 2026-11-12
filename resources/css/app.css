@@ -927,6 +927,13 @@
 
 [data-catalog] .catalog-results {
     min-width: 0;
+    transition: opacity 160ms ease;
+}
+
+/* Mientras Livewire reordena la grilla, la sección baja de opacidad para dar
+   feedback sin mover el layout ni bloquear la interacción. */
+[data-catalog] .catalog-results.catalog-results--loading {
+    opacity: 0.55;
 }
 
 [data-catalog] .catalog-results__bar {
@@ -1447,6 +1454,25 @@
     margin-top: 22px;
 }
 
+/* ----------------------------------------------------------- load more */
+
+[data-catalog] .catalog-load-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 36px;
+    padding-top: 20px;
+    border-top: 1px solid var(--cat-line);
+}
+
+[data-catalog] .catalog-btn--load-more {
+    min-width: 220px;
+}
+
+[data-catalog] .catalog-btn:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
 /* ---------------------------------------------------------- pagination */
 
 [data-catalog] .catalog-pagination {
@@ -1659,7 +1685,8 @@
     [data-catalog] .catalog-card__image,
     [data-catalog] .catalog-chip-filter,
     [data-catalog] .catalog-pager__edge,
-    [data-catalog] .catalog-pager__page {
+    [data-catalog] .catalog-pager__page,
+    [data-catalog] .catalog-results {
         transform: none !important;
         transition: none !important;
     }
@@ -1818,68 +1845,82 @@
 }
 
 /*
- * Tarjetas de productos recientes en la grilla móvil de dos columnas.
+ * Tarjetas destacadas —«Productos recientes» y favoritos—: bolsa `+`
+ * superpuesta, segunda foto (solo recientes) y zoom de la foto.
  *
- * La tarjeta compartida conserva toda su información, pero en 390 px cada
- * columna mide ~165 px. Se reduce el ritmo tipográfico y el relleno solo dentro
- * de `[data-home-products-grid]`; el catálogo y el mega menú no cambian.
+ * La bolsa vive dentro del marco de la foto, en la esquina inferior derecha.
+ * En equipos con puntero nace oculta y la tarjeta la revela al pasar el mouse
+ * (o al enfocar con teclado); en táctil queda siempre visible para poder
+ * tocarla. El zoom de la pieza queda recortado por el marco (1.08 en 700 ms).
+ * La segunda foto, cuando existe, entra con un fundido suave (100 ms de
+ * espera + 320 ms con ease-in-out) y el resto del zoom ocurre sobre ella: el
+ * efecto arranca en la primera y termina en la segunda; sin segunda foto,
+ * termina en la primera.
+ * La presentación se activa con `data-overlay-style`, que emite la tarjeta
+ * cuando recibe `overlayBag`. El catálogo conserva su botón ancho y su propio
+ * zoom.
  */
-@media (max-width: 639.98px) {
-    [data-home-products-grid] [data-product-card] > div:last-child {
-        padding: 0.625rem 0.625rem 0.75rem;
+@media (hover: hover) {
+    [data-overlay-style] [data-overlay-bag] {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(0.25rem);
+        transition:
+            opacity 200ms ease,
+            transform 200ms ease;
     }
 
-    [data-home-products-grid] [data-product-card] [data-home-card-kicker] {
-        font-size: 8px;
-        letter-spacing: 0.1em;
+    [data-overlay-style]:hover [data-overlay-bag],
+    [data-overlay-style]:focus-within [data-overlay-bag] {
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
     }
 
-    [data-home-products-grid] [data-product-card] [data-product-card-name] {
-        margin-top: 0.25rem;
-        font-size: 13px;
-        line-height: 1rem;
+    [data-overlay-style]:focus-within [data-product-card-image-secondary] {
+        opacity: 1;
+    }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    /* El zoom dura 700 ms y arranca en la primera foto. La segunda (solo en
+       «Productos recientes») entra con un fundido suave: 100 ms de espera +
+       320 ms con ease-in-out, para que el cambio no se sienta brusco; el resto
+       del zoom ocurre sobre ella. Sin segunda foto, el efecto termina en la
+       primera. Favoritos comparte esta presentación sin la segunda foto. */
+    [data-overlay-style] [data-product-card-image] {
+        transition: transform 700ms ease;
     }
 
-    [data-home-products-grid] [data-product-card] [data-home-card-meta] {
-        margin-top: 0.25rem;
-        gap: 0.5rem;
+    [data-overlay-style] [data-product-card-image-secondary] {
+        opacity: 0;
+        transform: scale(1);
+        transition:
+            transform 700ms ease,
+            opacity 320ms ease-in-out;
     }
 
-    [data-home-products-grid] [data-product-card] [data-home-card-reference],
-    [data-home-products-grid] [data-product-card] [data-home-card-specs] {
-        font-size: 8px;
-        letter-spacing: 0.08em;
+    [data-overlay-style]:hover [data-product-card-image],
+    [data-overlay-style]:focus-within [data-product-card-image] {
+        transform: scale(1.08);
     }
 
-    [data-home-products-grid] [data-product-card] [data-home-card-price] {
-        margin-top: 0.25rem;
-        gap: 0.25rem;
+    [data-overlay-style]:hover [data-product-card-image-secondary],
+    [data-overlay-style]:focus-within [data-product-card-image-secondary] {
+        opacity: 1;
+        transform: scale(1.08);
+        transition-delay: 0s, 100ms;
     }
 
-    [data-home-products-grid] [data-product-card] [data-home-card-price-before] {
-        font-size: 9px;
+    [data-overlay-style] [data-bag-plus] {
+        transition: transform 300ms ease;
     }
 
-    [data-home-products-grid] [data-product-card] [data-home-card-price] > span:last-child {
-        font-size: 12px;
-    }
-
-    [data-home-products-grid] [data-product-card] [data-home-card-action] {
-        padding-top: 0.5rem;
-    }
-
-    [data-home-products-grid] [data-product-card] [data-home-card-action] button {
-        height: 2.25rem;
-        padding-inline: 0.25rem;
-        font-size: 9px;
-        letter-spacing: 0.08em;
-    }
-
-    [data-home-products-grid] [data-product-card] [data-home-card-stock],
-    [data-home-products-grid] [data-product-card] [data-home-card-discount] {
-        padding: 0.125rem 0.25rem;
-        font-size: 8px;
-        letter-spacing: 0.08em;
+    /* El giro responde a la bolsa, no al hover de la tarjeta: pasar el mouse
+       sobre la foto no gira el `+`; hacerlo sobre el botón sí. */
+    [data-overlay-style] [data-overlay-bag]:hover [data-bag-plus],
+    [data-overlay-style] [data-overlay-bag]:focus-within [data-bag-plus] {
+        transform: rotate(90deg);
     }
 }
 
@@ -1912,9 +1953,9 @@
 
 /*
  * La tarjeta de favoritos comparte la ficha de recientes, pero el carrusel
- * muestra cinco por pantalla en escritorio y tres en móvil. Referencia, precio
- * y CTA se ajustan para conservar una sola línea de lectura sin tocar el tamaño
- * de la tarjeta de la grilla de cuatro columnas.
+ * muestra cinco por pantalla en escritorio y tres en móvil. Referencia y precio
+ * se ajustan para conservar una sola línea de lectura sin tocar el tamaño de la
+ * tarjeta de la grilla de cuatro columnas.
  */
 [data-favorite-card] [data-home-card-meta] {
     gap: 0.375rem;
@@ -1930,21 +1971,14 @@
     letter-spacing: 0.02em;
 }
 
-[data-favorite-card] [data-home-card-action] button {
-    padding-inline: 0.5rem;
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    white-space: nowrap;
-}
-
 /*
  * Variante mini de favoritos en móvil.
  *
  * A 390 px entran tres tarjetas por carrusel (~111 px cada una). La ficha
- * conserva foto, nombre, precio final y el botón de bolsa; el resto de la
- * información (kicker, referencia, ficha, descuento y precio tachado) se
- * oculta para que la lectura siga siendo posible. El chip de stock solo se
- * mantiene cuando aporta algo: Nuevo o Agotado.
+ * conserva foto, nombre, precio final y la bolsa `+` a su tamaño normal; el
+ * resto de la información (kicker, referencia, ficha, descuento y precio
+ * tachado) se oculta para que la lectura siga siendo posible. El chip de stock
+ * solo se mantiene cuando aporta algo: Nuevo o Agotado.
  */
 @media (max-width: 639.98px) {
     [data-home-favorites-swiper] [data-product-card] > div:last-child {
@@ -1983,23 +2017,6 @@
 
     [data-home-favorites-swiper] [data-product-card] [data-home-card-price] > span:last-child {
         font-size: 11px;
-    }
-
-    [data-home-favorites-swiper] [data-product-card] [data-home-card-action] {
-        padding-top: 0.375rem;
-    }
-
-    [data-home-favorites-swiper] [data-product-card] [data-home-card-action] button {
-        height: 2rem;
-        padding-inline: 0;
-    }
-
-    [data-home-favorites-swiper] [data-product-card] [data-compact-cart-label] {
-        display: none;
-    }
-
-    [data-home-favorites-swiper] [data-product-card] [data-compact-cart-icon] {
-        display: block;
     }
 }
 
@@ -3677,5 +3694,502 @@
     [data-product-detail] .pd-techstrip-link:hover svg,
     [data-product-detail] .pd-cta:hover:not(:disabled) .pd-cta-arrow {
         transform: none;
+    }
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Autenticación — /login, /register y /register/verify.
+ *
+ * Las tres pantallas comparten una única tarjeta centrada con el formulario.
+ * El marco exterior lo aporta el layout del storefront (top bar, navbar teal y
+ * footer), así que aquí solo se estiliza el contenido.
+ *
+ * El bloque sigue el sistema Apex Horology: blanco puro, teal institucional,
+ * naranja exclusivo para la acción principal, bordes de 1 px #E2E8F0, radios
+ * de 4/8 px y Space Grotesk + Work Sans. Todo vive bajo `[data-auth]` para no
+ * tocar el home, el catálogo, el checkout ni el panel.
+ *
+ * Responsive mobile-first:
+ *   - Base (< 640 px): una columna, inputs a 16 px (evita el zoom automático de
+ *     iOS) y CTA a ancho completo.
+ *   - 640–1023 px: tarjeta centrada más ancha y mismo formulario.
+ *   - 1024 px+: contenedor y relleno algo más generosos.
+ *   - 1280 px+: ancho máximo definitivo.
+ * ---------------------------------------------------------------------------
+ */
+
+[data-auth] {
+    --auth-line: var(--color-border-soft, #e2e8f0);
+    --auth-line-strong: #cbd5e1;
+    --auth-ink: var(--color-ink, #000000);
+    --auth-ink-soft: var(--color-ink-soft, #475569);
+    --auth-ink-muted: var(--color-ink-muted, #94a3b8);
+    --auth-primary: var(--color-primary, #008b8b);
+    --auth-primary-hover: var(--color-primary-hover, #007373);
+    --auth-accent: var(--color-secondary, #f26b3a);
+    --auth-accent-hover: var(--color-secondary-hover, #e05a29);
+    --auth-error: var(--color-error, #ba1a1a);
+
+    width: 100%;
+}
+
+[data-auth] a:focus-visible,
+[data-auth] button:focus-visible {
+    outline: 2px solid var(--auth-primary);
+    outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------- shell */
+
+[data-auth] .auth-shell {
+    width: 100%;
+    max-width: 30rem;
+    margin-inline: auto;
+    overflow: hidden;
+    border: 1px solid var(--auth-line);
+    border-radius: 0.5rem;
+    background: #ffffff;
+    box-shadow:
+        0 4px 20px -2px rgba(0, 139, 139, 0.05),
+        0 28px 70px -48px rgba(15, 23, 42, 0.45);
+}
+
+@keyframes auth-frame-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    [data-auth] .auth-shell {
+        animation: auth-frame-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+}
+
+/* ---------------------------------------------------------------- panel */
+
+[data-auth] .auth-panel {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding: 1.5rem 1.25rem;
+    background: #ffffff;
+}
+
+[data-auth] .auth-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    color: var(--auth-primary-hover);
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.17em;
+    line-height: 1.4;
+    text-transform: uppercase;
+}
+
+[data-auth] .auth-eyebrow::before {
+    width: 1.25rem;
+    height: 1px;
+    flex: none;
+    background: var(--auth-primary);
+    content: '';
+}
+
+[data-auth] .auth-title {
+    margin: 0.75rem 0 0;
+    color: var(--auth-ink);
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 6vw, 2.25rem);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.06;
+    text-wrap: balance;
+}
+
+[data-auth] .auth-subtitle {
+    margin: 0.625rem 0 0;
+    color: var(--auth-ink-soft);
+    font-family: var(--font-body);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+}
+
+[data-auth] .auth-subtitle strong {
+    color: var(--auth-ink);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------------------------- form */
+
+[data-auth] .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.125rem;
+    margin-top: 1.75rem;
+}
+
+[data-auth] .auth-field {
+    min-width: 0;
+}
+
+[data-auth] .auth-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--auth-ink-soft);
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+[data-auth] .auth-input {
+    width: 100%;
+    height: 3rem;
+    padding: 0 0.875rem;
+    border: 1px solid var(--auth-line);
+    border-radius: 0.25rem;
+    background: #ffffff;
+    color: var(--auth-ink);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.2;
+    transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease;
+}
+
+[data-auth] .auth-input::placeholder {
+    color: var(--auth-ink-muted);
+    opacity: 1;
+}
+
+[data-auth] .auth-input:hover {
+    border-color: var(--auth-line-strong);
+}
+
+[data-auth] .auth-input:focus {
+    border-color: var(--auth-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 139, 139, 0.15);
+}
+
+[data-auth] .auth-input[aria-invalid='true'] {
+    border-color: var(--auth-error);
+}
+
+[data-auth] .auth-input[aria-invalid='true']:focus {
+    box-shadow: 0 0 0 3px rgba(186, 26, 26, 0.13);
+}
+
+[data-auth] .auth-input--code {
+    height: 3.5rem;
+    padding-inline: 0.75rem;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    letter-spacing: 0.45em;
+    text-align: center;
+    text-indent: 0.45em;
+}
+
+[data-auth] .auth-otp {
+    display: flex;
+    gap: 0.5rem;
+}
+
+[data-auth] .auth-otp-input {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    height: 3.5rem;
+    padding: 0;
+    border: 1px solid var(--auth-line);
+    border-radius: 0.25rem;
+    background: #ffffff;
+    color: var(--auth-ink);
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease;
+}
+
+[data-auth] .auth-otp-input:hover {
+    border-color: var(--auth-line-strong);
+}
+
+[data-auth] .auth-otp-input:focus {
+    border-color: var(--auth-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 139, 139, 0.15);
+}
+
+[data-auth] .auth-otp-input[aria-invalid='true'] {
+    border-color: var(--auth-error);
+}
+
+[data-auth] .auth-otp-input[aria-invalid='true']:focus {
+    box-shadow: 0 0 0 3px rgba(186, 26, 26, 0.13);
+}
+
+[data-auth] .auth-hint {
+    margin: 0.375rem 0 0;
+    color: var(--auth-ink-muted);
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+[data-auth] .auth-error {
+    margin: 0.375rem 0 0;
+    color: var(--auth-error);
+    font-family: var(--font-body);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+
+[data-auth] .auth-remember {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: 0.625rem;
+    color: var(--auth-ink-soft);
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+[data-auth] .auth-checkbox {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex: none;
+    border: 1px solid var(--auth-line);
+    border-radius: 0.25rem;
+    accent-color: var(--auth-primary);
+    cursor: pointer;
+}
+
+[data-auth] .auth-checkbox:focus-visible {
+    outline: 2px solid var(--auth-primary);
+    outline-offset: 2px;
+}
+
+[data-auth] .auth-submit {
+    display: inline-flex;
+    width: 100%;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    background: var(--auth-accent);
+    color: #ffffff;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    line-height: 1;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+        background 160ms ease,
+        box-shadow 160ms ease;
+}
+
+[data-auth] .auth-submit:hover {
+    background: var(--auth-accent-hover);
+}
+
+[data-auth] .auth-submit:focus-visible {
+    outline: 2px solid var(--auth-primary);
+    outline-offset: 2px;
+}
+
+[data-auth] .auth-submit:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
+/* ---------------------------------------------------------- alerts y links */
+
+[data-auth] .auth-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    margin-top: 1.5rem;
+    padding: 0.75rem 0.875rem;
+    border: 1px solid rgba(0, 139, 139, 0.18);
+    border-left: 3px solid var(--auth-primary);
+    border-radius: 0.25rem;
+    background: rgba(0, 139, 139, 0.05);
+    color: var(--auth-ink-soft);
+    font-family: var(--font-body);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+[data-auth] .auth-alert svg {
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+    margin-top: 0.1rem;
+    color: var(--auth-primary);
+}
+
+[data-auth] .auth-alert--error {
+    border-color: rgba(186, 26, 26, 0.2);
+    border-left-color: var(--auth-error);
+    background: rgba(186, 26, 26, 0.05);
+    color: var(--auth-error);
+}
+
+[data-auth] .auth-alert--error svg {
+    color: var(--auth-error);
+}
+
+[data-auth] .auth-link {
+    color: var(--auth-primary-hover);
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+    transition: color 160ms ease;
+}
+
+[data-auth] .auth-link:hover {
+    color: var(--auth-accent);
+}
+
+[data-auth] .auth-switch {
+    margin: 1.5rem 0 0;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--auth-line);
+    color: var(--auth-ink-soft);
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+/* En pantallas muy angostas el enlace baja completo a la línea siguiente en
+   lugar de partirse en dos ("Crear / cuenta"). */
+[data-auth] .auth-switch .auth-link {
+    white-space: nowrap;
+}
+
+[data-auth] .auth-resend {
+    display: inline-flex;
+    width: 100%;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.25rem;
+    padding: 0.5rem;
+    border: 0;
+    background: transparent;
+    color: var(--auth-primary-hover);
+    font-family: var(--font-body);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.4;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+    cursor: pointer;
+    transition: color 160ms ease;
+}
+
+[data-auth] .auth-resend:hover {
+    color: var(--auth-accent);
+}
+
+[data-auth] .auth-back {
+    margin: 1.25rem 0 0;
+    font-family: var(--font-body);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    text-align: center;
+}
+
+/* ------------------------------------------------------------- responsive */
+
+@media (min-width: 640px) {
+    [data-auth] .auth-shell {
+        max-width: 33rem;
+    }
+
+    [data-auth] .auth-panel {
+        padding: 2rem 1.75rem;
+    }
+
+    [data-auth] .auth-otp {
+        gap: 0.625rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    [data-auth] .auth-shell {
+        max-width: 34rem;
+    }
+
+    [data-auth] .auth-panel {
+        padding: 2.75rem 3rem;
+    }
+
+    [data-auth] .auth-input {
+        font-size: 0.9375rem;
+    }
+}
+
+@media (min-width: 1280px) {
+    [data-auth] .auth-shell {
+        max-width: 36rem;
+    }
+
+    [data-auth] .auth-panel {
+        padding: 3rem 3.25rem;
+    }
+}
+
+@media (forced-colors: active) {
+    [data-auth] .auth-shell,
+    [data-auth] .auth-input,
+    [data-auth] .auth-otp-input {
+        border-color: CanvasText;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-auth] .auth-shell {
+        animation: none;
+    }
+
+    [data-auth] .auth-input,
+    [data-auth] .auth-otp-input,
+    [data-auth] .auth-submit,
+    [data-auth] .auth-link,
+    [data-auth] .auth-resend {
+        transition: none;
     }
 }

@@ -25,18 +25,18 @@
 <section class="admin-form__section" aria-labelledby="usuario-rol">
     <div class="admin-form__section-head">
         <h2 class="admin-form__section-title" id="usuario-rol">Rol y acceso</h2>
-        <p class="admin-form__section-note">Define qué puede hacer esta cuenta en la tienda y el panel.</p>
+        <p class="admin-form__section-note">Define qué puede hacer esta cuenta en el panel.</p>
     </div>
 
     <div class="admin-form__grid">
         <div class="admin-field">
             <label class="admin-label" for="role">Rol</label>
             <select class="admin-select" id="role" name="role" required>
-                @foreach(['admin' => 'Administrador', 'empleado' => 'Empleado', 'cliente' => 'Cliente'] as $value => $label)
-                    <option value="{{ $value }}" @selected(old('role', $u?->role ?? 'cliente') === $value)>{{ $label }}</option>
+                @foreach(['admin' => 'Administrador', 'empleado' => 'Empleado'] as $value => $label)
+                    <option value="{{ $value }}" @selected(old('role', $u?->role ?? 'empleado') === $value)>{{ $label }}</option>
                 @endforeach
             </select>
-            <p class="admin-help">Administrador gestiona el panel · empleado opera pedidos y productos · cliente compra en la tienda.</p>
+            <p class="admin-help">Administrador gestiona el panel · empleado opera pedidos y productos. Los clientes se gestionan en Clientes.</p>
         </div>
     </div>
 </section>
@@ -45,23 +45,29 @@
     <div class="admin-form__section-head">
         <h2 class="admin-form__section-title" id="usuario-contrasena">Contraseña</h2>
         <p class="admin-form__section-note">
-            {{ $isEdit ? 'Opcional. Solo se actualiza si escribes una contraseña nueva.' : 'Contraseña de acceso a la cuenta.' }}
+            {{ $isEdit ? 'La contraseña no se edita en este formulario.' : 'Contraseña de acceso al panel.' }}
         </p>
     </div>
 
-    <div class="admin-form__grid">
-        <div class="admin-field">
-            <label class="admin-label" for="password">
-                {{ $isEdit ? 'Nueva contraseña (déjala en blanco para conservar la actual)' : 'Contraseña' }}
-            </label>
-            <input class="admin-input" id="password" name="password" type="password" @required(! $isEdit) autocomplete="new-password">
-            <p class="admin-help">{{ $isEdit ? 'Mínimo 8 caracteres si escribes una nueva.' : 'Obligatoria, mínimo 8 caracteres.' }}</p>
-        </div>
+    @if($isEdit)
+        <p class="admin-help">
+            Para cambiarla, abre la
+            <a class="admin-link" href="{{ route('admin.users.password.edit', $u) }}">pantalla de contraseña</a>
+            de esta cuenta.
+        </p>
+    @else
+        <div class="admin-form__grid">
+            <div class="admin-field">
+                <label class="admin-label" for="password">Contraseña</label>
+                <input class="admin-input" id="password" name="password" type="password" required autocomplete="new-password">
+                <p class="admin-help">Obligatoria, mínimo 8 caracteres.</p>
+            </div>
 
-        <div class="admin-field">
-            <label class="admin-label" for="password_confirmation">Confirmar contraseña</label>
-            <input class="admin-input" id="password_confirmation" name="password_confirmation" type="password" @required(! $isEdit) autocomplete="new-password">
-            <p class="admin-help">Debe coincidir con la contraseña.</p>
+            <div class="admin-field">
+                <label class="admin-label" for="password_confirmation">Confirmar contraseña</label>
+                <input class="admin-input" id="password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password">
+                <p class="admin-help">Debe coincidir con la contraseña.</p>
+            </div>
         </div>
-    </div>
+    @endif
 </section>

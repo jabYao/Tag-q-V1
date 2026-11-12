@@ -24,10 +24,10 @@ use Tests\TestCase;
  * while the panel still hydrates right after page load. The rendered menu is
  * covered directly through `Livewire::test`.
  *
- * Featured selection is deterministic: only active products, newest
- * `created_at` first and `id` descending as the tiebreaker, capped at four.
- * Cards reuse the catalog conventions: real `imagenes[0]` with the Cloudinary
- * WebP helper, product name, COP price and the existing detail route.
+ * Selection is random: only active products, four at a time, without a
+ * deterministic order. Cards reuse the same shared partial as the search panel
+ * (`storefront.partials.result-product-card`), so both surfaces show the same
+ * border, square image, category, name and final COP price.
  */
 class StorefrontFeaturedProductsMenuTest extends TestCase
 {
@@ -57,16 +57,6 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
             'stock' => 3,
             'is_active' => true,
         ], $overrides));
-    }
-
-    /**
-     * Pin `created_at` past the model guard so ordering is deterministic.
-     */
-    private function age(Product $product, \DateTimeInterface $moment): Product
-    {
-        $product->forceFill(['created_at' => $moment])->save();
-
-        return $product->refresh();
     }
 
     /*
@@ -108,77 +98,39 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
             ->assertViewHas('products', fn ($products) => $products->count() === 4);
     }
 
-    public function test_la_variante_movil_muestra_solo_dos_productos_con_foto_y_nombre(): void
+    public function test_el_menu_elige_cuatro_productos_al_azar_entre_los_activos(): void
     {
         $category = $this->category();
 
-        foreach (range(1, 4) as $position) {
+        foreach (range(1, 8) as $index) {
             $this->product($category, [
-                'name' => "Compacto {$position}",
-                'slug' => "compacto-{$position}",
-                'precio' => 100000 * $position,
-                'reference' => "CMP-{$position}",
-                'imagenes' => ["https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/compacto-{$position}.jpg"],
+                'name' => "Aleatorio {$index}",
+                'slug' => "aleatorio-{$index}",
             ]);
         }
 
-        $component = Livewire::test(FeaturedProductsMenu::class, ['compact' => true]);
-        $html = $component->html();
+        $sets = collect();
 
-        $component->assertViewHas('products', fn ($products) => $products->pluck('name')->all() === [
-            'Compacto 4',
-            'Compacto 3',
-        ]);
+        foreach (range(1, 12) as $render) {
+            $products = Livewire::test(FeaturedProductsMenu::class)->viewData('products');
 
-        $document = new \DOMDocument;
-        @$document->loadHTML($html);
-        $xpath = new \DOMXPath($document);
+            $this->assertCount(4, $products);
+            $this->assertTrue(
+                $products->every(fn (Product $product) => $product->is_active),
+                'Todos los productos elegidos deben estar activos',
+            );
 
-        $this->assertSame(1, $xpath->query('//*[@data-nav-featured-compact]')->length, 'La variante móvil declara su lista compacta');
-        $this->assertSame(2, $xpath->query('//*[@data-nav-featured-product]')->length, 'La variante móvil muestra solo dos productos');
-        $this->assertSame(2, $xpath->query('//*[@data-nav-featured-image]')->length, 'Cada producto conserva su foto');
-        $this->assertSame(2, $xpath->query('//*[@data-nav-featured-name]')->length, 'Cada producto conserva su nombre');
-
-        // Solo foto y nombre: sin precio, estado, referencia ni botón de bolsa.
-        $this->assertSame(0, $xpath->query('//*[@data-nav-featured-price]')->length, 'La variante móvil no muestra precios');
-        $this->assertSame(0, $xpath->query('//*[@data-product-card]')->length, 'La variante móvil no reutiliza la tarjeta completa');
-        $this->assertSame(0, $xpath->query('//*[@data-home-card-stock]')->length, 'La variante móvil no muestra estado de stock');
-        $this->assertSame(0, $xpath->query('//*[@data-variant="compact"]')->length, 'La variante móvil no muestra el botón de bolsa');
-        $this->assertStringNotContainsString('COP', $html);
-        $this->assertStringNotContainsString('REF.', $html);
-    }
-
-    public function test_el_menu_ordena_por_created_at_mas_reciente_y_desempata_por_id_descendente(): void
-    {
-        $category = $this->category();
-
-        // Más antiguo pero con el id más alto: created_at manda sobre id.
-        $masAntiguo = $this->product($category, ['name' => 'Antiguo', 'slug' => 'antiguo-mega']);
-        $this->age($masAntiguo, now()->subDay());
-
-        // Los cuatro recientes comparten el mismo instante: el desempate
-        // determinista es id descendente.
-        $mismoInstante = now();
-
-        foreach (range(1, 4) as $index) {
-            $reciente = $this->product($category, [
-                'name' => "Reciente {$index}",
-                'slug' => "reciente-mega-{$index}",
-            ]);
-
-            $this->age($reciente, $mismoInstante);
+            $sets->push($products->pluck('name')->sort()->values()->implode('|'));
         }
 
-        Livewire::test(FeaturedProductsMenu::class)
-            ->assertViewHas('products', fn ($products) => $products->pluck('name')->all() === [
-                'Reciente 4',
-                'Reciente 3',
-                'Reciente 2',
-                'Reciente 1',
-            ]);
+        $this->assertGreaterThan(
+            1,
+            $sets->unique()->count(),
+            'La selección debe variar entre renders: el menú no puede volver a un orden fijo',
+        );
     }
 
-    public function test_el_menu_muestra_nombre_marca_precio_imagen_y_enlace_al_detalle(): void
+    public function test_las_tarjetas_son_las_mismas_del_panel_de_busqueda(): void
     {
         $category = $this->category('Dama', 'dama-mega');
         $imagen = 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418323/tag-q/hero/tgcquxabd0kcnu1gpbas.jpg';
@@ -192,21 +144,46 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
             'imagenes' => [$imagen],
         ]);
 
-        Livewire::test(FeaturedProductsMenu::class)
+        $component = Livewire::test(FeaturedProductsMenu::class);
+        $html = $component->html();
+
+        $component
             ->assertSee('data-nav-featured-product', false)
             ->assertSee('data-nav-featured-image', false)
+            ->assertSee('data-nav-featured-category', false)
             ->assertSee('data-nav-featured-name', false)
             ->assertSee('data-nav-featured-price', false)
             ->assertSee('Chronos Mega')
-            ->assertSee('1.290.000')
-            ->assertSee('COP')
-            ->assertSee('Tag Heuer · Automático')
-            ->assertDontSee('Dama')
-            ->assertSee(CloudinaryUrl::webpCard($imagen))
+            ->assertSee('Dama')
+            ->assertSee('$ 1.290.000 COP')
+            ->assertDontSee('data-nav-featured-compact', false)
+            ->assertDontSee('data-nav-featured-secondary', false)
+            ->assertDontSee('data-nav-featured-discount', false)
+            ->assertSee(CloudinaryUrl::webp($imagen))
             ->assertSee('href="'.route('catalog.show', $product).'"', false);
+
+        $document = new \DOMDocument;
+        @$document->loadHTML($html);
+        $xpath = new \DOMXPath($document);
+
+        $this->assertSame(1, $xpath->query('//*[@data-nav-featured-grid]')->length, 'El menú declara su grilla');
+
+        $grid = $xpath->query('//*[@data-nav-featured-grid]')->item(0);
+        $gridClasses = preg_split('/\s+/', trim($grid->getAttribute('class'))) ?: [];
+        $this->assertContains('grid-cols-1', $gridClasses);
+        $this->assertContains('sm:grid-cols-2', $gridClasses);
+        $this->assertContains('lg:grid-cols-4', $gridClasses);
+
+        $card = $xpath->query('//*[@data-nav-featured-product]')->item(0);
+        $this->assertNotNull($card);
+        $cardClasses = preg_split('/\s+/', trim($card->getAttribute('class'))) ?: [];
+        $this->assertContains('border', $cardClasses, 'La tarjeta del menú lleva el borde del buscador');
+        $this->assertContains('border-border-soft', $cardClasses);
+        $this->assertContains('rounded', $cardClasses);
+        $this->assertContains('bg-surface', $cardClasses);
     }
 
-    public function test_el_menu_usa_el_mismo_formato_de_tarjeta_que_el_home_y_el_catalogo(): void
+    public function test_la_tarjeta_no_muestra_descuento_ni_datos_de_la_tarjeta_completa(): void
     {
         $imagen = 'https://res.cloudinary.com/dg6iut6sl/image/upload/v1780418323/tag-q/hero/tgcquxabd0kcnu1gpbas.jpg';
 
@@ -226,22 +203,55 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
 
         $html = Livewire::test(FeaturedProductsMenu::class)->html();
 
-        // Mismo formato que el home y el catálogo: estado a la izquierda,
-        // descuento real a la derecha, kicker, nombre, referencia en lugar de
-        // las medidas, precio tachado y botón naranja compacto a lo ancho.
-        $this->assertStringContainsString('data-product-card', $html);
-        $this->assertStringContainsString('data-home-card-stock', $html);
-        $this->assertStringContainsString('data-home-card-discount', $html);
-        $this->assertStringContainsString('30% OFF', $html);
-        $this->assertStringContainsString('Rolex · Automático', $html);
-        $this->assertStringContainsString('REF. RX-SUB-41', $html);
+        // La ficha del buscador cobra el precio final real y no inventa una
+        // etiqueta de descuento: muestra el mismo dato que el panel de búsqueda.
+        $this->assertStringContainsString('$ 1.113.000 COP', $html);
+        $this->assertStringNotContainsString('% OFF', $html);
+        $this->assertStringNotContainsString('line-through', $html);
+        $this->assertStringNotContainsString('data-nav-featured-discount', $html);
+        $this->assertStringNotContainsString('data-nav-featured-price-before', $html);
+
+        // Nada de la tarjeta completa: estado, kicker, referencia, medidas,
+        // botón de bolsa ni selector de cantidad.
+        $this->assertStringNotContainsString('data-product-card', $html);
+        $this->assertStringNotContainsString('data-home-card-stock', $html);
+        $this->assertStringNotContainsString('data-home-card-kicker', $html);
+        $this->assertStringNotContainsString('data-home-card-reference', $html);
+        $this->assertStringNotContainsString('REF. RX-SUB-41', $html);
+        $this->assertStringNotContainsString('Rolex', $html);
+        $this->assertStringNotContainsString('Automático', $html);
         $this->assertStringNotContainsString('41 mm', $html);
         $this->assertStringNotContainsString('30 ATM', $html);
-        $this->assertStringContainsString('$ 1.590.000', $html);
-        $this->assertStringContainsString('$ 1.113.000 COP', $html);
-        $this->assertStringContainsString('data-variant="compact"', $html);
-        $this->assertStringContainsString('Agregar al carrito', $html);
+        $this->assertStringNotContainsString('data-variant="compact"', $html);
+        $this->assertStringNotContainsString('Agregar al carrito', $html);
         $this->assertStringNotContainsString('type="number"', $html);
+    }
+
+    public function test_la_tarjeta_no_inventa_descuento_sin_oferta_real(): void
+    {
+        $category = $this->category();
+
+        $this->product($category, [
+            'name' => 'Sin Oferta',
+            'slug' => 'sin-oferta-menu',
+            'precio' => 890000,
+            'precio_oferta' => null,
+        ]);
+
+        $this->product($category, [
+            'name' => 'Oferta Igual',
+            'slug' => 'oferta-igual-menu',
+            'precio' => 700000,
+            'precio_oferta' => 700000,
+        ]);
+
+        $html = Livewire::test(FeaturedProductsMenu::class)->html();
+
+        $this->assertStringContainsString('$ 890.000 COP', $html);
+        $this->assertStringContainsString('$ 700.000 COP', $html);
+        $this->assertStringNotContainsString('% OFF', $html);
+        $this->assertStringNotContainsString('data-nav-featured-price-before', $html);
+        $this->assertStringNotContainsString('line-through', $html);
     }
 
     public function test_el_menu_conserva_un_estado_vacio_honesto_sin_productos(): void
@@ -278,6 +288,32 @@ class StorefrontFeaturedProductsMenuTest extends TestCase
             $this->assertStringContainsString('data-nav-mobile-featured', $html, "El panel destacado móvil existe en {$url}");
             $this->assertStringContainsString('data-nav-mobile-item="tienda"', $html, "El menú móvil conserva Tienda en {$url}");
         }
+    }
+
+    public function test_el_panel_destacado_movil_se_oculta_solo_debajo_de_sm(): void
+    {
+        $html = $this->get(route('home'))->assertOk()->getContent();
+
+        $document = new \DOMDocument;
+        @$document->loadHTML($html);
+        $xpath = new \DOMXPath($document);
+
+        $panel = $xpath->query('//*[@data-nav-mobile-mega-panel]')->item(0);
+        $this->assertNotNull($panel, 'El panel móvil de destacados existe');
+
+        $classes = preg_split('/\s+/', trim($panel->getAttribute('class'))) ?: [];
+        $this->assertContains('hidden', $classes, 'El panel de relojes se oculta en teléfonos');
+        $this->assertContains('sm:block', $classes, 'El panel de relojes reaparece desde tablet');
+
+        // Las categorías viven en su propio submenú y no dependen del panel
+        // de destacados: siguen disponibles en móvil.
+        $submenu = $xpath->query('//*[@data-nav-mobile-tienda-submenu]')->item(0);
+        $this->assertNotNull($submenu, 'El submenú de categorías sigue en el menú móvil');
+        $this->assertSame(
+            2 + count(config('tagq.subcategories', [])),
+            $xpath->query('.//*[@data-nav-mobile-child]', $submenu)->length,
+            'El submenú conserva Ver todo, Niños y las subcategorías',
+        );
     }
 
     public function test_el_menu_no_filtra_los_productos_destacados_en_el_html_inicial(): void

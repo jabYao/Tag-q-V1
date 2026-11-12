@@ -13,8 +13,8 @@ namespace App\Support;
  * URL does not duplicate components.
  *
  * {@see webp()} is the general-purpose variant. {@see webpCard()} adds
- * Cloudinary's automatic trim (`e_trim`) for product-card thumbnails, where the
- * white margin of the studio photo is wasted space.
+ * Cloudinary's automatic trim (`e_trim`) for the compact catalog thumbnails,
+ * where the white margin of the studio photo is wasted space.
  */
 final class CloudinaryUrl
 {
@@ -28,9 +28,11 @@ final class CloudinaryUrl
 
     /**
      * Cloudinary's automatic trim: removes the uniform border around the
-     * subject. Product photography is delivered as a square canvas with a wide
-     * white margin, so the trim is what lets the watch fill a square card
-     * thumbnail without stretching or cropping the piece.
+     * subject. Product photography is delivered as a canvas with a wide white
+     * margin, so the trim is what lets the watch fill a compact square card
+     * thumbnail without stretching or cropping the piece. The home's recent
+     * products and favorites use {@see webp()} instead, because there the full
+     * canvas fills the frame with `object-cover`.
      */
     private const TRIM_COMPONENT = 'e_trim';
 
@@ -51,9 +53,10 @@ final class CloudinaryUrl
     /**
      * Same as {@see webp()} plus Cloudinary's automatic trim.
      *
-     * Only for product cards: the trim discards the empty margin of the studio
-     * photo so the piece fills the square thumbnail. Galleries and detail views
-     * keep calling {@see webp()} because there the full canvas matters.
+     * Only for the compact catalog and favorites cards: the trim discards the
+     * empty margin of the studio photo so the piece fills the square thumbnail.
+     * Galleries, detail views and the home's recent products keep calling
+     * {@see webp()} because there the full canvas matters.
      */
     public static function webpCard(?string $url): ?string
     {

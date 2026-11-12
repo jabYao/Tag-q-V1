@@ -30,12 +30,17 @@ class AdminUserManagementTest extends TestCase
     public function test_empleado_recibe_403(): void
     {
         $empleado = User::factory()->create(['role' => 'empleado']);
+        $target = $this->admin();
 
         $this->actingAs($empleado)->get(route('admin.users.index'))->assertForbidden();
         $this->actingAs($empleado)->get(route('admin.users.create'))->assertForbidden();
         $this->actingAs($empleado)->post(route('admin.users.store'), [])->assertForbidden();
+        $this->actingAs($empleado)->get(route('admin.users.edit', $target))->assertForbidden();
+        $this->actingAs($empleado)->put(route('admin.users.update', $target), [])->assertForbidden();
+        $this->actingAs($empleado)->get(route('admin.users.password.edit', $target))->assertForbidden();
+        $this->actingAs($empleado)->put(route('admin.users.password.update', $target), [])->assertForbidden();
         $this->actingAs($empleado)
-            ->patch(route('admin.users.toggle-active', $this->admin()))
+            ->patch(route('admin.users.toggle-active', $target))
             ->assertForbidden();
     }
 
@@ -45,13 +50,14 @@ class AdminUserManagementTest extends TestCase
 
         $this->actingAs($cliente)->get(route('admin.users.index'))->assertForbidden();
         $this->actingAs($cliente)->get(route('admin.users.create'))->assertForbidden();
+        $this->actingAs($cliente)->get(route('admin.users.password.edit', $cliente))->assertForbidden();
     }
 
     /* ------------------------------------------------------------------ *
      * Listado
      * ------------------------------------------------------------------ */
 
-    public function test_admin_ve_el_listado_con_nombre_email_rol_y_estado(): void
+    public function test_admin_ve_el_equipo_con_nombre_email_rol_y_estado(): void
     {
         $admin = $this->admin();
         User::factory()->create([
@@ -60,36 +66,43 @@ class AdminUserManagementTest extends TestCase
             'role' => 'empleado',
             'is_active' => false,
         ]);
+        User::factory()->create([
+            'name' => 'Cliente Excluido',
+            'email' => 'cliente.excluido@tagq.co',
+            'role' => 'cliente',
+        ]);
 
         $this->actingAs($admin)
             ->get(route('admin.users.index'))
             ->assertOk()
+            ->assertSee('EQUIPO')
             ->assertSee('Ana Empleada')
             ->assertSee('ana@tagq.co')
             ->assertSee('empleado')
-            ->assertSee('Inactivo');
+            ->assertSee('Inactivo')
+            ->assertDontSee('Cliente Excluido')
+            ->assertDontSee('cliente.excluido@tagq.co');
     }
 
-    public function test_el_listado_resume_usuarios_y_pagina_de_20_en_20(): void
+    public function test_el_listado_resume_solo_el_equipo_y_pagina_de_20_en_20(): void
     {
         $admin = $this->admin();
-        User::factory()->create(['role' => 'empleado', 'is_active' => true]);
+        User::factory()->count(21)->create(['role' => 'empleado', 'is_active' => true]);
         User::factory()->create(['role' => 'empleado', 'is_active' => false]);
-        User::factory()->create(['role' => 'cliente', 'is_active' => true]);
-        User::factory()->count(21)->create(['role' => 'cliente', 'is_active' => true]);
+        User::factory()->count(3)->create(['role' => 'cliente', 'is_active' => true]);
 
         $this->actingAs($admin)
             ->get(route('admin.users.index'))
             ->assertOk()
             ->assertViewHas('stats', function (array $stats) {
-                return $stats['total'] === 25
-                    && $stats['active'] === 24
+                return $stats['total'] === 23
+                    && $stats['active'] === 22
                     && $stats['admins'] === 1
-                    && $stats['employees'] === 1;
+                    && $stats['employees'] === 21;
             })
             ->assertViewHas('users', function ($users) {
                 return $users->perPage() === 20
-                    && $users->total() === 25
+                    && $users->total() === 23
                     && $users->count() === 20;
             });
     }
@@ -141,6 +154,23 @@ class AdminUserManagementTest extends TestCase
         $this->assertSame(1, User::where('email', 'existe@tagq.co')->count());
     }
 
+    public function test_creacion_rechaza_el_rol_cliente(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Cliente Desde Equipo',
+                'email' => 'cliente.equipo@tagq.co',
+                'role' => 'cliente',
+                'password' => 'clave12345',
+                'password_confirmation' => 'clave12345',
+            ])
+            ->assertSessionHasErrors('role');
+
+        $this->assertDatabaseMissing('users', ['email' => 'cliente.equipo@tagq.co']);
+    }
+
     /* ------------------------------------------------------------------ *
      * Editar
      * ------------------------------------------------------------------ */
@@ -148,7 +178,7 @@ class AdminUserManagementTest extends TestCase
     public function test_admin_edita_datos_sin_tocar_la_password_cuando_esta_vacia(): void
     {
         $admin = $this->admin();
-        $user = User::factory()->create(['role' => 'cliente', 'password' => 'original123']);
+        $user = User::factory()->create(['role' => 'empleado', 'password' => 'original123']);
         $hashOriginal = $user->password;
 
         $this->actingAs($admin)
@@ -169,10 +199,11 @@ class AdminUserManagementTest extends TestCase
         $this->assertTrue(Hash::check('original123', $user->password));
     }
 
-    public function test_admin_cambia_la_password_cuando_la_indica(): void
+    public function test_el_update_del_equipo_ignora_cualquier_password_enviada(): void
     {
         $admin = $this->admin();
-        $user = User::factory()->create(['role' => 'cliente', 'password' => 'original123']);
+        $user = User::factory()->create(['role' => 'empleado', 'password' => 'original123']);
+        $hashOriginal = $user->password;
 
         $this->actingAs($admin)
             ->put(route('admin.users.update', $user), [
@@ -184,20 +215,21 @@ class AdminUserManagementTest extends TestCase
             ])
             ->assertRedirect(route('admin.users.index'));
 
-        $this->assertTrue(Hash::check('nueva12345', $user->refresh()->password));
+        $this->assertSame($hashOriginal, $user->refresh()->password);
+        $this->assertTrue(Hash::check('original123', $user->password));
     }
 
     public function test_update_ignora_el_email_propio_pero_rechaza_uno_de_otro_usuario(): void
     {
         $admin = $this->admin();
-        $user = User::factory()->create(['role' => 'cliente']);
+        $user = User::factory()->create(['role' => 'empleado']);
         User::factory()->create(['email' => 'ocupado@tagq.co']);
 
         $this->actingAs($admin)
             ->put(route('admin.users.update', $user), [
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => 'cliente',
+                'role' => 'empleado',
             ])
             ->assertSessionHasNoErrors();
 
@@ -205,7 +237,7 @@ class AdminUserManagementTest extends TestCase
             ->put(route('admin.users.update', $user), [
                 'name' => $user->name,
                 'email' => 'ocupado@tagq.co',
-                'role' => 'cliente',
+                'role' => 'empleado',
             ])
             ->assertSessionHasErrors('email');
     }
@@ -213,12 +245,79 @@ class AdminUserManagementTest extends TestCase
     public function test_el_formulario_de_edicion_no_expone_la_password_actual(): void
     {
         $admin = $this->admin();
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'empleado']);
 
         $this->actingAs($admin)
             ->get(route('admin.users.edit', $user))
             ->assertOk()
-            ->assertDontSee($user->password);
+            ->assertDontSee($user->password)
+            ->assertDontSee('name="password"', false)
+            ->assertSee(route('admin.users.password.edit', $user));
+    }
+
+    public function test_el_equipo_no_puede_editar_ni_desactivar_clientes(): void
+    {
+        $admin = $this->admin();
+        $cliente = User::factory()->create(['role' => 'cliente', 'is_active' => true]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.edit', $cliente))
+            ->assertNotFound();
+
+        $this->actingAs($admin)
+            ->put(route('admin.users.update', $cliente), [
+                'name' => $cliente->name,
+                'email' => $cliente->email,
+                'role' => 'admin',
+            ])
+            ->assertNotFound();
+
+        $this->actingAs($admin)
+            ->patch(route('admin.users.toggle-active', $cliente))
+            ->assertNotFound();
+
+        $cliente->refresh();
+        $this->assertSame('cliente', $cliente->role);
+        $this->assertTrue($cliente->is_active);
+    }
+
+    public function test_el_update_del_equipo_rechaza_el_rol_cliente(): void
+    {
+        $admin = $this->admin();
+        $empleado = User::factory()->create(['role' => 'empleado']);
+
+        $this->actingAs($admin)
+            ->put(route('admin.users.update', $empleado), [
+                'name' => $empleado->name,
+                'email' => $empleado->email,
+                'role' => 'cliente',
+            ])
+            ->assertSessionHasErrors('role');
+
+        $this->assertSame('empleado', $empleado->refresh()->role);
+    }
+
+    public function test_el_listado_de_equipo_no_expone_hashes_de_password(): void
+    {
+        $admin = $this->admin();
+        $empleado = User::factory()->create(['role' => 'empleado', 'password' => 'original123']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.index'))
+            ->assertOk()
+            ->assertDontSee($empleado->password)
+            ->assertDontSee($admin->password);
+    }
+
+    public function test_el_empleado_no_ve_los_enlaces_de_equipo_ni_clientes(): void
+    {
+        $empleado = User::factory()->create(['role' => 'empleado']);
+
+        $this->actingAs($empleado)
+            ->get(route('admin.products.index'))
+            ->assertOk()
+            ->assertDontSee(route('admin.users.index'), false)
+            ->assertDontSee(route('admin.customers.index'), false);
     }
 
     /* ------------------------------------------------------------------ *
@@ -228,7 +327,7 @@ class AdminUserManagementTest extends TestCase
     public function test_admin_activa_y_desactiva_usuario(): void
     {
         $admin = $this->admin();
-        $user = User::factory()->create(['role' => 'cliente', 'is_active' => true]);
+        $user = User::factory()->create(['role' => 'empleado', 'is_active' => true]);
 
         $this->actingAs($admin)
             ->patch(route('admin.users.toggle-active', $user))

@@ -148,7 +148,10 @@ class AdminPanelTest extends DuskTestCase
             ->waitFor('#email')
             ->type('#email', $email)
             ->type('#password', 'password')
-            ->click('button[type="submit"]')
+            // El login comparte layout con el storefront y la navbar aloja
+            // otros formularios (buscador); el selector se limita al formulario
+            // de acceso para no pulsar un submit oculto.
+            ->click('[data-auth="login"] button[type="submit"]')
             ->waitForLocation($path, 10);
     }
 
@@ -176,8 +179,14 @@ class AdminPanelTest extends DuskTestCase
                 ->assertSee('Selección E2E');
 
             $browser->visit('/admin/users')
-                ->assertSee('USUARIOS')
-                ->assertSee($this->empleado->email);
+                ->assertSee('EQUIPO')
+                ->assertSee($this->empleado->email)
+                ->assertDontSee($this->cliente->email);
+
+            $browser->visit('/admin/clientes')
+                ->assertSee('CLIENTES')
+                ->assertSee($this->cliente->email)
+                ->assertDontSee($this->empleado->email);
         });
     }
 
@@ -200,7 +209,7 @@ class AdminPanelTest extends DuskTestCase
             $browser->visit('/admin/orders')
                 ->assertSee('TAG-E2E0001');
 
-            foreach (['/admin/users', '/admin/brands', '/admin/collections'] as $path) {
+            foreach (['/admin/users', '/admin/clientes', '/admin/brands', '/admin/collections'] as $path) {
                 $browser->visit($path)->assertSee('403');
             }
         });
@@ -227,7 +236,7 @@ class AdminPanelTest extends DuskTestCase
                 ->waitFor('#email')
                 ->type('#email', $this->inactivo->email)
                 ->type('#password', 'password')
-                ->click('button[type="submit"]')
+                ->click('[data-auth="login"] button[type="submit"]')
                 ->waitForText('El correo o la contraseña no son correctos.', 10)
                 ->assertPathIs('/login');
         });

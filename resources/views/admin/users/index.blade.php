@@ -1,18 +1,18 @@
 @extends('layouts.admin')
 
-@section('title', 'Usuarios')
+@section('title', 'Equipo')
 
 @section('content')
     <div class="admin-page-head admin-page-head--compact">
         <div class="admin-page-head__main">
-            <h1 class="admin-page-title admin-page-title--compact">USUARIOS</h1>
-            <p class="admin-page-note">Equipo y clientes de la tienda · rol y acceso al panel</p>
+            <h1 class="admin-page-title admin-page-title--compact">EQUIPO</h1>
+            <p class="admin-page-note">Administradores y empleados con acceso al panel · rol y estado de la cuenta</p>
             <div class="admin-page-actions">
                 <a class="admin-btn admin-btn--accent" href="{{ route('admin.users.create') }}">Nuevo usuario</a>
             </div>
         </div>
 
-        <div class="admin-glance" aria-label="Resumen de usuarios: total, activos, administradores activos y empleados activos">
+        <div class="admin-glance" aria-label="Resumen del equipo: total, activos, administradores activos y empleados activos">
             <div class="admin-glance__item">
                 <p class="admin-micro">Total</p>
                 <p class="admin-glance__value">{{ $stats['total'] }}</p>
@@ -40,7 +40,7 @@
 
         <div class="admin-table-wrap">
             <table class="admin-table admin-table--products">
-                <caption class="sr-only">Personas del equipo y clientes con su rol y estado de acceso</caption>
+                <caption class="sr-only">Personas del equipo con su rol y estado de acceso</caption>
                 <colgroup>
                     <col class="col-name">
                     <col class="col-stock">
@@ -84,6 +84,7 @@
                         <td>
                             <div class="admin-actions">
                                 <a class="admin-action" href="{{ route('admin.users.edit', $u) }}" aria-label="Editar a {{ $u->name }}">Editar</a>
+                                <a class="admin-action" href="{{ route('admin.users.password.edit', $u) }}" aria-label="Cambiar la contraseña de {{ $u->name }}">Contraseña</a>
                                 <form method="POST" action="{{ route('admin.users.toggle-active', $u) }}">
                                     @csrf
                                     @method('PATCH')
@@ -100,7 +101,7 @@
                     <tr>
                         <td colspan="4">
                             <div class="admin-empty admin-empty--table">
-                                Todavía no hay personas registradas. Crea la primera cuenta para empezar.
+                                Todavía no hay equipo registrado. Crea la primera cuenta para empezar.
                             </div>
                         </td>
                     </tr>

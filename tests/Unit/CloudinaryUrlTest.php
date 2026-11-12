@@ -9,7 +9,8 @@ use Tests\TestCase;
 /**
  * Transformaciones de entrega de Cloudinary.
  *
- * La tarjeta de producto pide `e_trim` para quitar el margen blanco de la foto
+ * Las tarjetas de catálogo y favoritos piden `e_trim` para quitar el margen
+ * blanco de la foto
  * de estudio; el resto de vistas (galería y detalle) conserva la imagen
  * completa. Estas pruebas fijan ese contrato sin base de datos ni HTTP.
  */

@@ -645,6 +645,15 @@ class StorefrontHomeTest extends TestCase
         $this->assertContains('lg:grid-cols-3', $gridClasses, 'El escritorio conserva tres columnas');
         $this->assertContains('xl:grid-cols-4', $gridClasses, 'Las pantallas anchas conservan cuatro columnas');
 
+        // La grilla se reduce a 75vw desde tablet para que la foto 1:1 mida lo
+        // mismo que la referencia final; en móvil conserva el 90vw del home.
+        $wrapper = $xpath->query('//*[@data-home-products-grid]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $wrapper, 'La grilla de recientes existe');
+        $wrapperClasses = $this->classesOf($wrapper);
+        $this->assertContains('mx-auto', $wrapperClasses, 'La grilla se centra en el contenedor del home');
+        $this->assertContains('w-full', $wrapperClasses, 'En móvil conserva el ancho del contenedor');
+        $this->assertContains('sm:w-[75vw]', $wrapperClasses, 'Desde tablet la grilla mide 75vw');
+
         $cards = $xpath->query('.//*[@data-home-card]', $grid);
         $this->assertSame(6, $cards->length, 'La grilla declara seis recientes para móvil');
 
@@ -969,7 +978,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertSame('Agotado', $this->cardBadge($response->getContent(), 'Pulso Agotado'));
     }
 
-    public function test_las_tarjetas_del_home_ofrecen_un_unico_boton_naranja_de_bolsa(): void
+    public function test_las_tarjetas_del_home_ofrecen_un_unico_boton_de_bolsa_sobre_la_foto(): void
     {
         $category = $this->category();
 
@@ -986,27 +995,33 @@ class StorefrontHomeTest extends TestCase
 
         $response = $this->get('/')->assertOk();
 
-        // Producto disponible: un único botón naranja a lo ancho, con nombre
-        // accesible y sin selector de cantidad.
+        // Producto disponible: un único cuadro `+` sobre la foto, con nombre
+        // accesible, sin selector de cantidad y con el mismo contrato de una
+        // unidad que la bolsa compacta del catálogo.
         $available = $this->cardHtml($response->getContent(), 'Pulso Compacto');
-        $this->assertStringContainsString('data-variant="compact"', $available);
+        $this->assertStringContainsString('data-variant="bag"', $available);
         $this->assertStringContainsString('data-add-to-cart="true"', $available);
         $this->assertStringContainsString('aria-label="Agregar Pulso Compacto al carrito"', $available);
-        $this->assertStringContainsString('Agregar al carrito', $available);
+        $this->assertStringContainsString('data-bag-plus', $available);
         $this->assertStringContainsString('bg-accent', $available);
-        $this->assertStringContainsString('w-full', $available);
+        $this->assertStringContainsString('h-10 w-10', $available);
         $this->assertSame(1, substr_count($available, '<button'), 'La tarjeta ofrece un único botón');
-        $this->assertStringNotContainsString('data-add-to-cart-compact-plus', $available);
+        $this->assertStringNotContainsString('data-compact-cart-label', $available);
         $this->assertStringNotContainsString('data-nav-icon="bag"', $available);
         $this->assertStringNotContainsString('wire:model="quantity"', $available);
         $this->assertStringNotContainsString('type="number"', $available);
 
-        // Agotado: el mismo botón queda deshabilitado y lo anuncia.
+        // Agotado: el mismo cuadro queda deshabilitado y lo anuncia.
         $soldOut = $this->cardHtml($response->getContent(), 'Pulso Sin Stock');
-        $this->assertStringContainsString('data-variant="compact"', $soldOut);
+        $this->assertStringContainsString('data-variant="bag"', $soldOut);
         $this->assertStringContainsString('data-add-to-cart="false"', $soldOut);
         $this->assertStringContainsString('aria-label="Pulso Sin Stock no disponible"', $soldOut);
-        $this->assertStringContainsString('disabled', $soldOut);
+
+        // `wire:loading.attr="disabled"` siempre está en el marcado: la
+        // aserción tiene que mirar el atributo real del botón, no el texto.
+        $soldOutButton = (new \DOMXPath($this->documentOf($soldOut)))->query('//button')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $soldOutButton);
+        $this->assertTrue($soldOutButton->hasAttribute('disabled'), 'El cuadro agotado queda deshabilitado de verdad');
     }
 
     /*
@@ -1104,7 +1119,7 @@ class StorefrontHomeTest extends TestCase
         // formato nuevo de la tarjeta.
         $this->assertStringContainsString('Pulso Editorial', $card);
         $this->assertStringContainsString('REF. TQ-4410', $card);
-        $this->assertStringContainsString('https://res.cloudinary.com/dg6iut6sl/image/upload/e_trim,f_webp,q_auto/v1/tag-q/producto/pulso-editorial.jpg', $card);
+        $this->assertStringContainsString('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/pulso-editorial.jpg', $card);
         $this->assertStringContainsString('$ 1.290.000 COP', $card);
         $this->assertStringContainsString('Marca Existente · Automático', $card);
         $this->assertStringNotContainsString('data-home-card-diameter', $card);
@@ -1122,18 +1137,36 @@ class StorefrontHomeTest extends TestCase
         $this->assertMatchesRegularExpression('/data-home-card-stock[^>]*text-secondary/', $card);
         $this->assertStringContainsString('bg-secondary', $card);
 
-        // La foto es cuadrada (1:1) y se muestra completa: el recorte automático
-        // de Cloudinary quita el margen blanco y `object-contain` garantiza que
-        // la pieza nunca se corte. No lleva borde interno ni alto fijo.
+        // La foto es cuadrada (1:1) y llena el marco como en el preview: usa
+        // la foto original (sin `e_trim`) con `object-cover` y sin relleno
+        // interno, para que el fondo de la foto llegue hasta el borde. No
+        // lleva alto fijo ni borde interno.
         $this->assertStringContainsString('aspect-square', $card);
-        $this->assertStringContainsString('object-contain', $card);
+        $this->assertStringContainsString('object-cover', $card);
+        $this->assertStringNotContainsString('object-contain', $card);
+        $this->assertStringNotContainsString('p-[4%]', $card);
         $this->assertStringNotContainsString('h-52', $card);
         $this->assertStringNotContainsString('aspect-[3/4]', $card);
-        $this->assertStringNotContainsString('object-cover', $card);
         $this->assertStringNotContainsString('border-border-soft', $card);
 
-        // Marco negro delgado (1 px) y un único botón naranja a lo ancho.
-        $this->assertStringContainsString('border-ink', $card);
+        // Un producto con una sola foto no muestra segunda imagen ni necesita
+        // posicionamiento relativo en el marco.
+        $this->assertStringNotContainsString('data-product-card-image-secondary', $card);
+
+        $singleFrame = (new \DOMXPath($this->documentOf($card)))->query('//div[contains(@class,"aspect-square")]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $singleFrame);
+        $this->assertNotContains('relative', $this->classesOf($singleFrame));
+
+        // La tarjeta de recientes va sin borde para probar un acabado más
+        // limpio; conserva el radio y la sombra del hover. Ningún otro uso de
+        // la tarjeta cambia. Se miden las clases del artículo, no el HTML
+        // completo: los chips tienen sus propios bordes.
+        $article = (new \DOMXPath($this->documentOf($card)))->query('//*[@data-home-card]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $article);
+        $articleClasses = $this->classesOf($article);
+        $this->assertNotContains('border', $articleClasses, 'Recientes no dibuja borde');
+        $this->assertNotContains('border-ink', $articleClasses);
+        $this->assertContains('rounded-lg', $articleClasses);
         $this->assertStringNotContainsString('border-2', $card);
         $this->assertSame(1, substr_count($card, '<button'), 'La tarjeta ofrece un único botón');
 
@@ -1145,6 +1178,45 @@ class StorefrontHomeTest extends TestCase
         $this->assertSame('Nuevo', $this->cardBadge($response->getContent(), 'Pulso Editorial'));
         $this->assertDoesNotMatchRegularExpression('/data-home-card-stock[^>]*rounded-full/', $card);
         $response->assertDontSee('Disponible: 2');
+    }
+
+    public function test_los_productos_con_segunda_foto_la_muestran_al_pasar_el_mouse(): void
+    {
+        $category = $this->category();
+
+        $this->product($category, [
+            'name' => 'Doble Foto',
+            'slug' => 'doble-foto',
+            'imagenes' => [
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/doble-1.jpg',
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/doble-2.jpg',
+            ],
+        ]);
+
+        $card = $this->cardHtml($this->get('/')->assertOk()->getContent(), 'Doble Foto');
+        $xpath = new \DOMXPath($this->documentOf($card));
+
+        $secondary = $xpath->query('//img[@data-product-card-image-secondary]')->item(0);
+
+        $this->assertInstanceOf(\DOMElement::class, $secondary, 'La segunda foto se renderiza para el hover');
+        $this->assertStringContainsString('/f_webp,q_auto/v1/tag-q/producto/doble-2.jpg', $secondary->getAttribute('src'));
+        $this->assertStringNotContainsString('e_trim', $secondary->getAttribute('src'), 'La segunda foto usa el mismo encuadre que la primera');
+        $this->assertSame('', $secondary->getAttribute('alt'), 'La segunda foto es decorativa');
+        $this->assertSame('true', $secondary->getAttribute('aria-hidden'));
+
+        $classes = $this->classesOf($secondary);
+        $this->assertContains('absolute', $classes);
+        $this->assertContains('inset-0', $classes);
+        $this->assertContains('object-cover', $classes);
+        $this->assertContains('opacity-0', $classes);
+        $this->assertContains('group-hover:opacity-100', $classes);
+        $this->assertContains('pointer-events-none', $classes);
+
+        $this->assertSame(1, $xpath->query('//img[@data-product-card-image-secondary]')->length, 'Solo se renderiza una segunda foto');
+
+        $frame = $xpath->query('//div[contains(@class,"aspect-square")]')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $frame);
+        $this->assertContains('relative', $this->classesOf($frame), 'El marco posiciona la segunda foto');
     }
 
     public function test_la_tarjeta_sin_referencia_muestra_las_medidas_reales_en_su_lugar(): void
@@ -1269,7 +1341,7 @@ class StorefrontHomeTest extends TestCase
         $this->assertStringContainsString('$ 250.000 COP', $pleno);
     }
 
-    public function test_el_boton_de_la_bolsa_del_home_cierra_la_tarjeta_a_lo_ancho(): void
+    public function test_la_bolsa_del_home_vive_sobre_la_foto_y_se_revela_con_el_hover(): void
     {
         $this->product($this->category(), [
             'name' => 'Pulso Hover',
@@ -1280,21 +1352,71 @@ class StorefrontHomeTest extends TestCase
         $card = $this->cardHtml($this->get('/')->assertOk()->getContent(), 'Pulso Hover');
         $xpath = new \DOMXPath($this->documentOf($card));
 
-        // La acción vive en el cuerpo, debajo del precio, y está siempre
-        // visible: no depende del hover como en el formato anterior.
+        // La acción vive dentro del marco de la foto, superpuesta a la esquina
+        // inferior derecha, por encima del enlace estirado que cubre la
+        // tarjeta. El CSS la revela con el hover de la tarjeta.
         $action = $xpath->query('//*[@data-home-card-action]')->item(0);
         $this->assertNotNull($action, 'La tarjeta declara el contenedor de la acción');
-        $this->assertSame(0, $xpath->query('//*[@data-home-card-media]//*[@data-home-card-action]')->length, 'El botón ya no va sobre la foto');
+        $this->assertSame(1, $xpath->query('//*[@data-home-card-media]//*[@data-home-card-action]')->length, 'La bolsa vive dentro de la foto');
 
-        $classes = $action->getAttribute('class');
-        $this->assertStringNotContainsString('opacity-0', $classes);
-        $this->assertStringNotContainsString('absolute', $classes);
-        $this->assertStringContainsString('relative', $classes);
+        $classes = $this->classesOf($action);
+        $this->assertContains('absolute', $classes, 'La bolsa se superpone a la foto');
+        $this->assertContains('bottom-2', $classes, 'La bolsa se separa 8 px del borde inferior');
+        $this->assertContains('right-2', $classes, 'La bolsa se separa 8 px del borde derecho');
+        $this->assertContains('z-[3]', $classes, 'La bolsa queda por encima del enlace estirado');
+        $this->assertTrue($action->hasAttribute('data-overlay-bag'), 'La bolsa declara el gancho de superposición');
+        $this->assertNotContains('mt-auto', $classes);
 
-        // El botón sigue siendo único y a lo ancho, con su nombre accesible.
+        // El cuadro mide 40×40, conserva su nombre accesible y es el único
+        // botón de la tarjeta.
+        $button = $xpath->query('//*[@data-home-card-action]//button')->item(0);
+        $this->assertNotNull($button);
+        $buttonClasses = $this->classesOf($button);
+        $this->assertContains('h-10', $buttonClasses);
+        $this->assertContains('w-10', $buttonClasses);
         $this->assertSame(1, substr_count($card, '<button'));
         $this->assertStringContainsString('aria-label="Agregar Pulso Hover al carrito"', $card);
-        $this->assertStringContainsString('w-full', $card);
+    }
+
+    public function test_la_bolsa_y_el_zoom_de_recientes_se_revelan_solo_en_esa_grilla(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-overlay-style\]:hover\s+\[data-overlay-bag\][^{]*\{[^}]*opacity:\s*1/s',
+            $css,
+            'La bolsa aparece con el hover de la tarjeta',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-overlay-style\]:hover\s+\[data-product-card-image\][^{]*\{[^}]*scale\(1\.08\)/s',
+            $css,
+            'La primera foto de recientes arranca el zoom',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-overlay-style\]:hover\s+\[data-product-card-image-secondary\][^{]*\{[^}]*scale\(1\.08\)/s',
+            $css,
+            'La segunda foto termina el zoom',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-overlay-style\]:hover\s+\[data-product-card-image-secondary\][^{]*\{[^}]*transition-delay:\s*0s,\s*100ms/s',
+            $css,
+            'La segunda foto entra rápido, tras un breve arranque del zoom',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-overlay-style\]\s+\[data-product-card-image-secondary\][^{]*\{[^}]*opacity\s+320ms\s+ease-in-out/s',
+            $css,
+            'El cambio entre fotos es un fundido suave de 320 ms',
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\[data-overlay-style\]\s+\[data-overlay-bag\]:hover\s+\[data-bag-plus\][^{]*\{[^}]*rotate\(90deg\)/s',
+            $css,
+            'El + de la bolsa gira al pasar el mouse sobre la bolsa, no sobre la foto',
+        );
     }
 
     public function test_el_home_sin_productos_conserva_las_secciones_sin_tarjetas_inventadas(): void
@@ -2381,7 +2503,12 @@ class StorefrontHomeTest extends TestCase
             $products[$position] = $this->product($category, [
                 'name' => "Favorito {$position}",
                 'slug' => "favorito-{$position}",
-                'imagenes' => ["https://cdn.example.com/favorito-{$position}.jpg"],
+                'imagenes' => $position === 1
+                    ? [
+                        'https://cdn.example.com/favorito-1.jpg',
+                        'https://cdn.example.com/favorito-1-b.jpg',
+                    ]
+                    : ["https://cdn.example.com/favorito-{$position}.jpg"],
             ]);
         }
 
@@ -2451,10 +2578,34 @@ class StorefrontHomeTest extends TestCase
 
         $this->assertSame(8, $xpath->query('.//*[@data-favorite-card]', $section)->length);
         $this->assertSame(8, $xpath->query('.//*[contains(concat(" ", normalize-space(@class), " "), " swiper-slide ")]', $section)->length);
-        $this->assertSame(8, substr_count($document->saveHTML($section), 'data-variant="compact"'), 'Cada favorito conserva su botón de bolsa');
+        $this->assertSame(8, substr_count($document->saveHTML($section), 'data-variant="bag"'), 'Cada favorito adopta la bolsa `+` de recientes');
+        $this->assertSame(0, substr_count($document->saveHTML($section), 'data-variant="compact"'), 'Favoritos ya no usa el botón ancho');
+        $this->assertSame(8, $xpath->query('.//*[@data-favorite-card]//*[@data-overlay-bag]', $section)->length, 'Cada favorito superpone la bolsa `+` a la foto');
 
         $firstCard = $xpath->query('.//*[@data-favorite-card]', $section)->item(0);
         $this->assertNotNull($firstCard);
+
+        $this->assertTrue($firstCard->hasAttribute('data-overlay-style'), 'Favoritos adopta la presentación de recientes');
+
+        // Favoritos adopta la tarjeta sin borde de recientes.
+        $this->assertNotContains('border', $this->classesOf($firstCard), 'Favoritos ya no dibuja borde');
+        $this->assertNotContains('border-ink', $this->classesOf($firstCard));
+        $this->assertContains('rounded-lg', $this->classesOf($firstCard));
+
+        // La foto llena el marco como en recientes: original sin `e_trim`,
+        // `object-cover` y sin el relleno del 4%. La segunda foto sigue siendo
+        // exclusiva de «Productos recientes».
+        $firstImage = $xpath->query('.//img[@data-product-card-image]', $firstCard)->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $firstImage);
+        $this->assertContains('object-cover', $this->classesOf($firstImage), 'Favoritos llena el marco con la foto');
+        $this->assertNotContains('object-contain', $this->classesOf($firstImage));
+        $this->assertStringNotContainsString('e_trim', $firstImage->getAttribute('src'), 'Favoritos usa la foto original');
+
+        $favoriteFrame = $firstImage->parentNode;
+        $this->assertInstanceOf(\DOMElement::class, $favoriteFrame);
+        $this->assertNotContains('p-[4%]', $this->classesOf($favoriteFrame), 'Favoritos ya no deja relleno en el marco');
+        $this->assertSame(0, $xpath->query('.//*[@data-product-card-image-secondary]', $firstCard)->length, 'Favoritos no adoptan la segunda foto de recientes');
+
         $this->assertSame(route('catalog.show', $products[1]), $xpath->query('.//a[@data-card-link]', $firstCard)->item(0)?->getAttribute('href'));
     }
 
@@ -2650,9 +2801,10 @@ class StorefrontHomeTest extends TestCase
             'En escritorio el Ver todos vive en el encabezado, antes del carrusel',
         );
 
-        // La ficha mini conserva foto, nombre, precio final y botón; esconde
-        // kicker, referencia, descuento y precio tachado, y deja solo el icono
-        // de la bolsa. La regla está acotada al carrusel de favoritos.
+        // La ficha mini conserva foto, nombre, precio final y la bolsa `+`;
+        // esconde kicker, referencia, descuento y precio tachado. La regla está
+        // acotada al carrusel de favoritos. La bolsa `+` mantiene su tamaño de
+        // 40×40: las reglas del antiguo botón compacto ya no viven aquí.
         $css = (string) file_get_contents(base_path('resources/css/app.css'));
         $this->assertMatchesRegularExpression(
             '/\[data-home-favorites-swiper\][^{]*\[data-home-card-kicker\][^{]*\[data-home-card-meta\][^{]*\[data-home-card-discount\][^{]*\[data-home-card-price-before\][^{]*\{[^}]*display:\s*none/s',
@@ -2660,28 +2812,29 @@ class StorefrontHomeTest extends TestCase
             'La ficha mini esconde la información secundaria en móvil',
         );
         $this->assertMatchesRegularExpression(
-            '/\[data-home-favorites-swiper\][^{]*\[data-compact-cart-label\][^{]*\{[^}]*display:\s*none/s',
-            $css,
-            'La ficha mini esconde la etiqueta del botón',
-        );
-        $this->assertMatchesRegularExpression(
-            '/\[data-home-favorites-swiper\][^{]*\[data-compact-cart-icon\][^{]*\{[^}]*display:\s*block/s',
-            $css,
-            'La ficha mini muestra el icono de la bolsa',
-        );
-        $this->assertMatchesRegularExpression(
             '/\[data-home-favorites-swiper\][^{]*\[data-home-card-stock\]\[data-stock-state=\'Disponible\'\][^{]*\{[^}]*display:\s*none/s',
             $css,
             'La ficha mini solo conserva Nuevo o Agotado',
+        );
+        $this->assertStringNotContainsString(
+            '[data-home-favorites-swiper] [data-product-card] [data-compact-cart-label]',
+            $css,
+            'La ficha mini ya no usa la etiqueta del botón compacto',
+        );
+        $this->assertStringNotContainsString(
+            '[data-home-favorites-swiper] [data-product-card] [data-compact-cart-icon]',
+            $css,
+            'La ficha mini ya no usa el icono del botón compacto',
         );
 
         // Los datos siguen en el HTML: la reducción es visual, no de contenido.
         $first = $xpath->query('.//*[@data-favorite-card]', $favorites)->item(0);
         $this->assertNotNull($first);
         $firstHtml = (string) $document->saveHTML($first);
-        foreach (['data-home-card-kicker', 'data-home-card-reference', 'data-home-card-discount', 'data-home-card-price-before', 'data-compact-cart-icon'] as $hook) {
+        foreach (['data-home-card-kicker', 'data-home-card-reference', 'data-home-card-discount', 'data-home-card-price-before', 'data-bag-plus', 'data-overlay-bag'] as $hook) {
             $this->assertStringContainsString($hook, $firstHtml, "La ficha conserva {$hook} en el HTML");
         }
+        $this->assertStringContainsString('data-variant="bag"', $firstHtml, 'La ficha mini usa la bolsa `+`');
     }
 
     public function test_los_botones_ver_todos_del_home_van_sin_flecha(): void

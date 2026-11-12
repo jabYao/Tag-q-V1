@@ -6,16 +6,31 @@
     // clave de Livewire y, si los necesita, ganchos de imagen, nombre y precio.
     // Así el mismo producto puede aparecer varias veces en la página sin
     // repetir el componente de la bolsa ni duplicar el marcado.
+    //
+    // `overlayBag` activa la presentación de las tarjetas destacadas: la bolsa
+    // pasa a ser el cuadro `+` superpuesto a la foto. `fillPhoto` completa esa
+    // presentación: la foto original (sin `e_trim`) llena el marco con
+    // `object-cover`. `hoverImage` revela la segunda foto al pasar el mouse y
+    // `borderless` quita el marco negro de la tarjeta. «Productos recientes»,
+    // favoritos y el catálogo comparten esta presentación; favoritos no activa
+    // la segunda foto. Sin estos flags, la tarjeta conserva su borde y el
+    // botón ancho del cuerpo para otros usos.
     $cardAttribute = $cardAttribute ?? 'data-home-card';
     $wireKeyPrefix = $wireKeyPrefix ?? 'home';
+    $wireKey = $wireKey ?? null;
     $imageHook = $imageHook ?? null;
     $nameHook = $nameHook ?? null;
     $priceHook = $priceHook ?? null;
     $headingLevel = $headingLevel ?? 3;
     $cardClasses = $cardClasses ?? '';
+    $overlayBag = $overlayBag ?? false;
+    $fillPhoto = $fillPhoto ?? false;
+    $hoverImage = $hoverImage ?? false;
+    $borderless = $borderless ?? false;
 
     $imagenes = $product->imagenes ?? [];
     $imagen = $imagenes[0] ?? null;
+    $imagenSecundaria = $hoverImage ? ($imagenes[1] ?? null) : null;
 
     // Formato de la referencia del dueño: kicker con marca y movimiento,
     // nombre en mayúsculas, referencia en la línea de la ficha (reemplaza las
@@ -57,35 +72,50 @@
 {{-- Tarjeta guiada por la referencia del dueño: foto cuadrada con el estado a
      la izquierda y el descuento a la derecha; debajo, el kicker de marca y
      movimiento, el nombre en mayúsculas, la ficha real con la referencia al
-     lado, el precio (normal tachado y final en naranja) y el botón naranja a lo
-     ancho, siempre visible. El enlace estirado cubre la tarjeta y el botón
-     queda por encima de él. --}}
+     lado y el precio (normal tachado y final en naranja). El enlace estirado
+     cubre la tarjeta y la acción queda por encima de él. En «Productos
+     recientes», favoritos y el catálogo la acción es el cuadro `+` sobre la
+     foto; sin `overlayBag` es el botón naranja a lo ancho del cuerpo. --}}
 <article
+    @if ($wireKey) wire:key="{{ $wireKey }}" @endif
     {{ $cardAttribute }}
     data-product-card
     data-product-name="{{ $product->name }}"
     data-home-reveal
     data-home-hover
-    class="group relative flex h-full flex-col overflow-hidden rounded-lg border border-ink bg-white hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.18)] {{ $cardClasses }}"
+    @if ($overlayBag) data-overlay-style @endif
+    class="group relative flex h-full flex-col overflow-hidden rounded-lg bg-white hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.18)] {{ $borderless ? '' : 'border border-ink' }} {{ $cardClasses }}"
 >
-    {{-- Foto cuadrada (1:1) a todo el ancho del card: al no haber relleno
-         lateral, la pieza ocupa el ancho completo y el marco la recorta con sus
-         esquinas. Las fotos llegan en 1:1 con margen blanco de estudio; el
-         recorte automático (`e_trim`) quita ese margen y `object-contain`
-         garantiza que el reloj nunca se corte. Sobre la foto viven el estado y
-         el descuento (izquierda y derecha, respectivamente). El hover acerca la
-         pieza. --}}
+    {{-- Foto cuadrada (1:1) a todo el ancho del card. Con `$fillPhoto` se usa
+         la foto original sin `e_trim` y `object-cover` para que llene el marco;
+         sin ese flag se mantiene `e_trim` + `object-contain` + 4% para mostrar
+         la pieza completa. Sobre la foto viven el estado y el descuento
+         (izquierda y derecha, respectivamente). El hover acerca la pieza. --}}
     <div data-home-card-media data-product-card-media data-home-reveal-media class="relative overflow-hidden bg-white">
-        <div class="aspect-square w-full overflow-hidden p-[4%]">
+        <div @class(['aspect-square w-full overflow-hidden', 'relative' => $imagenSecundaria !== null, 'p-[4%]' => ! $fillPhoto])>
             @if($imagen)
                 <img
                     @if($imageHook) {{ $imageHook }} @endif
                     data-product-card-image
-                    src="{{ CloudinaryUrl::webpCard($imagen) }}"
+                    src="{{ $fillPhoto ? CloudinaryUrl::webp($imagen) : CloudinaryUrl::webpCard($imagen) }}"
                     alt="{{ $product->name }}"
                     loading="lazy"
-                    class="h-full w-full object-contain"
+                    @class(['h-full w-full', 'object-cover' => $fillPhoto, 'object-contain' => ! $fillPhoto])
                 >
+                @if($imagenSecundaria)
+                    {{-- Segunda foto (solo «Productos recientes»): decorativa y
+                         superpuesta a la primera. Nace oculta y la tarjeta la
+                         revela con un fundido suave mientras continúa el zoom,
+                         sin interceptar el puntero. --}}
+                    <img
+                        data-product-card-image-secondary
+                        src="{{ $fillPhoto ? CloudinaryUrl::webp($imagenSecundaria) : CloudinaryUrl::webpCard($imagenSecundaria) }}"
+                        alt=""
+                        aria-hidden="true"
+                        loading="lazy"
+                        class="pointer-events-none absolute inset-0 h-full w-full bg-white object-cover opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                    >
+                @endif
             @else
                 <div class="flex h-full w-full items-center justify-center font-body text-sm text-ink-muted">Sin imagen</div>
             @endif
@@ -119,6 +149,16 @@
                 </span>
             @endif
         </div>
+
+        @if($overlayBag)
+            {{-- Bolsa de «Productos recientes»: cuadro `+` superpuesto a la
+                 esquina inferior derecha de la foto. Vive dentro del marco para
+                 que la tarjeta la revele al pasar el mouse; va por encima del
+                 enlace estirado, que sigue cubriendo el resto de la tarjeta. --}}
+            <div data-home-card-action data-product-card-action data-overlay-bag class="absolute bottom-2 right-2 z-[3]">
+                @livewire('cart.add-to-cart', ['product' => $product, 'variant' => 'bag'], key($wireKeyPrefix.'-'.$product->id))
+            </div>
+        @endif
     </div>
 
     {{-- Enlace estirado al detalle: cubre toda la tarjeta y deja el botón de la
@@ -162,11 +202,13 @@
             <span class="text-[15px] font-bold tracking-[0.03em] text-accent">$ {{ number_format($precioFinal, 0, ',', '.') }} COP</span>
         </p>
 
-        {{-- Acción siempre visible: un único botón naranja a lo ancho, como la
-             referencia del dueño. Vive en el cuerpo, debajo del precio, y el
-             enlace estirado queda por debajo de él. --}}
-        <div data-home-card-action data-product-card-action class="relative z-[2] mt-auto pt-3">
-            @livewire('cart.add-to-cart', ['product' => $product, 'variant' => 'compact'], key($wireKeyPrefix.'-'.$product->id))
-        </div>
+        {{-- Acción del cuerpo para usos sin `overlayBag`: botón naranja a lo
+             ancho. «Productos recientes», favoritos y el catálogo usan la bolsa
+             sobre la foto, así que su cuerpo termina en el precio. --}}
+        @unless($overlayBag)
+            <div data-home-card-action data-product-card-action class="relative z-[2] mt-auto pt-3">
+                @livewire('cart.add-to-cart', ['product' => $product, 'variant' => 'compact'], key($wireKeyPrefix.'-'.$product->id))
+            </div>
+        @endunless
     </div>
 </article>

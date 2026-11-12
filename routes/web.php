@@ -2,12 +2,16 @@
 
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CollectionController;
+use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\UserPasswordController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegistrationController;
 use App\Http\Controllers\CatalogController;
+use App\Http\Controllers\Customer\AccountController;
 use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
 use App\Http\Controllers\StorefrontHomeController;
 use App\Http\Controllers\WompiWebhookController;
@@ -56,6 +60,12 @@ Route::middleware('guest')->group(function () {
     Route::get('/register/verify', [RegistrationController::class, 'showVerify'])->name('register.verify');
     Route::post('/register/verify', [RegistrationController::class, 'verify'])->name('register.verify.submit');
     Route::post('/register/resend', [RegistrationController::class, 'resend'])->name('register.resend');
+
+    // Recuperación de contraseña — enlace por correo, token de un solo uso.
+    Route::get('/recuperar-contrasena', [PasswordResetController::class, 'requestForm'])->name('password.request');
+    Route::post('/recuperar-contrasena', [PasswordResetController::class, 'sendLink'])->name('password.email')->middleware('throttle:6,1');
+    Route::get('/restablecer-contrasena/{token}', [PasswordResetController::class, 'resetForm'])->name('password.reset');
+    Route::post('/restablecer-contrasena', [PasswordResetController::class, 'reset'])->name('password.store')->middleware('throttle:6,1');
 });
 
 Route::post('/logout', function (Request $request) {
@@ -71,6 +81,28 @@ Route::post('/logout', function (Request $request) {
 Route::middleware('auth')->prefix('mis-pedidos')->name('customer.orders.')->group(function () {
     Route::get('/', [CustomerOrderController::class, 'index'])->name('index');
     Route::get('/{order}', [CustomerOrderController::class, 'show'])->name('show');
+});
+
+// Panel del cliente — solo el rol cliente actualiza sus datos y su contraseña.
+// Los pedidos siguen en /mis-pedidos (auth, cada quien ve los suyos).
+Route::middleware(['auth', 'role:cliente'])->prefix('mi-cuenta')->name('customer.account.')->group(function () {
+    Route::get('/', [AccountController::class, 'edit'])->name('edit');
+    Route::put('/datos', [AccountController::class, 'update'])->name('update');
+    Route::get('/contrasena', [AccountController::class, 'editPassword'])->name('password.edit');
+    // Prefijo propio en cada throttle: Laravel usa solo el ID del usuario como
+    // clave para autenticados, así que sin prefijo las tres rutas compartirían
+    // el mismo contador y agotar la verificación bloquearía el reenvío.
+    Route::put('/contrasena', [AccountController::class, 'updatePassword'])
+        ->middleware('throttle:6,1,password-change-start')
+        ->name('password.update');
+    Route::get('/contrasena/verificar', [AccountController::class, 'showPasswordVerification'])
+        ->name('password.verify');
+    Route::post('/contrasena/verificar', [AccountController::class, 'verifyPassword'])
+        ->middleware('throttle:10,1,password-change-verify')
+        ->name('password.verify.submit');
+    Route::post('/contrasena/verificar/reenviar', [AccountController::class, 'resendPasswordCode'])
+        ->middleware('throttle:6,1,password-change-resend')
+        ->name('password.verify.resend');
 });
 
 // Panel admin — solo admin y empleado (cliente e invitado quedan fuera)
@@ -99,7 +131,17 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::resource('brands', BrandController::class)->except(['show']);
 
     Route::patch('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
+    Route::get('users/{user}/password', [UserPasswordController::class, 'edit'])->name('users.password.edit');
+    Route::put('users/{user}/password', [UserPasswordController::class, 'update'])->name('users.password.update');
     Route::resource('users', UserController::class)->except(['show', 'destroy']);
+
+    // Clientes — solo admin: datos de contacto, estado y conteo de pedidos.
+    // La contraseña la gestiona el propio cliente en /mi-cuenta.
+    Route::get('clientes', [CustomerController::class, 'index'])->name('customers.index');
+    Route::get('clientes/{user}', [CustomerController::class, 'show'])->name('customers.show');
+    Route::get('clientes/{user}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
+    Route::put('clientes/{user}', [CustomerController::class, 'update'])->name('customers.update');
+    Route::patch('clientes/{user}/toggle-active', [CustomerController::class, 'toggleActive'])->name('customers.toggle-active');
 });
 
 // Alias en español para compatibilidad blade (opcional)

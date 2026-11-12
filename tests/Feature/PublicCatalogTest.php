@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Storefront\CatalogListing;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class PublicCatalogTest extends TestCase
@@ -142,8 +144,33 @@ class PublicCatalogTest extends TestCase
             ->assertSee('Tag Heuer · Automático')
             ->assertSee('Nuevo')
             ->assertSee('980.000')
-            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/e_trim,f_webp,q_auto/v1/tag-q/producto/heritage.jpg', false)
+            ->assertSee('https://res.cloudinary.com/dg6iut6sl/image/upload/f_webp,q_auto/v1/tag-q/producto/heritage.jpg', false)
+            ->assertSee('object-cover')
+            ->assertDontSee('object-contain')
+            ->assertDontSee('p-[4%]', false)
             ->assertDontSee('Disponible: 5');
+    }
+
+    public function test_el_catalogo_muestra_la_segunda_foto_como_recientes(): void
+    {
+        $this->product([
+            'name' => 'Catalogo Dos Fotos',
+            'slug' => 'catalogo-dos-fotos',
+            'imagenes' => [
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/catalogo-1.jpg',
+                'https://res.cloudinary.com/dg6iut6sl/image/upload/v1/tag-q/producto/catalogo-2.jpg',
+            ],
+        ]);
+
+        $this->get('/catalogo')
+            ->assertOk()
+            ->assertSee('object-cover')
+            ->assertDontSee('object-contain')
+            ->assertDontSee('p-[4%]', false)
+            ->assertSee('f_webp,q_auto/v1/tag-q/producto/catalogo-1.jpg', false)
+            ->assertSee('f_webp,q_auto/v1/tag-q/producto/catalogo-2.jpg', false)
+            ->assertSee('data-product-card-image-secondary', false)
+            ->assertDontSee('e_trim', false);
     }
 
     public function test_la_tarjeta_del_catalogo_usa_el_formato_de_la_referencia(): void
@@ -170,6 +197,12 @@ class PublicCatalogTest extends TestCase
         $xpath = new \DOMXPath($document);
         $card = $xpath->query('//*[@data-catalog-item][@data-product-name="Submariner Gold"]')->item(0);
         $this->assertNotNull($card);
+
+        $cardClasses = preg_split('/\s+/', trim($card->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+        $this->assertNotContains('border', $cardClasses, 'El catálogo adopta la tarjeta sin borde de recientes');
+        $this->assertNotContains('border-ink', $cardClasses);
+        $this->assertContains('rounded-lg', $cardClasses);
+        $this->assertTrue($card->hasAttribute('data-overlay-style'), 'La tarjeta activa la presentación superpuesta');
 
         // Kicker teal con marca y movimiento.
         $kicker = $xpath->query('.//*[@data-product-card-kicker]', $card)->item(0);
@@ -199,10 +232,14 @@ class PublicCatalogTest extends TestCase
         $this->assertSame('$ 1.590.000', trim($before->textContent));
         $this->assertStringContainsString('$ 1.113.000', $card->textContent);
 
-        // Acción: botón naranja a lo ancho, sin selector de cantidad.
-        $this->assertStringContainsString('data-variant="compact"', $document->saveHTML($card));
-        $this->assertStringNotContainsString('type="number"', $document->saveHTML($card));
-        $this->assertStringContainsString('Agregar al carrito', $card->textContent);
+        // Acción: bolsa `+` superpuesta a la foto, sin selector de cantidad.
+        $cardHtml = $document->saveHTML($card);
+        $this->assertStringContainsString('data-variant="bag"', $cardHtml);
+        $this->assertStringContainsString('data-overlay-bag', $cardHtml);
+        $this->assertStringContainsString('data-bag-plus', $cardHtml);
+        $this->assertStringContainsString('aria-label="Agregar Submariner Gold al carrito"', $cardHtml);
+        $this->assertStringNotContainsString('type="number"', $cardHtml);
+        $this->assertStringNotContainsString('data-compact-cart-label', $cardHtml);
     }
 
     public function test_catalogo_usa_imagen_de_fallback_sin_imagenes(): void
@@ -612,6 +649,126 @@ class PublicCatalogTest extends TestCase
         foreach (['recientes', 'precio_asc', 'precio_desc', 'nombre_asc'] as $orden) {
             $this->assertStringContainsString('value="'.$orden.'"', $html, "El desplegable debe ofrecer {$orden}");
         }
+
+        // El cambio de orden lo aplica Livewire sin enviar el formulario GET.
+        $this->assertStringContainsString(
+            'wire:model.live="sort"',
+            $html,
+            'El desplegable debe actualizar el orden con Livewire'
+        );
+        $this->assertStringNotContainsString('x-on:change="$el.form.submit()"', $html);
+    }
+
+    public function test_el_orden_se_actualiza_con_livewire_y_conserva_los_filtros(): void
+    {
+        $this->product(['name' => 'Alfa Reloj', 'slug' => 'alfa-reloj', 'precio' => 1000000, 'marca' => 'Acme']);
+        $this->product(['name' => 'Beta Reloj', 'slug' => 'beta-reloj', 'precio' => 3000000, 'marca' => 'Acme']);
+        $this->product(['name' => 'Gamma Reloj', 'slug' => 'gamma-reloj', 'precio' => 2000000, 'marca' => 'Otra']);
+
+        $component = Livewire::test(CatalogListing::class, ['filters' => ['marca' => 'Acme']])
+            ->assertSet('sort', 'recientes');
+
+        // `recientes` desempata por id descendente: Beta se creó después.
+        $this->assertSame(
+            ['Beta Reloj', 'Alfa Reloj'],
+            $this->orderedNames($component->html()),
+            'El orden inicial debe ser el más reciente'
+        );
+
+        $component->set('sort', 'precio_asc')
+            ->assertSet('sort', 'precio_asc');
+
+        $this->assertSame(
+            ['Alfa Reloj', 'Beta Reloj'],
+            $this->orderedNames($component->html()),
+            'Cambiar el orden debe reordenar la grilla'
+        );
+        $this->assertStringNotContainsString(
+            'Gamma Reloj',
+            $component->html(),
+            'El filtro de marca debe conservarse al cambiar el orden'
+        );
+    }
+
+    public function test_un_orden_invalido_en_livewire_vuelve_a_recientes(): void
+    {
+        $this->product(['name' => 'Alfa Reloj', 'slug' => 'alfa-reloj']);
+
+        Livewire::test(CatalogListing::class)
+            ->set('sort', 'invalido')
+            ->assertSet('sort', 'recientes');
+    }
+
+    public function test_el_boton_ver_mas_agrega_los_siguientes_productos(): void
+    {
+        for ($i = 1; $i <= 13; $i++) {
+            $this->product([
+                'name' => sprintf('Reloj Ver Más %02d', $i),
+                'slug' => "reloj-ver-mas-{$i}",
+            ]);
+        }
+
+        $component = Livewire::test(CatalogListing::class)
+            ->assertSee('Ver más relojes');
+
+        $this->assertSame(
+            12,
+            substr_count($component->html(), 'data-catalog-item'),
+            'El primer lote debe mostrar 12 productos'
+        );
+
+        $component->call('loadMore')
+            ->assertDontSee('Ver más relojes');
+
+        $this->assertSame(
+            13,
+            substr_count($component->html(), 'data-catalog-item'),
+            '«Ver más» debe agregar el producto restante'
+        );
+    }
+
+    public function test_ver_mas_conserva_los_filtros(): void
+    {
+        for ($i = 1; $i <= 13; $i++) {
+            $this->product([
+                'name' => sprintf('Filtrado Ver Más %02d', $i),
+                'slug' => "filtrado-ver-mas-{$i}",
+                'marca' => 'Filtrada',
+            ]);
+        }
+
+        $this->product([
+            'name' => 'Fuera Del Filtro',
+            'slug' => 'fuera-del-filtro',
+            'marca' => 'Otra',
+        ]);
+
+        $component = Livewire::test(CatalogListing::class, ['filters' => ['marca' => 'Filtrada']])
+            ->call('loadMore')
+            ->assertSee('Filtrado Ver Más 01')
+            ->assertDontSee('Fuera Del Filtro');
+
+        $this->assertSame(
+            13,
+            substr_count($component->html(), 'data-catalog-item'),
+            'Cargar más no debe perder el filtro de marca'
+        );
+    }
+
+    public function test_cambiar_el_orden_desde_la_pagina_2_vuelve_a_la_primera(): void
+    {
+        for ($i = 1; $i <= 13; $i++) {
+            $this->product([
+                'name' => sprintf('Reloj Página %02d', $i),
+                'slug' => "reloj-pagina-{$i}",
+            ]);
+        }
+
+        Livewire::test(CatalogListing::class)
+            ->call('gotoPage', 2)
+            ->assertSet('paginators.page', 2)
+            ->set('sort', 'precio_asc')
+            ->assertSet('paginators.page', 1);
     }
 
     public function test_catalogo_orden_recientes_es_estable_por_id_descendente(): void
@@ -630,7 +787,7 @@ class PublicCatalogTest extends TestCase
         $this->assertSame(['Gamma Reloj', 'Beta Reloj', 'Alfa Reloj'], $recientes, 'orden=recientes debe ser estable');
     }
 
-    public function test_catalogo_paginacion_preserva_filtros_con_query_string(): void
+    public function test_catalogo_ver_mas_preserva_filtros_y_mantiene_paginacion_sin_js(): void
     {
         for ($i = 1; $i <= 13; $i++) {
             $this->product([
@@ -643,11 +800,13 @@ class PublicCatalogTest extends TestCase
         $response = $this->get('/catalogo?marca=Filtrada&orden=nombre_asc')->assertOk();
         $decoded = html_entity_decode($response->getContent());
 
-        $this->assertStringContainsString('page=2', $decoded, 'La paginación debe ofrecer la página 2');
+        $this->assertStringContainsString('Ver más relojes', $decoded, 'El catálogo debe ofrecer «Ver más»');
+        $this->assertStringContainsString('<noscript>', $decoded, 'La paginación clásica debe quedar como respaldo sin JS');
+        $this->assertStringContainsString('page=2', $decoded, 'La paginación de respaldo debe ofrecer la página 2');
         $this->assertMatchesRegularExpression(
             '/catalogo\?[^"]*marca=Filtrada[^"]*page=2/',
             $decoded,
-            'El enlace de la página 2 debe preservar los filtros con withQueryString()'
+            'La paginación de respaldo debe preservar los filtros'
         );
     }
 
