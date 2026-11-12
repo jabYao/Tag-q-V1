@@ -13,9 +13,10 @@
 
             var FALLBACK_MESSAGE = 'No pudimos abrir el widget de pago. Usa "Abrir Wompi" para completar el pago.';
 
-            window.wompiCheckoutWidget = function (config) {
+            window.wompiCheckoutWidget = function (config, orderUrl) {
                 return {
                     config: config,
+                    orderUrl: orderUrl || '',
                     ready: false,
                     loading: true,
                     failed: false,
@@ -70,6 +71,13 @@
                         this.message = parts.length
                             ? 'Pago en proceso (' + parts.join(', ') + '). Confirmaremos tu pedido cuando Wompi nos notifique.'
                             : 'Pago en proceso. Confirmaremos tu pedido cuando Wompi nos notifique.';
+
+                        // Al terminar el widget se navega a la página pública del
+                        // pedido. Es solo navegación: el estado lo sigue fijando
+                        // el webhook, nunca el callback del navegador.
+                        if (this.orderUrl) {
+                            window.location.assign(this.orderUrl);
+                        }
                     }
                 };
             };
@@ -114,7 +122,7 @@
 
             <div
                 data-wompi-widget
-                x-data="wompiCheckoutWidget(@js($wompiPayload))"
+                x-data="wompiCheckoutWidget(@js($wompiPayload), @js($orderUrl))"
                 class="mt-6 flex flex-col items-start gap-4"
             >
                 <button

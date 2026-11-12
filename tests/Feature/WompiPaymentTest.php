@@ -296,8 +296,17 @@ class WompiPaymentTest extends TestCase
             'signature' => [
                 'integrity' => hash('sha256', $order->code.'258000000'.'COP'.self::INTEGRITY_SECRET),
             ],
-            'redirectUrl' => self::APP_URL.'/checkout',
-        ], $payload, 'El payload del widget expone únicamente configuración pública en camelCase');
+        ], array_diff_key($payload, ['redirectUrl' => true]), 'El payload del widget expone únicamente configuración pública en camelCase');
+
+        $redirectUrl = $payload['redirectUrl'] ?? null;
+
+        $this->assertIsString($redirectUrl, 'Con APP_URL https el widget envía redirectUrl');
+        $this->assertStringStartsWith(self::APP_URL.'/pedido/'.$order->code.'/', $redirectUrl);
+        $this->assertStringNotContainsString('?', $redirectUrl, 'El token va en el path porque Wompi agrega ?id= al volver');
+
+        // La página abre sin sesión, incluso con el ?id= que agrega Wompi.
+        $this->get($redirectUrl)->assertOk();
+        $this->get($redirectUrl.'?id=12082714-1794497620-32187')->assertOk();
 
         $this->assertArrayNotHasKey('private_key', $payload);
         $this->assertArrayNotHasKey('privateKey', $payload);
@@ -330,7 +339,7 @@ class WompiPaymentTest extends TestCase
             hash('sha256', $order->code.'129000000'.'COP'.self::INTEGRITY_SECRET),
             $query['signature:integrity'],
         );
-        $this->assertSame(self::APP_URL.'/checkout', $query['redirect-url']);
+        $this->assertStringStartsWith(self::APP_URL.'/pedido/'.$order->code.'/', $query['redirect-url']);
 
         foreach ([self::PRIVATE_KEY, self::INTEGRITY_SECRET, self::EVENTS_SECRET] as $secret) {
             $this->assertStringNotContainsString($secret, $url, 'El respaldo manual tampoco filtra secretos');
@@ -340,16 +349,20 @@ class WompiPaymentTest extends TestCase
     public function test_redirect_url_es_null_en_entorno_local_http_y_no_viaja_en_los_payloads(): void
     {
         config()->set('app.url', 'http://localhost');
-        config()->set('services.wompi.redirect_url', null);
 
         $service = app(WompiService::class);
 
-        // Un retorno local http no es una URL válida para Wompi: mejor omitirlo
-        // que enviar una URL que Wompi rechazaría o usaría de forma insegura.
-        $this->assertNull($service->redirectUrl(), 'Una URL local http no produce redirect url');
-
         $product = $this->product(['precio' => 1290000]);
         $order = $this->wompiOrder($product, 1);
+
+        // Un retorno local http no es una URL válida para Wompi: mejor omitirlo
+        // que enviar una URL que Wompi rechazaría o usaría de forma insegura.
+        $this->assertNull($service->redirectUrl($order), 'Una URL local http no produce redirect url');
+
+        // El callback del widget sí navega: la página del pedido funciona en http.
+        $orderUrl = $service->publicOrderUrl($order);
+        $this->assertStringContainsString('/pedido/'.$order->code.'/', $orderUrl);
+        $this->get($orderUrl)->assertOk();
 
         $widget = $service->buildWidgetPayload($order);
 
@@ -366,27 +379,28 @@ class WompiPaymentTest extends TestCase
         $this->assertArrayNotHasKey('redirect-url', $query, 'El respaldo manual omite redirect-url sin URL https');
     }
 
-    public function test_redirect_url_respeta_configuracion_https_y_descarta_las_urls_http_o_relativas(): void
+    public function test_redirect_url_https_firma_la_pagina_del_pedido_de_cada_orden(): void
     {
-        $service = app(WompiService::class);
-
-        // Una redirect_url https configurada se respeta tal cual.
-        config()->set('app.url', 'http://localhost');
-        config()->set('services.wompi.redirect_url', 'https://tienda.example.com/retorno');
-        $this->assertSame('https://tienda.example.com/retorno', $service->redirectUrl());
-
-        // Una redirect_url http se ignora y cae en APP_URL https + /checkout.
         config()->set('app.url', 'https://tagq.test');
-        config()->set('services.wompi.redirect_url', 'http://tienda.example.com/retorno');
-        $this->assertSame('https://tagq.test/checkout', $service->redirectUrl());
 
-        // Una redirect_url relativa tampoco es válida para Wompi.
-        config()->set('services.wompi.redirect_url', '/checkout');
-        $this->assertSame('https://tagq.test/checkout', $service->redirectUrl());
+        $service = app(WompiService::class);
+        $product = $this->product(['precio' => 1290000]);
+        $first = $this->wompiOrder($product, 1);
+        $second = $this->wompiOrder($product, 1);
 
-        // Sin redirect_url configurada se deriva de APP_URL https.
-        config()->set('services.wompi.redirect_url', null);
-        $this->assertSame('https://tagq.test/checkout', $service->redirectUrl());
+        $firstUrl = $service->redirectUrl($first);
+        $secondUrl = $service->redirectUrl($second);
+
+        $this->assertIsString($firstUrl);
+        $this->assertIsString($secondUrl);
+        $this->assertStringStartsWith('https://tagq.test/pedido/'.$first->code.'/', $firstUrl);
+        $this->assertStringStartsWith('https://tagq.test/pedido/'.$second->code.'/', $secondUrl);
+        $this->assertStringNotContainsString('?', $firstUrl, 'El token va en el path, no en el query');
+        $this->assertNotSame($firstUrl, $secondUrl, 'Cada pedido tiene su propio enlace');
+
+        $this->get($firstUrl)->assertOk();
+        $this->get($secondUrl)->assertOk();
+        $this->get($firstUrl.'?id=12082714-1794497620-32187')->assertOk();
     }
 
     public function test_pagina_de_checkout_incluye_el_script_oficial_del_widget_en_el_head(): void
@@ -464,6 +478,13 @@ class WompiPaymentTest extends TestCase
         ]);
         $this->assertSame(3, $product->fresh()->stock, 'El stock se reserva al crear el pedido Wompi');
         $this->assertEmpty($this->cart()->getSessionCart(), 'El carrito se limpia al crear el pedido');
+
+        // El componente publica el enlace del pedido: el callback del widget
+        // navega ahí al terminar el pago, incluso sin redirectUrl de Wompi.
+        $orderUrl = $component->get('orderUrl');
+        $this->assertIsString($orderUrl);
+        $this->assertStringContainsString('/pedido/'.$order->code.'/', $orderUrl);
+        $this->get($orderUrl)->assertOk();
 
         $component
             ->assertSee($order->code)

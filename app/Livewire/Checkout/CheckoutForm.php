@@ -46,6 +46,9 @@ class CheckoutForm extends Component
     /** Respaldo manual (Web Checkout) para el botón "Abrir Wompi". */
     public string $wompiFallbackUrl = '';
 
+    /** Página pública del pedido (token en el path): destino al terminar el pago. */
+    public string $orderUrl = '';
+
     protected function rules(): array
     {
         return [
@@ -88,6 +91,7 @@ class CheckoutForm extends Component
         $this->orderCode = '';
         $this->wompiPayload = [];
         $this->wompiFallbackUrl = '';
+        $this->orderUrl = '';
         $this->resetErrorBag();
 
         $validated = $this->validate();
@@ -123,6 +127,7 @@ class CheckoutForm extends Component
         $this->orderCode = '';
         $this->wompiPayload = [];
         $this->wompiFallbackUrl = '';
+        $this->orderUrl = '';
         $this->resetErrorBag();
 
         $validated = $this->validate();
@@ -149,6 +154,7 @@ class CheckoutForm extends Component
         app(OrderNotificationService::class)->notifyCreated($order);
         $this->wompiPayload = $wompi->buildWidgetPayload($order);
         $this->wompiFallbackUrl = $wompi->buildWidgetFallbackUrl($order);
+        $this->orderUrl = $wompi->publicOrderUrl($order);
         $this->dispatch('cart-updated');
     }
 

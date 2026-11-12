@@ -13,6 +13,7 @@ use App\Http\Controllers\Auth\RegistrationController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\Customer\AccountController;
 use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
+use App\Http\Controllers\PublicOrderController;
 use App\Http\Controllers\StorefrontHomeController;
 use App\Http\Controllers\WompiWebhookController;
 use Illuminate\Http\Request;
@@ -45,6 +46,11 @@ Route::get('/carrito', fn () => view('cart.index'))->name('cart.index');
 
 // Checkout público MVP contraentrega — accesible a invitado y cliente autenticado.
 Route::get('/checkout', fn () => view('checkout.index'))->name('checkout.index');
+
+// Confirmación pública del pedido para el retorno de Wompi. El token del path
+// autoriza la lectura (Wompi agrega ?id=... al volver) y no exige sesión.
+Route::get('/pedido/{order:code}/{token}', [PublicOrderController::class, 'show'])
+    ->name('orders.public.show');
 
 // Webhook de Wompi (transaction.updated): lo invoca Wompi, no el navegador.
 // Se excluye de CSRF en bootstrap/app.php; la autenticidad la da la firma del evento.

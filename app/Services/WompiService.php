@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Product;
+use App\Support\OrderLink;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -148,27 +150,57 @@ class WompiService
     }
 
     /**
+     * URL pública del pedido con su token de acceso.
+     *
+     * Se usa para navegar al cliente desde el callback del widget, con el
+     * esquema y host del request actual: funciona en local (http) y en
+     * producción (https). El token impide leer el pedido cambiando el código.
+     */
+    public function publicOrderUrl(Order $order): string
+    {
+        return OrderLink::url($order);
+    }
+
+    /**
      * URL de retorno tras pagar, o null si no hay una URL https válida.
      *
-     * Wompi exige una URL de retorno absoluta https. Se respeta
-     * `services.wompi.redirect_url` solo cuando es una cadena no vacía que
-     * empieza por `https://`; en caso contrario se deriva de APP_URL
-     * (`config('app.url')`) solo si también es https, concatenando `/checkout`.
-     * Para entornos locales (http o URL relativa) devuelve null y el llamador
-     * omite el parámetro: es mejor no enviarlo que enviar una URL inválida.
+     * Wompi exige una URL de retorno absoluta https. Se usa el dominio de
+     * `config('app.url')` cuando ya es https y, en su defecto, el host del
+     * request actual solo si llegó por https (por ejemplo, un túnel de
+     * desarrollo). En local por http devuelve null y el llamador omite el
+     * parámetro: el callback del widget sigue navegando a `publicOrderUrl()`.
+     *
+     * El destino es la página del pedido, no `/checkout`. El token va en el
+     * path porque Wompi agrega `?id=<transacción>` al volver y un query extra
+     * invalidaría una URL firmada de Laravel.
      */
-    public function redirectUrl(): ?string
+    public function redirectUrl(Order $order): ?string
     {
-        $configured = config('services.wompi.redirect_url');
+        $base = $this->httpsBase();
 
-        if (is_string($configured) && str_starts_with($configured, 'https://')) {
-            return $configured;
+        if ($base === null) {
+            return null;
         }
 
-        $appUrl = config('app.url');
+        return $base.OrderLink::path($order);
+    }
 
-        if (is_string($appUrl) && str_starts_with($appUrl, 'https://')) {
-            return rtrim($appUrl, '/').'/checkout';
+    /**
+     * Base https pública: APP_URL configurada o, en su defecto, el request
+     * seguro actual (túnel de desarrollo).
+     */
+    private function httpsBase(): ?string
+    {
+        $appUrl = rtrim((string) config('app.url'), '/');
+
+        if (str_starts_with($appUrl, 'https://')) {
+            return $appUrl;
+        }
+
+        $request = request();
+
+        if ($request instanceof Request && $request->isSecure()) {
+            return $request->getSchemeAndHttpHost();
         }
 
         return null;
@@ -220,7 +252,7 @@ class WompiService
             'signature:integrity' => $this->integritySignature($reference, $amountInCents),
         ];
 
-        $redirectUrl = $this->redirectUrl();
+        $redirectUrl = $this->redirectUrl($order);
 
         if ($redirectUrl !== null) {
             $payload['redirect-url'] = $redirectUrl;
@@ -263,7 +295,7 @@ class WompiService
             ],
         ];
 
-        $redirectUrl = $this->redirectUrl();
+        $redirectUrl = $this->redirectUrl($order);
 
         if ($redirectUrl !== null) {
             $payload['redirectUrl'] = $redirectUrl;
