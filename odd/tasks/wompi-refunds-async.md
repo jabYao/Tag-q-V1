@@ -1,6 +1,6 @@
 # Wompi refunds asíncronos
 
-Objetivo: que un reembolso Wompi funcione de punta a punta (solicitud, estado pendiente, webhook, stock y correo) sin fallar en silencio. Rama: `main` (sin commits hasta autorización explícita). Runner: `php artisan test` contra PostgreSQL. Entrega: trabajo local, push solo con autorización del dueño.
+Objetivo: que un reembolso Wompi funcione de punta a punta (solicitud, estado pendiente, webhook, stock y correo) sin fallar en silencio. Rama: `main`. Runner: `php artisan test` contra PostgreSQL. Entrega: commits locales `2ac5cc4` (redirección previa, separada) y `b1d7ef2` (reembolsos), push a `main` autorizado y ejecutado.
 
 ## Specs
 
@@ -37,3 +37,4 @@ Objetivo: que un reembolso Wompi funcione de punta a punta (solicitud, estado pe
 - **L6** Implementación T1-T7 completada. Decisión de diseño: `applyRefundStatus` ya no exige `refund_id` para APPROVED porque la conciliación por transacción no lo conoce; la idempotencia se garantiza con el estado del pedido bajo `lockForUpdate`. Un id guardado desde PENDING no bloquea la aprobación; el id que llega con APPROVED es el autoritativo.
 - **L7** T8 sandbox real: refund `32963` creado en PENDING, aprobado en ~30 s; webhook real aplicó la transición y restauró stock una sola vez. La conciliación corrió después y no reprocesó nada.
 - **L8** T9: suite 715/715, Pint verde, build verde. El correo de reembolso se intentó una vez y falló por el transporte local de Resend (`TransportException`), capturado por el servicio sin afectar el pedido; en producción depende de credenciales válidas de Resend.
+- **L9** Commits separados como se acordó: `2ac5cc4` redirección al pedido público (sin hunks de reembolso; suite aislada 695/695) y `b1d7ef2` reembolsos asíncronos. Push a `main` autorizado: `7ea8320..b1d7ef2`.
