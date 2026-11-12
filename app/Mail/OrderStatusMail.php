@@ -4,6 +4,8 @@ namespace App\Mail;
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\CheckoutService;
+use App\Support\Legal;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -107,14 +109,24 @@ class OrderStatusMail extends Mailable
 
     public function content(): Content
     {
+        $items = $this->itemsSnapshot();
+        $subtotal = (int) array_sum(array_column($items, 'subtotal'));
+
         return new Content(
             view: 'emails.orders.status',
             with: [
                 'eventLabel' => $this->eventLabel(),
                 'orderCode' => (string) $this->order->code,
                 'statusLabel' => $this->statusLabel(),
+                'isCreated' => $this->event === self::EVENT_CREATED,
+                'orderDate' => $this->order->created_at?->format('d/m/Y') ?? now()->format('d/m/Y'),
+                'paymentMethodLabel' => $this->paymentMethodLabel(),
+                'subtotal' => $subtotal,
+                'shippingCost' => (int) $this->order->shipping_cost,
                 'total' => (int) $this->order->total,
-                'items' => $this->itemsSnapshot(),
+                'deliveryDays' => (int) config('legal.delivery.max_days', 30),
+                'deliveryDeadline' => Legal::deliveryDeadline($this->order->created_at),
+                'items' => $items,
                 'orderUrl' => $this->orderUrl,
             ],
         );
@@ -168,5 +180,17 @@ class OrderStatusMail extends Mailable
         $status = (string) $this->order->status;
 
         return self::STATUS_LABELS[$status] ?? $status;
+    }
+
+    /**
+     * Etiqueta visible del medio de pago.
+     */
+    private function paymentMethodLabel(): string
+    {
+        return match ((string) $this->order->payment_method) {
+            CheckoutService::WOMPI_PAYMENT_METHOD => 'Wompi',
+            CheckoutService::PAYMENT_METHOD => 'Contraentrega',
+            default => 'No informado',
+        };
     }
 }

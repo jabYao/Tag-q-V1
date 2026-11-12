@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -108,6 +109,16 @@ class OrderTransactionalEmailsTest extends TestCase
             'direccion' => 'Calle 10 # 20-30',
             'ciudad' => 'Bogotá',
         ], $overrides);
+    }
+
+    /**
+     * Componente de checkout con las dos aceptaciones legales marcadas.
+     */
+    private function checkout(): Testable
+    {
+        return Livewire::test(CheckoutForm::class)
+            ->set('acceptTerms', true)
+            ->set('acceptPrivacy', true);
     }
 
     /**
@@ -261,7 +272,7 @@ class OrderTransactionalEmailsTest extends TestCase
         $product = $this->product();
         app(CartService::class)->addToSession($product->id, 1);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasNoErrors();
@@ -282,7 +293,7 @@ class OrderTransactionalEmailsTest extends TestCase
         $product = $this->product();
         app(CartService::class)->addToSession($product->id, 1);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->set('paymentMethod', CheckoutService::WOMPI_PAYMENT_METHOD)
             ->call('confirm')
@@ -706,6 +717,35 @@ class OrderTransactionalEmailsTest extends TestCase
         $this->assertStringContainsString((string) $orderItem->quantity, $html, 'El correo incluye la cantidad del item');
     }
 
+    public function test_correo_de_pedido_creado_es_acuse_e_incluye_medio_de_pago_envio_total_y_plazo(): void
+    {
+        $order = $this->order([
+            'status' => 'pendiente_de_pago',
+            'payment_method' => CheckoutService::PAYMENT_METHOD,
+            'shipping_cost' => 15000,
+            'total' => 1305000,
+        ]);
+
+        $html = (new OrderStatusMail($order, OrderStatusMail::EVENT_CREATED))->render();
+
+        $this->assertStringContainsString('acuse de recibo', $html, 'El correo creado es el acuse de recibo del pedido');
+        $this->assertStringContainsString('Contraentrega', $html, 'El correo identifica el medio de pago');
+        $this->assertStringContainsString('15.000', $html, 'El correo muestra el costo de envío');
+        $this->assertStringContainsString('1.305.000', $html, 'El correo muestra el total exacto');
+        $this->assertStringContainsString('1.290.000', $html, 'El correo muestra el subtotal de los productos');
+        $this->assertStringContainsString('30 días calendario', $html, 'El correo informa el plazo máximo de entrega');
+        $this->assertStringContainsString($order->created_at->format('d/m/Y'), $html, 'El correo informa la fecha del pedido');
+    }
+
+    public function test_correo_identifica_wompi_como_medio_de_pago(): void
+    {
+        $order = $this->order(['payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD]);
+
+        $html = (new OrderStatusMail($order, OrderStatusMail::EVENT_CREATED))->render();
+
+        $this->assertStringContainsString('Wompi', $html);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | TRIANGULATE: fallo del proveedor de correo
@@ -733,7 +773,7 @@ class OrderTransactionalEmailsTest extends TestCase
         $product = $this->product();
         app(CartService::class)->addToSession($product->id, 1);
 
-        Livewire::test(CheckoutForm::class)
+        $this->checkout()
             ->set($this->shipping())
             ->call('confirm')
             ->assertHasNoErrors();

@@ -969,6 +969,9 @@
                         <li>
                             <a data-footer-link="legal-contact" href="{{ route('legal.contact') }}" class="text-gray-300 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#00052c]">Contacto</a>
                         </li>
+                        <li>
+                            <a data-footer-link="sic" href="{{ config('legal.sic.url', 'https://www.sic.gov.co') }}" target="_blank" rel="noopener" class="text-gray-300 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#00052c]">Superintendencia de Industria y Comercio</a>
+                        </li>
                     </ul>
                 </nav>
             </div>

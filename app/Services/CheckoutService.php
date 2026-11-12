@@ -39,7 +39,7 @@ class CheckoutService
     /** Intentos máximos para encontrar un sufijo libre antes de abortar. */
     private const CODE_MAX_ATTEMPTS = 10;
 
-    public function __construct(private CartService $cart) {}
+    public function __construct(private CartService $cart, private ConsentService $consents) {}
 
     /**
      * Confirma el pedido del invitado (sesión) o del cliente autenticado (BD).
@@ -47,11 +47,12 @@ class CheckoutService
      * @param  array{nombre: string, email: string, telefono: string, direccion: string, ciudad: string}  $shipping
      *
      * @throws \RuntimeException si el carrito está vacío, un producto ya no está
-     *                           disponible o no hay stock suficiente
+     *                           disponible, no hay stock suficiente o faltó la
+     *                           aceptación de los documentos legales
      */
-    public function confirm(array $shipping, ?User $user = null): Order
+    public function confirm(array $shipping, ?User $user = null, bool $acceptTerms = false, bool $acceptPrivacy = false): Order
     {
-        return $this->createOrder($shipping, $user, self::PAYMENT_METHOD);
+        return $this->createOrder($shipping, $user, self::PAYMENT_METHOD, $acceptTerms, $acceptPrivacy);
     }
 
     /**
@@ -64,28 +65,42 @@ class CheckoutService
      * @param  array{nombre: string, email: string, telefono: string, direccion: string, ciudad: string}  $shipping
      *
      * @throws \RuntimeException si el carrito está vacío, un producto ya no está
-     *                           disponible o no hay stock suficiente
+     *                           disponible, no hay stock suficiente o faltó la
+     *                           aceptación de los documentos legales
      */
-    public function confirmWompi(array $shipping, ?User $user = null): Order
+    public function confirmWompi(array $shipping, ?User $user = null, bool $acceptTerms = false, bool $acceptPrivacy = false): Order
     {
-        return $this->createOrder($shipping, $user, self::WOMPI_PAYMENT_METHOD);
+        return $this->createOrder($shipping, $user, self::WOMPI_PAYMENT_METHOD, $acceptTerms, $acceptPrivacy);
     }
 
     /**
      * Crea el pedido de forma atómica para el método de pago indicado.
      *
+     * El consentimiento se exige antes de crear el pedido: sin las dos
+     * aceptaciones no hay pedido, no se descuenta stock y no se guarda evidencia.
+     *
      * @param  array{nombre: string, email: string, telefono: string, direccion: string, ciudad: string}  $shipping
      *
      * @throws \RuntimeException si el carrito está vacío, un producto ya no está
-     *                           disponible o no hay stock suficiente
+     *                           disponible, no hay stock suficiente o faltó la
+     *                           aceptación de los documentos legales
      */
-    private function createOrder(array $shipping, ?User $user, string $paymentMethod): Order
-    {
-        return DB::transaction(function () use ($shipping, $user, $paymentMethod): Order {
+    private function createOrder(
+        array $shipping,
+        ?User $user,
+        string $paymentMethod,
+        bool $acceptTerms,
+        bool $acceptPrivacy,
+    ): Order {
+        return DB::transaction(function () use ($shipping, $user, $paymentMethod, $acceptTerms, $acceptPrivacy): Order {
             $entries = $this->cartEntries($user);
 
             if ($entries === []) {
                 throw new \RuntimeException('Tu carrito está vacío.');
+            }
+
+            if (! $acceptTerms || ! $acceptPrivacy) {
+                throw new \RuntimeException('Debes aceptar los términos y condiciones y la política de privacidad.');
             }
 
             $lines = [];
@@ -110,12 +125,14 @@ class CheckoutService
                 $total += $price * $quantity;
             }
 
+            $shippingCost = max(0, (int) config('legal.shipping.cost', 0));
+
             $order = Order::create([
                 'code' => $this->generateCode(),
                 'user_id' => $user?->id,
                 'status' => self::STATUS,
-                'total' => $total,
-                'shipping_cost' => 0,
+                'total' => $total + $shippingCost,
+                'shipping_cost' => $shippingCost,
                 'payment_method' => $paymentMethod,
                 'shipping_address' => $this->normalizeShipping($shipping),
             ]);
@@ -132,6 +149,15 @@ class CheckoutService
 
             // El carrito se limpia solo después de confirmar todo el pedido.
             $this->clearCart($user);
+
+            // La evidencia de consentimiento se guarda dentro de la misma
+            // transacción: si algo falla, no queda pedido ni evidencia parcial.
+            $this->consents->recordPair(
+                ConsentService::SOURCE_CHECKOUT,
+                $user,
+                $order,
+                (string) ($shipping['email'] ?? ''),
+            );
 
             return $order;
         });
