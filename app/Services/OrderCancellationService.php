@@ -4,47 +4,38 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Product;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\Response;
+use App\Support\RefundStatus;
+use App\Support\WompiRefundResult;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 /**
  * Parte 4 — cancelaciones y reembolsos.
  *
- * Unifica las salidas anómalas de un pedido en una sola operación atómica, con
- * `DB::transaction` + `lockForUpdate` sobre el pedido y cada producto, para que
- * dos peticiones concurrentes no cancelen ni reembolsen dos veces:
+ * Las cancelaciones (sin pago o contraentrega) siguen siendo una operación
+ * atómica con `DB::transaction` + `lockForUpdate`: dos peticiones concurrentes
+ * no cancelan ni restauran stock dos veces.
  *
- *   - `pendiente_de_pago` → `cancelado` y restaura el stock una sola vez
- *     (sin pago, con o sin Wompi).
- *   - `pagado` con contraentrega → `cancelado` y restaura el stock una sola vez.
- *   - `pagado` con Wompi → NO se marca `cancelado`: se pide el reembolso a
- *     Wompi (`POST /v1/refunds` con Bearer WOMPI_PRIVATE_KEY) y solo si Wompi
- *     responde APPROVED se guarda `wompi_refund_id`, se marca `reembolsado` y se
- *     restaura el stock una vez. DECLINED/ERROR/CANCELLED, un HTTP no exitoso o
- *     un fallo de red dejan el pedido `pagado`, sin tocar el stock y con un
- *     error accionable.
- *   - `en_preparacion`, `enviado`, `entregado`, `reembolsado` y `cancelado` no
- *     se pueden cancelar.
+ * El reembolso de un pago Wompi es asíncrono y en tres pasos, porque la
+ * llamada HTTP nunca debe vivir dentro de una transacción de base de datos:
+ *
+ *   1. Preparación (transacción corta): valida el pedido, genera una
+ *      idempotency key nueva y deja `refund_status = pending`,
+ *      `refund_requested_at` y la key guardada. Dos peticiones concurrentes no
+ *      pueden preparar el mismo pedido dos veces.
+ *   2. Llamada a Wompi (`POST /v1/refunds`) fuera de toda transacción.
+ *   3. Aplicación (transacción corta): APPROVED marca `reembolsado`, guarda el
+ *      id y restaura el stock una sola vez; PENDING deja el pedido `pagado` con
+ *      el reembolso en curso; DECLINED/ERROR/CANCELLED deja el pedido `pagado`,
+ *      guarda el motivo en `refund_error` y permite reintentar con una key
+ *      nueva; un timeout o 5xx es ambiguo y lo resuelve la conciliación con la
+ *      misma key.
  *
  * La llave privada solo viaja en la cabecera Authorization de la petición a
  * Wompi: nunca se registra ni se devuelve en mensajes de error.
  */
 class OrderCancellationService
 {
-    /** Ruta del contrato oficial de Wompi Refunds V2. */
-    public const REFUND_PATH = '/refunds';
-
-    /** Tiempo máximo de espera de la respuesta de Wompi, en segundos. */
-    public const REFUND_TIMEOUT_SECONDS = 15;
-
-    /** Resultado de Wompi que aprueba el reembolso. */
-    public const REFUND_STATUS_APPROVED = 'APPROVED';
-
-    /** Razón por defecto cuando el panel no envía una. */
-    private const DEFAULT_REASON = 'Reembolso solicitado desde el panel administrativo';
-
     private const ORDER_PENDING = 'pendiente_de_pago';
 
     private const ORDER_PAID = 'pagado';
@@ -52,6 +43,8 @@ class OrderCancellationService
     private const ORDER_CANCELLED = 'cancelado';
 
     private const ORDER_REFUNDED = 'reembolsado';
+
+    public function __construct(private WompiService $wompi) {}
 
     /**
      * ¿El panel ofrece el botón de cancelar para este pedido?
@@ -74,24 +67,38 @@ class OrderCancellationService
     /**
      * ¿El panel ofrece el botón de reembolsar para este pedido?
      *
-     * Solo un pedido pagado con Wompi, con transacción registrada y sin
-     * reembolso previo.
+     * Solo un pedido pagado con Wompi, con transacción registrada y sin un
+     * reembolso en curso o aprobado. Un estado final fallido permite reintentar.
      */
     public function canRefund(Order $order): bool
     {
         return (string) $order->status === self::ORDER_PAID
             && $this->isWompi($order)
             && $this->hasTransactionId($order)
-            && ! $this->hasRefundId($order);
+            && ! $this->hasRefundId($order)
+            && RefundStatus::canStart($order->refund_status, false);
     }
 
     /**
-     * Cancela un pedido: sin pago se marca cancelado; un pago Wompi se reembolsa.
+     * Cancela un pedido: sin pago o contraentrega se marca cancelado; un pago
+     * Wompi se reembolsa con el flujo asíncrono.
      *
-     * @throws \RuntimeException si el estado no admite cancelación o el reembolso falla
+     * @throws \RuntimeException si el estado no admite cancelación
      */
     public function cancel(Order $order): Order
     {
+        $snapshot = Order::find($order->getKey());
+
+        if (! $snapshot) {
+            throw new \RuntimeException('El pedido no existe.');
+        }
+
+        // Un pago en línea pagado no se cancela: se reembolsa fuera de la
+        // transacción de cancelación.
+        if ((string) $snapshot->status === self::ORDER_PAID && $this->isWompi($snapshot)) {
+            return $this->refund($snapshot);
+        }
+
         return DB::transaction(function () use ($order): Order {
             $locked = $this->lock($order);
             $status = (string) $locked->status;
@@ -102,8 +109,11 @@ class OrderCancellationService
 
             if ($status === self::ORDER_PAID) {
                 if ($this->isWompi($locked)) {
-                    // Un pago en línea no se cancela directamente: se reembolsa.
-                    return $this->refundLocked($locked);
+                    // Cambió a pago Wompi entre la lectura y el lock: no se
+                    // cancela aquí, se reembolsa con una nueva petición.
+                    throw new \RuntimeException(
+                        'Este pago en línea se resuelve con un reembolso. Recarga la página e inténtalo de nuevo.'
+                    );
                 }
 
                 return $this->markCancelled($locked);
@@ -114,28 +124,213 @@ class OrderCancellationService
     }
 
     /**
-     * Reembolsa un pedido Wompi pagado contra el contrato oficial V2.
+     * Solicita un reembolso total a Wompi sin bloquear una transacción durante
+     * la llamada HTTP.
      *
-     * @throws \RuntimeException si el pedido no es un pago Wompi pagado, ya fue
-     *                           reembolsado, no tiene transaction id o Wompi no
-     *                           aprueba el reembolso
+     * @throws \RuntimeException si el pedido no es un pago Wompi pagado, ya tiene
+     *                           un reembolso en curso o aprobado, o no tiene
+     *                           transaction id
      */
     public function refund(Order $order, ?string $reason = null): Order
     {
-        return DB::transaction(function () use ($order, $reason): Order {
-            $locked = $this->lock($order);
+        [$prepared, $idempotencyKey] = $this->prepareRefund($order);
 
-            if ((string) $locked->status === self::ORDER_REFUNDED || $this->hasRefundId($locked)) {
+        // Fuera de toda transacción: la llamada HTTP puede tardar o fallar sin
+        // retener locks de la base de datos.
+        $result = $this->wompi->requestRefund($prepared, $idempotencyKey, $reason);
+
+        return $this->applyRefundOutcome($prepared, $result);
+    }
+
+    /**
+     * Reconcilia un reembolso que quedó `pending` (timeout, 5xx o webhook
+     * perdido): consulta por id si lo conoce o reintenta con la misma
+     * idempotency key, y aplica el estado final.
+     *
+     * Devuelve null cuando el pedido ya no está en un estado reconciliable.
+     */
+    public function reconcileRefund(Order $order): ?Order
+    {
+        $snapshot = Order::find($order->getKey());
+
+        if (! $snapshot
+            || (string) $snapshot->status !== self::ORDER_PAID
+            || ! RefundStatus::isPending($snapshot->refund_status)
+            || ! $this->hasTransactionId($snapshot)) {
+            return null;
+        }
+
+        $idempotencyKey = (string) ($snapshot->refund_idempotency_key ?: Str::uuid());
+
+        if ($this->hasRefundId($snapshot)) {
+            $result = $this->wompi->fetchRefund((string) $snapshot->wompi_refund_id);
+
+            if (! $result->accepted) {
+                // El id pudo no ser consultable; la transacción sigue siendo la
+                // fuente autoritativa del estado.
+                $result = $this->wompi->refundFromTransaction((string) $snapshot->wompi_transaction_id) ?? $result;
+            }
+        } else {
+            $result = $this->wompi->requestRefund($snapshot, $idempotencyKey);
+        }
+
+        return $this->applyRefundOutcome($snapshot, $result);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reembolso asíncrono
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Transacción corta previa a la llamada HTTP: valida y deja el reembolso en
+     * `pending` con una idempotency key única por intento.
+     *
+     * @return array{0: Order, 1: string}
+     *
+     * @throws \RuntimeException si el pedido no cumple las precondiciones
+     */
+    private function prepareRefund(Order $order): array
+    {
+        return DB::transaction(function () use ($order): array {
+            $locked = $this->lock($order);
+            $status = (string) $locked->status;
+
+            if ($status !== self::ORDER_PAID) {
+                throw new \RuntimeException(
+                    'Solo se puede reembolsar un pedido pagado. Estado actual: «'.$status.'».'
+                );
+            }
+
+            if (! $this->isWompi($locked)) {
+                throw new \RuntimeException('Solo los pedidos pagados con Wompi se pueden reembolsar.');
+            }
+
+            if (! $this->hasTransactionId($locked)) {
+                throw new \RuntimeException(
+                    'El pedido no tiene un identificador de transacción de Wompi; no se puede reembolsar. Confirma el pago antes de reintentar.'
+                );
+            }
+
+            if ($this->hasRefundId($locked) || RefundStatus::isApproved($locked->refund_status)) {
                 throw new \RuntimeException('Este pedido ya fue reembolsado.');
             }
 
-            return $this->refundLocked($locked, $reason);
+            if (RefundStatus::isPending($locked->refund_status)) {
+                throw new \RuntimeException('Ya hay un reembolso en curso para este pedido. Espera la confirmación de Wompi.');
+            }
+
+            if (! RefundStatus::canStart($locked->refund_status, false)) {
+                throw new \RuntimeException('Este pedido no admite un reembolso nuevo en este momento.');
+            }
+
+            // Una key por intento: un reintento tras un fallo final usa una
+            // nueva; la conciliación reutiliza la guardada.
+            $idempotencyKey = (string) Str::uuid();
+
+            $locked->refund_status = RefundStatus::PENDING;
+            $locked->refund_requested_at = now();
+            $locked->refund_idempotency_key = $idempotencyKey;
+            $locked->refund_error = null;
+            $locked->save();
+
+            return [$locked, $idempotencyKey];
+        });
+    }
+
+    /**
+     * Aplica el resultado de Wompi al pedido en una transacción corta.
+     *
+     * Nunca lanza por un rechazo de Wompi: el resultado queda registrado en
+     * `refund_status`/`refund_error` para que el panel lo muestre y permita
+     * reintentar. Solo un APPROVED mueve el pedido y restaura stock.
+     */
+    private function applyRefundOutcome(Order $order, WompiRefundResult $result): Order
+    {
+        if ($result->accepted && $result->isApproved()) {
+            $outcome = $this->wompi->applyRefundStatus($order, WompiService::REFUND_STATUS_APPROVED, $result->id);
+
+            if ($outcome === 'refunded') {
+                // La transición efectiva es única: un webhook duplicado o una
+                // conciliación posterior devuelve 'ignored' y no reenvía correo.
+                app(OrderNotificationService::class)->notifyRefundApproved($order->refresh());
+            }
+
+            return $order->refresh();
+        }
+
+        if ($result->accepted && $result->isFinalFailure()) {
+            return $this->recordRefundFailure($order, (string) $result->status, $result->errorMessage);
+        }
+
+        if (! $result->accepted && $result->errorCode === 'NOT_CONFIGURED') {
+            return $this->recordRefundFailure($order, RefundStatus::ERROR, 'Wompi no está configurado para reembolsos en este momento.');
+        }
+
+        if (! $result->accepted && ! $result->networkError && $result->httpStatus >= 400 && $result->httpStatus < 500) {
+            return $this->recordRefundFailure(
+                $order,
+                RefundStatus::ERROR,
+                $result->errorMessage ?? 'Wompi rechazó la solicitud de reembolso.'
+            );
+        }
+
+        // PENDING, respuesta aceptada sin estado, timeout, 5xx o configuración
+        // transitoria: el reembolso queda en curso y la conciliación lo
+        // resuelve con la misma idempotency key.
+        return $this->recordPendingRefund($order, $result);
+    }
+
+    /**
+     * Guarda el estado `pending` y el id del reembolso si Wompi lo entregó.
+     * No toca el estado del pedido ni el stock.
+     */
+    private function recordPendingRefund(Order $order, WompiRefundResult $result): Order
+    {
+        return DB::transaction(function () use ($order, $result): Order {
+            $locked = $this->lock($order);
+
+            if ((string) $locked->status !== self::ORDER_PAID) {
+                return $locked;
+            }
+
+            if ($result->id !== null && ! $this->hasRefundId($locked)) {
+                $locked->wompi_refund_id = $result->id;
+            }
+
+            $locked->refund_status = RefundStatus::PENDING;
+            $locked->refund_requested_at ??= now();
+            $locked->save();
+
+            return $locked;
+        });
+    }
+
+    /**
+     * Registra un fallo definitivo del reembolso: el pedido sigue pagado y el
+     * motivo queda visible en el panel. Permite reintentar con una key nueva.
+     */
+    private function recordRefundFailure(Order $order, string $status, ?string $message): Order
+    {
+        return DB::transaction(function () use ($order, $status, $message): Order {
+            $locked = $this->lock($order);
+
+            if ((string) $locked->status !== self::ORDER_PAID) {
+                return $locked;
+            }
+
+            $locked->refund_status = strtolower($status);
+            $locked->refund_error = $message ?? 'Wompi no aprobó el reembolso ('.$status.').';
+            $locked->save();
+
+            return $locked;
         });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Operaciones bajo lock
+    | Cancelación
     |--------------------------------------------------------------------------
     */
 
@@ -150,126 +345,6 @@ class OrderCancellationService
         $this->restoreStock($locked);
 
         return $locked;
-    }
-
-    /**
-     * Solicita el reembolso a Wompi y, solo si Wompi lo aprueba, guarda el id,
-     * marca `reembolsado` y restaura el stock una sola vez.
-     *
-     * @throws \RuntimeException si el pedido no cumple las precondiciones, si
-     *                           falta la llave privada, si la red falla o si
-     *                           Wompi no aprueba el reembolso
-     */
-    private function refundLocked(Order $locked, ?string $reason = null): Order
-    {
-        if ((string) $locked->status !== self::ORDER_PAID) {
-            throw new \RuntimeException(
-                'Solo se puede reembolsar un pedido pagado. Estado actual: «'.$locked->status.'».'
-            );
-        }
-
-        if (! $this->isWompi($locked)) {
-            throw new \RuntimeException('Solo los pedidos pagados con Wompi se pueden reembolsar.');
-        }
-
-        if ($this->hasRefundId($locked)) {
-            throw new \RuntimeException('Este pedido ya tiene un reembolso registrado.');
-        }
-
-        if (! $this->hasTransactionId($locked)) {
-            throw new \RuntimeException(
-                'El pedido no tiene un identificador de transacción de Wompi; no se puede reembolsar. Confirma el pago antes de reintentar.'
-            );
-        }
-
-        $response = $this->requestRefund($locked, (string) $locked->wompi_transaction_id, $reason);
-        $refundStatus = $this->refundStatus($response);
-
-        if (! $response->successful() || $refundStatus !== self::REFUND_STATUS_APPROVED) {
-            throw new \RuntimeException($this->refundFailedMessage($refundStatus));
-        }
-
-        $refundId = $response->json('data.id') ?? $response->json('data.v2_refund_id');
-
-        if (is_string($refundId) && $refundId !== '') {
-            $locked->wompi_refund_id = $refundId;
-        }
-
-        $locked->status = self::ORDER_REFUNDED;
-        $locked->save();
-
-        $this->restoreStock($locked);
-
-        return $locked;
-    }
-
-    /**
-     * Llama a `POST {api_url}/refunds` con Bearer WOMPI_PRIVATE_KEY y el monto
-     * del pedido en centavos.
-     *
-     * @throws \RuntimeException si Wompi no está configurado o la red falla
-     */
-    private function requestRefund(Order $order, string $transactionId, ?string $reason): Response
-    {
-        $privateKey = (string) (config('services.wompi.private_key') ?? '');
-
-        if ($privateKey === '') {
-            throw new \RuntimeException('Wompi no está configurado para reembolsos en este momento.');
-        }
-
-        $url = rtrim((string) config('services.wompi.api_url'), '/').self::REFUND_PATH;
-        $reason = is_string($reason) && trim($reason) !== '' ? trim($reason) : self::DEFAULT_REASON;
-
-        $payload = [
-            'transaction_id' => $transactionId,
-            'amount_in_cents' => ((int) $order->total) * WompiService::CENTS_FACTOR,
-            'reason' => $reason,
-            'reference' => (string) $order->code,
-        ];
-
-        $testScenario = $this->refundTestScenario();
-
-        if ($testScenario !== null) {
-            $payload['test_scenario'] = $testScenario;
-        }
-
-        try {
-            return Http::withToken($privateKey)
-                ->timeout(self::REFUND_TIMEOUT_SECONDS)
-                ->acceptJson()
-                ->post($url, $payload);
-        } catch (ConnectionException) {
-            // Mensaje genérico: ni la URL ni la llave se filtran al usuario.
-            throw new \RuntimeException(
-                'No se pudo contactar a Wompi para el reembolso. El pedido sigue pagado; verifica la conexión e intenta de nuevo.'
-            );
-        }
-    }
-
-    /**
-     * Escenario de prueba opcional para el sandbox de Wompi.
-     *
-     * Devuelve el valor configurado en `WOMPI_REFUND_TEST_SCENARIO` solo cuando
-     * la api_url apunta al sandbox; en producción devuelve null aunque la
-     * variable exista, para no alterar nunca un reembolso real.
-     */
-    private function refundTestScenario(): ?string
-    {
-        $apiUrl = strtolower((string) config('services.wompi.api_url'));
-
-        if (! str_contains($apiUrl, 'sandbox')) {
-            return null;
-        }
-
-        $scenario = config('services.wompi.refund_test_scenario');
-
-        if (! is_string($scenario)) {
-            return null;
-        }
-
-        $scenario = trim($scenario);
-
-        return $scenario === '' ? null : $scenario;
     }
 
     /**
@@ -319,27 +394,12 @@ class OrderCancellationService
         return is_string($order->wompi_refund_id) && $order->wompi_refund_id !== '';
     }
 
-    private function refundStatus(Response $response): ?string
-    {
-        $status = $response->json('data.status');
-
-        return is_string($status) && $status !== '' ? strtoupper($status) : null;
-    }
-
     private function notCancellableMessage(string $status): string
     {
         return match ($status) {
             self::ORDER_CANCELLED => 'El pedido ya está cancelado.',
             self::ORDER_REFUNDED => 'El pedido ya fue reembolsado.',
             default => 'No se puede cancelar un pedido en estado «'.$status.'». Solo se cancela un pedido pendiente de pago o pagado con contraentrega.',
-        };
-    }
-
-    private function refundFailedMessage(?string $status): string
-    {
-        return match ($status) {
-            'DECLINED', 'ERROR', 'CANCELLED', 'CANCELED' => 'Wompi no aprobó el reembolso ('.$status.'). El pedido sigue pagado; intenta de nuevo o revísalo en Wompi.',
-            default => 'Wompi no confirmó el reembolso. El pedido sigue pagado; intenta de nuevo en unos minutos.',
         };
     }
 }

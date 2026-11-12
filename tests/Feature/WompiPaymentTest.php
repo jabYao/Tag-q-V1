@@ -869,14 +869,18 @@ class WompiPaymentTest extends TestCase
         $this->assertSame(3, $product->fresh()->stock);
     }
 
-    public function test_webhook_refund_updated_con_transaccion_desconocida_responde_404_sin_mutar(): void
+    public function test_webhook_refund_updated_con_transaccion_desconocida_responde_200_sin_mutar(): void
     {
         $product = $this->product(['precio' => 1000000, 'stock' => 5]);
         $order = $this->paidWompiOrder($product, 2, 'txn_refund_otro');
 
         $refund = $this->refundFor($order, 'APPROVED', ['transaction_id' => 'txn_que_no_existe']);
 
-        $this->postJson(route('webhooks.wompi'), $this->refundEventPayload($refund))->assertStatus(404);
+        // 200: no hay pedido que reconciliar y un 404 haría que Wompi
+        // reintentara el mismo evento indefinidamente.
+        $this->postJson(route('webhooks.wompi'), $this->refundEventPayload($refund))
+            ->assertOk()
+            ->assertJson(['result' => 'not_found']);
 
         $order->refresh();
         $this->assertSame('pagado', $order->status, 'El pedido de otra transacción no se toca');
@@ -884,7 +888,7 @@ class WompiPaymentTest extends TestCase
         $this->assertSame(3, $product->fresh()->stock);
     }
 
-    public function test_webhook_refund_updated_aprobado_sin_id_responde_422_sin_mutar(): void
+    public function test_webhook_refund_updated_aprobado_sin_id_marca_reembolsado(): void
     {
         $product = $this->product(['precio' => 1000000, 'stock' => 5]);
         $order = $this->paidWompiOrder($product, 2, 'txn_refund_sin_id');
@@ -892,14 +896,16 @@ class WompiPaymentTest extends TestCase
         $refund = $this->refundFor($order, 'APPROVED');
         unset($refund['id']);
 
-        // Un APPROVED sin id no se puede registrar de forma fiable: se rechaza
-        // sin mutar para que Wompi reintente en lugar de perder el reembolso.
-        $this->postJson(route('webhooks.wompi'), $this->refundEventPayload($refund))->assertStatus(422);
+        // La conciliación por transacción no conoce el id del reembolso: el
+        // estado APPROVED es suficiente para marcar el pedido como reembolsado.
+        $this->postJson(route('webhooks.wompi'), $this->refundEventPayload($refund))
+            ->assertOk()
+            ->assertJson(['result' => 'refunded']);
 
         $order->refresh();
-        $this->assertSame('pagado', $order->status);
+        $this->assertSame('reembolsado', $order->status);
         $this->assertNull($order->wompi_refund_id);
-        $this->assertSame(3, $product->fresh()->stock);
+        $this->assertSame(5, $product->fresh()->stock);
     }
 
     public function test_webhook_refund_updated_rechazado_deja_el_pedido_pagado_y_el_stock_intacto(): void
@@ -910,13 +916,15 @@ class WompiPaymentTest extends TestCase
 
             $payload = $this->refundEventPayload($this->refundFor($order, $status));
 
-            // 200 para que Wompi no reintente un rechazo que ya se ignoró.
+            // 200 para que Wompi no reintente un rechazo que ya se registró.
             $this->postJson(route('webhooks.wompi'), $payload)
                 ->assertOk()
-                ->assertJson(['status' => $status, 'result' => 'ignored']);
+                ->assertJson(['status' => $status, 'result' => 'failed']);
 
             $order->refresh();
             $this->assertSame('pagado', $order->status, "El estado {$status} deja el pedido pagado");
+            $this->assertSame(strtolower($status), $order->refund_status, "El estado {$status} queda registrado");
+            $this->assertNotNull($order->refund_error, "El estado {$status} guarda un motivo visible");
             $this->assertNull($order->wompi_refund_id, "El estado {$status} no guarda id de reembolso");
             $this->assertSame(3, $product->fresh()->stock, "El estado {$status} no restaura stock");
         }

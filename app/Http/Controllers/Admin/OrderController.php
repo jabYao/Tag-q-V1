@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Services\OrderCancellationService;
 use App\Services\OrderNotificationService;
 use App\Services\OrderStatusService;
+use App\Support\RefundStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -89,9 +90,14 @@ class OrderController extends Controller
             'order' => $order,
             'statuses' => OrderStatusService::STATUSES,
             'statusLabels' => OrderStatusService::LABELS,
-            'availableTransitions' => $this->statuses->availableTransitions((string) $order->status),
+            // Un reembolso en curso congela el avance operativo en el panel.
+            'availableTransitions' => RefundStatus::isPending($order->refund_status)
+                ? []
+                : $this->statuses->availableTransitions((string) $order->status),
             'canCancel' => $this->cancellations->canCancel($order),
-            'canRefund' => $this->cancellations->canRefund($order),
+            // Reembolsar es exclusivo del admin: el empleado no ve el botón.
+            'canRefund' => $this->cancellations->canRefund($order) && (bool) auth()->user()?->isAdmin(),
+            'refundStatusLabel' => RefundStatus::label($order->refund_status),
         ]);
     }
 
@@ -131,24 +137,33 @@ class OrderController extends Controller
                 ->withErrors(['order' => $e->getMessage()]);
         }
 
-        // Un pago Wompi se resuelve con reembolso, no como cancelación.
-        $notifications = app(OrderNotificationService::class);
-
+        // Un pago Wompi se resuelve con reembolso asíncrono, no como
+        // cancelación: el correo de reembolso lo envía el servicio solo cuando
+        // Wompi confirma APPROVED.
         if ((string) $updated->status === 'reembolsado') {
-            $notifications->notifyRefundApproved($updated);
-        } else {
-            $notifications->notifyCancelled($updated);
+            return redirect()
+                ->route('admin.orders.show', $order)
+                ->with('success', 'Reembolso aprobado por Wompi. El pedido quedó reembolsado.');
         }
+
+        if (RefundStatus::isPending($updated->refund_status)) {
+            return redirect()
+                ->route('admin.orders.show', $order)
+                ->with('success', 'Solicitud de reembolso enviada a Wompi. El pedido sigue pagado mientras Wompi confirma.');
+        }
+
+        app(OrderNotificationService::class)->notifyCancelled($updated);
 
         return redirect()
             ->route('admin.orders.show', $order)
-            ->with('success', (string) $updated->status === 'reembolsado'
-                ? 'Reembolso aprobado por Wompi. El pedido quedó reembolsado.'
-                : 'Pedido cancelado y stock restaurado.');
+            ->with('success', 'Pedido cancelado y stock restaurado.');
     }
 
     /**
      * Reembolsa un pedido Wompi pagado a través del contrato oficial de Wompi.
+     *
+     * La llamada a Wompi es asíncrona: un PENDING deja el pedido pagado con el
+     * reembolso en curso y un fallo definitivo se informa sin romper la vista.
      */
     public function refund(Request $request, Order $order): RedirectResponse
     {
@@ -164,11 +179,21 @@ class OrderController extends Controller
                 ->withErrors(['order' => $e->getMessage()]);
         }
 
-        app(OrderNotificationService::class)->notifyRefundApproved($updated);
+        if ((string) $updated->status === 'reembolsado') {
+            return redirect()
+                ->route('admin.orders.show', $order)
+                ->with('success', 'Reembolso aprobado por Wompi. El pedido quedó reembolsado.');
+        }
+
+        if (RefundStatus::isPending($updated->refund_status)) {
+            return redirect()
+                ->route('admin.orders.show', $order)
+                ->with('success', 'Solicitud de reembolso enviada a Wompi. El pedido sigue pagado mientras Wompi confirma.');
+        }
 
         return redirect()
             ->route('admin.orders.show', $order)
-            ->with('success', 'Reembolso aprobado por Wompi. El pedido quedó reembolsado.');
+            ->withErrors(['order' => $updated->refund_error ?? 'Wompi no aprobó el reembolso.']);
     }
 
     /**

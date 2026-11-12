@@ -49,6 +49,10 @@ return [
         'events_secret' => env('WOMPI_EVENTS_SECRET'),
         'api_url' => env('WOMPI_API_URL', 'https://sandbox.wompi.co/v1'),
 
+        // Identidad del comercio para el contrato V2 de reembolsos.
+        'merchant_id' => env('WOMPI_MERCHANT_ID'),
+        'region' => env('WOMPI_REGION', 'CO'),
+
         // Escenario de prueba opcional que Wompi acepta en el sandbox para
         // forzar el resultado del reembolso. Solo se envía cuando la api_url
         // apunta al sandbox; en producción se ignora aunque la variable exista.

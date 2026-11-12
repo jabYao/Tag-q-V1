@@ -5,8 +5,13 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\Product;
 use App\Support\OrderLink;
+use App\Support\RefundStatus;
+use App\Support\WompiRefundResult;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 /**
  * Integración Wompi Sandbox con Web Checkout.
@@ -74,6 +79,17 @@ class WompiService
      * (DECLINED/ERROR/CANCELLED y cualquier valor desconocido) lo deja pagado.
      */
     public const REFUND_STATUS_APPROVED = 'APPROVED';
+
+    public const REFUND_STATUS_PENDING = 'PENDING';
+
+    public const REFUND_STATUS_DECLINED = 'DECLINED';
+
+    public const REFUND_STATUS_ERROR = 'ERROR';
+
+    public const REFUND_STATUS_CANCELLED = 'CANCELLED';
+
+    /** Tiempo máximo de espera de la API de reembolsos, en segundos. */
+    public const REFUND_TIMEOUT_SECONDS = 10;
 
     /** Estados de pedido usados en la transición del webhook. */
     private const ORDER_PENDING = 'pendiente_de_pago';
@@ -550,13 +566,25 @@ class WompiService
     }
 
     /**
-     * `data.refund.id` del evento, o null si falta.
+     * Id del reembolso del evento: acepta `data.refund.refund_id` (contrato V2)
+     * y `data.refund.id` (contrato observado en el sandbox).
      *
      * @param  array<string, mixed>  $payload
      */
     public function refundId(array $payload): ?string
     {
-        return $this->stringValue($payload['data']['refund']['id'] ?? null);
+        $refund = $payload['data']['refund'] ?? null;
+        $refund = is_array($refund) ? $refund : [];
+
+        foreach ([$refund['refund_id'] ?? null, $refund['id'] ?? null] as $candidate) {
+            $id = $this->stringValue($candidate);
+
+            if ($id !== null) {
+                return $id;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -599,55 +627,329 @@ class WompiService
     /**
      * Aplica el estado del reembolso al pedido de forma idempotente.
      *
-     * Solo APPROVED mueve el pedido: un pedido pagado pasa a `reembolsado`, se
-     * guarda `wompi_refund_id` y se restaura el stock una sola vez bajo
-     * `lockForUpdate`. No se llama a la API de Wompi: el reembolso ya ocurrió y
-     * el evento solo lo confirma.
+     * - APPROVED: un pedido pagado pasa a `reembolsado`, se guarda
+     *   `wompi_refund_id` (si viene), se marca `refund_status = approved` y se
+     *   restaura el stock una sola vez bajo `lockForUpdate`. No exige id porque
+     *   la conciliación por transacción no lo conoce.
+     * - PENDING: deja el pedido pagado, guarda el id si viene y mantiene
+     *   `refund_status = pending`.
+     * - DECLINED/ERROR/CANCELLED: deja el pedido pagado, registra
+     *   `refund_status` y un motivo en `refund_error`, y permite reintentar.
      *
-     * DECLINED/ERROR/CANCELLED y cualquier otro estado se ignoran sin mutar: el
-     * pedido sigue pagado y el stock intacto. Un evento duplicado o fuera de
-     * orden de un pedido ya reembolsado, cancelado o aún pendiente también se
-     * ignora, así que el stock nunca se restaura dos veces ni se sobrescribe el
+     * Un evento duplicado o fuera de orden de un pedido ya reembolsado,
+     * cancelado o aún pendiente no restaura stock dos veces ni sobrescribe el
      * id del primer reembolso.
      *
-     * @return string 'refunded' | 'ignored' | 'not_found'
+     * @return string 'refunded' | 'pending' | 'failed' | 'ignored' | 'not_found'
      */
     public function applyRefundStatus(Order $order, ?string $status, ?string $refundId = null): string
     {
-        $status = strtoupper((string) $status);
+        $status = strtoupper(trim((string) $status));
         $refundId = is_string($refundId) && $refundId !== '' ? $refundId : null;
 
-        if ($status !== self::REFUND_STATUS_APPROVED || $refundId === null) {
-            return 'ignored';
-        }
-
-        return DB::transaction(function () use ($order, $refundId): string {
+        return DB::transaction(function () use ($order, $status, $refundId): string {
             $locked = Order::whereKey($order->getKey())->lockForUpdate()->first();
 
             if (! $locked) {
                 return 'not_found';
             }
 
-            // Solo un pedido pagado se reembolsa: ya reembolsado, cancelado o
-            // aún pendiente no restaura stock.
-            if ($locked->status !== self::ORDER_PAID) {
-                return 'ignored';
+            if ($status === self::REFUND_STATUS_APPROVED) {
+                // Solo un pedido pagado se reembolsa: ya reembolsado, cancelado
+                // o aún pendiente de pago no restaura stock. Esta comprobación
+                // es la que hace idempotente un evento duplicado.
+                if ($locked->status !== self::ORDER_PAID) {
+                    return 'ignored';
+                }
+
+                // Un id guardado desde la respuesta PENDING no impide aprobar:
+                // el id que llega con APPROVED es el autoritativo.
+                if ($refundId !== null) {
+                    $locked->wompi_refund_id = $refundId;
+                }
+
+                $locked->status = self::ORDER_REFUNDED;
+                $locked->refund_status = RefundStatus::APPROVED;
+                $locked->refund_error = null;
+                $locked->save();
+
+                $this->restoreStock($locked);
+
+                return 'refunded';
             }
 
-            // Ya hay un reembolso registrado: un evento duplicado (mismo id) o
-            // uno distinto no lo sobrescribe ni vuelve a restaurar stock.
-            if (is_string($locked->wompi_refund_id) && $locked->wompi_refund_id !== '') {
-                return 'ignored';
+            if ($status === self::REFUND_STATUS_PENDING) {
+                if ($locked->status !== self::ORDER_PAID) {
+                    return 'ignored';
+                }
+
+                if ($refundId !== null && ! $this->hasWompiRefundId($locked)) {
+                    $locked->wompi_refund_id = $refundId;
+                }
+
+                if (! RefundStatus::isPending($locked->refund_status)) {
+                    $locked->refund_status = RefundStatus::PENDING;
+                    $locked->refund_requested_at ??= now();
+                }
+
+                $locked->save();
+
+                return 'pending';
             }
 
-            $locked->wompi_refund_id = $refundId;
-            $locked->status = self::ORDER_REFUNDED;
-            $locked->save();
+            if (in_array($status, [
+                self::REFUND_STATUS_DECLINED,
+                self::REFUND_STATUS_ERROR,
+                self::REFUND_STATUS_CANCELLED,
+            ], true)) {
+                if ($locked->status !== self::ORDER_PAID || RefundStatus::isApproved($locked->refund_status)) {
+                    return 'ignored';
+                }
 
-            $this->restoreStock($locked);
+                $locked->refund_status = strtolower($status);
+                $locked->refund_error = 'Wompi reportó el reembolso como '.$status.'.';
+                $locked->save();
 
-            return 'refunded';
+                return 'failed';
+            }
+
+            return 'ignored';
         });
+    }
+
+    /**
+     * Solicita un reembolso total a Wompi.
+     *
+     * Envía el contrato observado (legacy) y los campos V2 en el mismo payload:
+     * el sandbox ignora los V2 y responde 201 con `data.id`, mientras que la doc
+     * vigente describe 202 con `refund_id`. El parser acepta ambos.
+     *
+     * No lanza excepciones de negocio: el llamador decide qué hacer con el
+     * resultado. Un fallo de red devuelve un resultado ambiguo (no sabemos si
+     * Wompi alcanzó a crear el reembolso).
+     */
+    public function requestRefund(Order $order, string $idempotencyKey, ?string $reason = null): WompiRefundResult
+    {
+        if ($this->privateKey() === '') {
+            return WompiRefundResult::configurationFailure();
+        }
+
+        try {
+            $response = Http::withToken($this->privateKey())
+                ->timeout(self::REFUND_TIMEOUT_SECONDS)
+                ->acceptJson()
+                ->post($this->refundUrl(), $this->refundPayload($order, $idempotencyKey, $reason));
+        } catch (ConnectionException) {
+            return WompiRefundResult::networkFailure();
+        }
+
+        return $this->refundResult($response);
+    }
+
+    /** Consulta el estado actual de un reembolso por su id. */
+    public function fetchRefund(string $refundId): WompiRefundResult
+    {
+        if ($this->privateKey() === '') {
+            return WompiRefundResult::configurationFailure();
+        }
+
+        try {
+            $response = Http::withToken($this->privateKey())
+                ->timeout(self::REFUND_TIMEOUT_SECONDS)
+                ->acceptJson()
+                ->get($this->refundUrl().'/'.rawurlencode($refundId));
+        } catch (ConnectionException) {
+            return WompiRefundResult::networkFailure();
+        }
+
+        return $this->refundResult($response);
+    }
+
+    /**
+     * Último reembolso registrado en la transacción, o null si no hay.
+     *
+     * Wompi no incluye el id del reembolso en `data.refunds`, así que este
+     * resultado sirve para conciliar el estado, no para guardar el id.
+     */
+    public function refundFromTransaction(string $transactionId): ?WompiRefundResult
+    {
+        if ($this->privateKey() === '') {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($this->privateKey())
+                ->timeout(self::REFUND_TIMEOUT_SECONDS)
+                ->acceptJson()
+                ->get($this->apiUrl().'/transactions/'.rawurlencode($transactionId));
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $refunds = $response->json('data.refunds');
+
+        if (! is_array($refunds) || $refunds === []) {
+            return null;
+        }
+
+        $refund = end($refunds);
+
+        if (! is_array($refund)) {
+            return null;
+        }
+
+        return new WompiRefundResult(
+            accepted: true,
+            httpStatus: $response->status(),
+            id: null,
+            status: $this->normalizeRefundStatus($refund['status'] ?? null),
+            errorMessage: $this->stringValue($refund['status_message'] ?? null),
+        );
+    }
+
+    /**
+     * Payload híbrido: campos legacy que el sandbox entiende y campos V2 que la
+     * documentación vigente exige. `test_scenario` solo viaja al sandbox.
+     *
+     * @return array<string, mixed>
+     */
+    private function refundPayload(Order $order, string $idempotencyKey, ?string $reason): array
+    {
+        $amountInCents = ((int) $order->total) * self::CENTS_FACTOR;
+        $reason = is_string($reason) && trim($reason) !== ''
+            ? trim($reason)
+            : 'Reembolso solicitado desde el panel administrativo';
+
+        $payload = [
+            'transaction_id' => (string) $order->wompi_transaction_id,
+            'amount_in_cents' => $amountInCents,
+            'reason' => $reason,
+            'reference' => (string) $order->code,
+        ];
+
+        $merchantId = $this->stringValue(config('services.wompi.merchant_id'));
+
+        if ($merchantId !== null) {
+            // Las comisiones no vienen en el objeto de la transacción. El
+            // sandbox acepta cero y calcula el total con ese valor; si producción
+            // exige la comisión real, se ajusta aquí sin cambiar el flujo.
+            $feeInCents = 0;
+            $feeVatInCents = 0;
+
+            $payload += [
+                'idempotency_key' => $idempotencyKey,
+                'merchant_id' => $merchantId,
+                'region' => (string) (config('services.wompi.region') ?: 'CO'),
+                'currency' => self::CURRENCY,
+                'fee_in_cents' => $feeInCents,
+                'fee_vat_in_cents' => $feeVatInCents,
+                'total_freeze_amount' => $amountInCents + $feeInCents + $feeVatInCents,
+                'refund_type' => 'TOTAL',
+                'original_amount_in_cents' => $amountInCents,
+                'references' => [mb_substr((string) $order->code, 0, 40)],
+            ];
+        }
+
+        $scenario = $this->refundTestScenario();
+
+        if ($scenario !== null) {
+            $payload['test_scenario'] = $scenario;
+        }
+
+        return $payload;
+    }
+
+    /** Normaliza una respuesta de reembolso (legacy o V2) a un DTO. */
+    private function refundResult(Response $response): WompiRefundResult
+    {
+        $json = $response->json();
+        $json = is_array($json) ? $json : [];
+        [$errorCode, $errorMessage] = $this->refundError($json);
+
+        return new WompiRefundResult(
+            // Un 409 de idempotencia devuelve el reembolso ya existente.
+            accepted: $response->successful() || $response->status() === 409,
+            httpStatus: $response->status(),
+            id: $this->refundIdFromResponse($json),
+            status: $this->refundStatusFromResponse($json),
+            errorCode: $errorCode,
+            errorMessage: $errorMessage,
+        );
+    }
+
+    private function refundIdFromResponse(array $json): ?string
+    {
+        $data = is_array($json['data'] ?? null) ? $json['data'] : [];
+        $refund = is_array($data['refund'] ?? null) ? $data['refund'] : [];
+
+        foreach ([
+            $json['refund_id'] ?? null,
+            $data['refund_id'] ?? null,
+            $refund['refund_id'] ?? null,
+            $refund['id'] ?? null,
+            $data['id'] ?? null,
+        ] as $candidate) {
+            $id = $this->stringValue($candidate);
+
+            if ($id !== null) {
+                return $id;
+            }
+        }
+
+        return null;
+    }
+
+    private function refundStatusFromResponse(array $json): ?string
+    {
+        $data = is_array($json['data'] ?? null) ? $json['data'] : [];
+        $refund = is_array($data['refund'] ?? null) ? $data['refund'] : [];
+
+        foreach ([
+            $json['status'] ?? null,
+            $data['status'] ?? null,
+            $refund['status'] ?? null,
+        ] as $candidate) {
+            $status = $this->normalizeRefundStatus($candidate);
+
+            if ($status !== null) {
+                return $status;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function refundError(array $json): array
+    {
+        $error = is_array($json['error'] ?? null) ? $json['error'] : [];
+        $message = $this->stringValue($error['message'] ?? null);
+
+        if ($message === null && is_array($error['messages'] ?? null)) {
+            foreach ($error['messages'] as $value) {
+                $first = is_array($value) ? reset($value) : $value;
+                $message = $this->stringValue($first);
+
+                if ($message !== null) {
+                    break;
+                }
+            }
+        }
+
+        return [$this->stringValue($error['type'] ?? null), $message];
+    }
+
+    private function normalizeRefundStatus(mixed $value): ?string
+    {
+        $status = $this->stringValue($value);
+
+        return $status !== null ? strtoupper($status) : null;
     }
 
     /**
@@ -812,6 +1114,11 @@ class WompiService
         return null;
     }
 
+    private function hasWompiRefundId(Order $order): bool
+    {
+        return is_string($order->wompi_refund_id) && $order->wompi_refund_id !== '';
+    }
+
     /**
      * Normaliza un valor escalar del payload (string o entero) a string no
      * vacío, o null si falta o no es utilizable.
@@ -849,6 +1156,34 @@ class WompiService
         }
 
         return is_string($current) ? $current : '';
+    }
+
+    private function apiUrl(): string
+    {
+        return rtrim((string) (config('services.wompi.api_url') ?? 'https://sandbox.wompi.co/v1'), '/');
+    }
+
+    private function refundUrl(): string
+    {
+        return $this->apiUrl().'/refunds';
+    }
+
+    private function privateKey(): string
+    {
+        return (string) (config('services.wompi.private_key') ?? '');
+    }
+
+    /**
+     * Escenario de pruebas de Wompi (`test_scenario`). Solo viaja al sandbox:
+     * en producción se omite aunque la variable exista.
+     */
+    private function refundTestScenario(): ?string
+    {
+        if (! str_contains($this->apiUrl(), 'sandbox')) {
+            return null;
+        }
+
+        return $this->stringValue(config('services.wompi.refund_test_scenario'));
     }
 
     private function publicKey(): string

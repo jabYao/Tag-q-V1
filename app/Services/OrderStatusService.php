@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Support\RefundStatus;
 
 /**
  * Transiciones de estado del pedido para el panel administrativo.
@@ -105,6 +106,15 @@ class OrderStatusService
     public function transition(Order $order, string $to): void
     {
         $from = (string) $order->status;
+
+        // Un reembolso en curso bloquea el avance operativo: el pedido no debe
+        // prepararse ni enviarse mientras Wompi no confirme la devolución.
+        if (RefundStatus::isPending($order->refund_status)
+            && in_array($to, ['en_preparacion', 'enviado', 'entregado'], true)) {
+            throw new \RuntimeException(
+                'El pedido tiene un reembolso en curso; no se puede avanzar hasta que Wompi lo confirme.'
+            );
+        }
 
         if (! $this->canTransition($from, $to)) {
             throw new \RuntimeException(

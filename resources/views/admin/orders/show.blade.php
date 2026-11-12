@@ -214,6 +214,16 @@
                         <dt class="admin-kv__term">Reembolso Wompi</dt>
                         <dd class="admin-kv__desc">{{ $order->wompi_refund_id ?? '—' }}</dd>
                     </div>
+                    <div class="admin-kv__row">
+                        <dt class="admin-kv__term">Estado del reembolso</dt>
+                        <dd class="admin-kv__desc">{{ $refundStatusLabel }}</dd>
+                    </div>
+                    @if($order->refund_error)
+                        <div class="admin-kv__row">
+                            <dt class="admin-kv__term">Motivo del fallo</dt>
+                            <dd class="admin-kv__desc">{{ $order->refund_error }}</dd>
+                        </div>
+                    @endif
                 </dl>
             </section>
 

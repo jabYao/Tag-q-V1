@@ -124,6 +124,10 @@ Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin
     Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::patch('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.status');
     Route::patch('orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
+});
+
+// Reembolsos — solo admin: el empleado no puede devolver dinero (403).
+Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::post('orders/{order}/refund', [OrderController::class, 'refund'])->name('orders.refund');
 });
 

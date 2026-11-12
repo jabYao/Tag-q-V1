@@ -21,9 +21,10 @@ use Illuminate\Http\Request;
  * - `refund.updated`: resuelve el pedido por `data.refund.transaction_id` contra
  *   `orders.wompi_transaction_id` y exige que el monto del reembolso coincida
  *   exactamente con el pedido (el evento de reembolso no trae moneda, así que no
- *   se exige). Un reembolso APPROVED marca el pedido pagado como reembolsado,
- *   guarda `wompi_refund_id` y restaura el stock una sola vez; DECLINED/ERROR/
- *   CANCELLED y los duplicados se ignoran sin mutar nada.
+ *   se exige). Acepta `data.refund.refund_id` y `data.refund.id`, y aplica
+ *   PENDING, APPROVED, DECLINED, ERROR o CANCELLED de forma idempotente. Un
+ *   evento de un pedido desconocido devuelve 200 para no provocar reintentos
+ *   infinitos: no hay nada que reconciliar en este sistema.
  *
  * La ruta se excluye de CSRF porque la llama Wompi, no el navegador.
  *
@@ -121,7 +122,12 @@ class WompiWebhookController extends Controller
         $order = Order::where('wompi_transaction_id', $transactionId)->first();
 
         if (! $order) {
-            return response()->json(['error' => 'Pedido no encontrado.'], 404);
+            // 200: no hay pedido que reconciliar y un 404 haría que Wompi
+            // reintentara el mismo evento indefinidamente.
+            return response()->json([
+                'received' => true,
+                'result' => 'not_found',
+            ]);
         }
 
         // La firma solo prueba el origen del evento: el monto del reembolso debe
@@ -134,14 +140,6 @@ class WompiWebhookController extends Controller
 
         $status = $wompi->refundStatus($payload);
         $refundId = $wompi->refundId($payload);
-
-        // Un APPROVED sin id no se puede registrar de forma fiable: se rechaza
-        // sin mutar para que Wompi reintente en lugar de perder el reembolso.
-        if ($status === WompiService::REFUND_STATUS_APPROVED && $refundId === null) {
-            return response()->json([
-                'error' => 'El evento de reembolso no incluye un identificador.',
-            ], 422);
-        }
 
         $result = $wompi->applyRefundStatus($order, $status, $refundId);
 

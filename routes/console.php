@@ -14,3 +14,10 @@ Artisan::command('inspire', function () {
 Schedule::command('orders:expire-wompi-pending')
     ->everyFiveMinutes()
     ->withoutOverlapping();
+
+// Recuperación de reembolsos Wompi: un reembolso puede quedar `pending` si el
+// webhook no llega o la respuesta fue ambigua. La conciliación consulta por id o
+// reintenta con la misma idempotency key y aplica el estado final.
+Schedule::command('orders:reconcile-refunds')
+    ->everyTenMinutes()
+    ->withoutOverlapping();

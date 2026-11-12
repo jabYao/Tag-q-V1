@@ -2,15 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Mail\OrderStatusMail;
 use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\CheckoutService;
+use App\Support\RefundStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
@@ -19,10 +22,15 @@ use Tests\TestCase;
  *
  * Cubre la cancelación sin pago (pendiente_de_pago) y la cancelación de
  * contraentrega pagado, ambas con restauración de stock una sola vez bajo
- * transacción y lockForUpdate; el reembolso de un pedido Wompi pagado contra
- * `POST /v1/refunds` (Bearer con WOMPI_PRIVATE_KEY, monto en centavos y razón);
- * y las guardas de doble devolución, transición inválida, ausencia de
- * transaction id, rechazo de Wompi y fallo de red.
+ * transacción y lockForUpdate.
+ *
+ * El reembolso Wompi es asíncrono: una transacción corta deja el pedido en
+ * `refund_status = pending`, la llamada HTTP a `POST /v1/refunds` ocurre fuera
+ * de la transacción y el resultado se aplica en otra transacción corta.
+ * APPROVED marca `reembolsado` y restaura stock; PENDING deja el pedido
+ * `pagado`; DECLINED/ERROR/CANCELLED guarda el motivo y permite reintentar; un
+ * timeout o 5xx queda pendiente para la conciliación. El webhook y el comando
+ * de conciliación aplican el mismo estado de forma idempotente.
  *
  * Ningún pago real: las llamadas a Wompi se sustituyen con Http::fake y se
  * verifica el Bearer y el monto sin exponer la llave privada.
@@ -47,6 +55,8 @@ class OrderCancellationRefundTest extends TestCase
     /** Escenario de prueba ficticio para el sandbox de Wompi. */
     private const TEST_SCENARIO = 'test_scenario_sandbox';
 
+    private const EVENTS_SECRET = 'test_events_fake_secret';
+
     private Category $category;
 
     private User $admin;
@@ -63,7 +73,10 @@ class OrderCancellationRefundTest extends TestCase
 
         config()->set('services.wompi.private_key', self::PRIVATE_KEY);
         config()->set('services.wompi.api_url', self::API_URL);
+        config()->set('services.wompi.merchant_id', '2082714');
+        config()->set('services.wompi.region', 'CO');
         config()->set('services.wompi.refund_test_scenario', null);
+        config()->set('services.wompi.events_secret', self::EVENTS_SECRET);
 
         $this->category = Category::create(['name' => 'Caballero', 'slug' => 'caballero']);
         $this->admin = User::factory()->create(['role' => 'admin']);
@@ -111,6 +124,20 @@ class OrderCancellationRefundTest extends TestCase
         ]);
 
         return $order->fresh();
+    }
+
+    /**
+     * Pedido Wompi pagado con transacción, listo para reembolsar.
+     */
+    private function wompiPaidOrder(string $transactionId): Order
+    {
+        $product = $this->product(['stock' => 5]);
+
+        return $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => $transactionId,
+        ]);
     }
 
     /*
@@ -187,7 +214,7 @@ class OrderCancellationRefundTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | Transiciones inválidas
+    | Transiciones inválidas y precondiciones del reembolso
     |--------------------------------------------------------------------------
     */
 
@@ -227,7 +254,9 @@ class OrderCancellationRefundTest extends TestCase
             ->post(route('admin.orders.refund', $order))
             ->assertSessionHasErrors('order');
 
-        $this->assertSame('pendiente_de_pago', $order->fresh()->status);
+        $order->refresh();
+        $this->assertSame('pendiente_de_pago', $order->status);
+        $this->assertNull($order->refund_status);
         $this->assertSame(4, $product->fresh()->stock);
         Http::assertNothingSent();
     }
@@ -251,18 +280,21 @@ class OrderCancellationRefundTest extends TestCase
         $order->refresh();
         $this->assertSame('pagado', $order->status);
         $this->assertNull($order->wompi_refund_id);
+        $this->assertNull($order->refund_status);
         $this->assertSame(4, $product->fresh()->stock);
         Http::assertNothingSent();
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Reembolso Wompi (V2: POST /v1/refunds)
+    | Reembolso Wompi asíncrono (POST /v1/refunds)
     |--------------------------------------------------------------------------
     */
 
-    public function test_refund_wompi_aprobado_envia_bearer_monto_correcto_guarda_id_y_restaura_stock(): void
+    public function test_refund_aprobado_envia_bearer_monto_correcto_guarda_id_y_restaura_stock(): void
     {
+        Mail::fake();
+
         Http::fake([
             self::REFUND_URL => Http::response([
                 'data' => ['id' => 'refund_aprobado_123', 'status' => 'APPROVED'],
@@ -274,11 +306,12 @@ class OrderCancellationRefundTest extends TestCase
             'status' => 'pagado',
             'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
             'wompi_transaction_id' => 'txn_abc123',
+            'shipping_address' => ['nombre' => 'Ana Pérez', 'email' => 'ana@example.com'],
         ], quantity: 1);
 
         $code = $order->code;
 
-        $this->actingAs($this->empleado)
+        $this->actingAs($this->admin)
             ->from(route('admin.orders.show', $order))
             ->post(route('admin.orders.refund', $order), ['reason' => 'Cliente solicita devolución'])
             ->assertRedirect(route('admin.orders.show', $order))
@@ -287,7 +320,11 @@ class OrderCancellationRefundTest extends TestCase
         $order->refresh();
         $this->assertSame('reembolsado', $order->status);
         $this->assertSame('refund_aprobado_123', $order->wompi_refund_id);
+        $this->assertSame(RefundStatus::APPROVED, $order->refund_status);
         $this->assertSame(5, $product->fresh()->stock, 'El stock se restaura al aprobarse el reembolso');
+        $this->assertNotNull($order->refund_idempotency_key, 'La idempotency key quedó registrada');
+
+        Mail::assertSent(OrderStatusMail::class, 1);
 
         Http::assertSent(function (ClientRequest $request) use ($code): bool {
             return $request->url() === self::REFUND_URL
@@ -296,7 +333,9 @@ class OrderCancellationRefundTest extends TestCase
                 && $request['transaction_id'] === 'txn_abc123'
                 && $request['amount_in_cents'] === 129000000
                 && $request['reference'] === $code
-                && $request['reason'] === 'Cliente solicita devolución';
+                && $request['reason'] === 'Cliente solicita devolución'
+                && is_string($request['idempotency_key'])
+                && $request['idempotency_key'] !== '';
         });
 
         $sent = Http::recorded()[0][0] ?? null;
@@ -308,7 +347,40 @@ class OrderCancellationRefundTest extends TestCase
         );
     }
 
-    public function test_refund_rechazado_por_wompi_conserva_pagado_el_stock_y_sin_id(): void
+    public function test_refund_pending_201_deja_el_pedido_pagado_con_reembolso_en_curso_sin_tocar_stock(): void
+    {
+        Mail::fake();
+
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'data' => ['id' => 32961, 'status' => 'PENDING'],
+            ], 201),
+        ]);
+
+        $product = $this->product(['stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_pending',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertRedirect(route('admin.orders.show', $order))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Solicitud de reembolso enviada a Wompi. El pedido sigue pagado mientras Wompi confirma.');
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status, 'El pedido sigue pagado mientras Wompi procesa');
+        $this->assertSame(RefundStatus::PENDING, $order->refund_status);
+        $this->assertSame('32961', $order->wompi_refund_id);
+        $this->assertNotNull($order->refund_requested_at);
+        $this->assertSame(4, $product->fresh()->stock, 'Un reembolso en curso no restaura stock');
+        Mail::assertNothingSent();
+    }
+
+    public function test_refund_declinado_conserva_pagado_registra_motivo_y_no_toca_stock(): void
     {
         Http::fake([
             self::REFUND_URL => Http::response([
@@ -323,7 +395,7 @@ class OrderCancellationRefundTest extends TestCase
             'wompi_transaction_id' => 'txn_rechazada',
         ]);
 
-        $response = $this->actingAs($this->admin)
+        $this->actingAs($this->admin)
             ->from(route('admin.orders.show', $order))
             ->post(route('admin.orders.refund', $order))
             ->assertSessionHasErrors('order');
@@ -333,12 +405,45 @@ class OrderCancellationRefundTest extends TestCase
 
         $order->refresh();
         $this->assertSame('pagado', $order->status);
+        $this->assertSame(RefundStatus::DECLINED, $order->refund_status);
+        $this->assertNotNull($order->refund_error);
         $this->assertNull($order->wompi_refund_id);
         $this->assertSame(4, $product->fresh()->stock, 'Un rechazo no restaura stock');
-        unset($response);
     }
 
-    public function test_refund_con_respuesta_http_no_exitosa_conserva_pagado(): void
+    public function test_refund_con_error_de_validacion_de_wompi_registra_el_motivo(): void
+    {
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'error' => [
+                    'type' => 'INPUT_VALIDATION_ERROR',
+                    'messages' => [
+                        'amount_in_cents' => ['La suma de los reembolsos de una transacción no pueden superar la cantidad de dicha transacción'],
+                    ],
+                ],
+            ], 422),
+        ]);
+
+        $product = $this->product(['stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_validacion',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasErrors('order');
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertSame(RefundStatus::ERROR, $order->refund_status);
+        $this->assertStringContainsString('La suma de los reembolsos', (string) $order->refund_error);
+        $this->assertSame(4, $product->fresh()->stock);
+    }
+
+    public function test_refund_con_5xx_queda_pending_ambiguo_sin_error_visible(): void
     {
         Http::fake([
             self::REFUND_URL => Http::response(['error' => 'boom'], 500),
@@ -354,13 +459,15 @@ class OrderCancellationRefundTest extends TestCase
         $this->actingAs($this->admin)
             ->from(route('admin.orders.show', $order))
             ->post(route('admin.orders.refund', $order))
-            ->assertSessionHasErrors('order');
+            ->assertSessionHasNoErrors();
 
-        $this->assertSame('pagado', $order->fresh()->status);
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertSame(RefundStatus::PENDING, $order->refund_status, 'Un 5xx es ambiguo: la conciliación lo resuelve');
         $this->assertSame(4, $product->fresh()->stock);
     }
 
-    public function test_refund_con_fallo_de_red_conserva_pagado_y_devuelve_error_accionable(): void
+    public function test_refund_con_fallo_de_red_queda_pending_y_no_filtra_la_llave(): void
     {
         Http::fake(fn () => throw new ConnectionException('timeout'));
 
@@ -374,20 +481,18 @@ class OrderCancellationRefundTest extends TestCase
         $this->actingAs($this->admin)
             ->from(route('admin.orders.show', $order))
             ->post(route('admin.orders.refund', $order))
-            ->assertSessionHasErrors('order');
-
-        $message = (string) session('errors')->first('order');
-        $this->assertStringNotContainsString(self::PRIVATE_KEY, $message);
+            ->assertSessionHasNoErrors();
 
         $order->refresh();
         $this->assertSame('pagado', $order->status);
+        $this->assertSame(RefundStatus::PENDING, $order->refund_status, 'Un timeout es ambiguo: la conciliación lo resuelve');
         $this->assertNull($order->wompi_refund_id);
         $this->assertSame(4, $product->fresh()->stock);
     }
 
     /*
     |--------------------------------------------------------------------------
-    | TRIANGULATE: idempotencia y no doble devolución
+    | TRIANGULATE: idempotencia, reintentos y no doble devolución
     |--------------------------------------------------------------------------
     */
 
@@ -442,6 +547,63 @@ class OrderCancellationRefundTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_triangulate_reintento_tras_rechazo_usa_una_idempotency_key_nueva(): void
+    {
+        Http::fake([
+            self::REFUND_URL => Http::sequence()
+                ->push(['data' => ['status' => 'DECLINED']], 200)
+                ->push(['data' => ['id' => 'refund_reintento', 'status' => 'APPROVED']], 200),
+        ]);
+
+        $order = $this->wompiPaidOrder('txn_reintento');
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasErrors('order');
+
+        $firstKey = $order->fresh()->refund_idempotency_key;
+        $this->assertSame(RefundStatus::DECLINED, $order->fresh()->refund_status);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasNoErrors();
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status);
+        $this->assertSame(RefundStatus::APPROVED, $order->refund_status);
+        $this->assertNotSame($firstKey, $order->refund_idempotency_key, 'Un reintento genera una key nueva');
+
+        $recorded = Http::recorded();
+        $this->assertCount(2, $recorded);
+        $this->assertNotSame(
+            $recorded[0][0]->data()['idempotency_key'],
+            $recorded[1][0]->data()['idempotency_key'],
+        );
+    }
+
+    public function test_triangulate_no_se_puede_reintentar_mientras_hay_un_reembolso_en_curso(): void
+    {
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'data' => ['id' => 'refund_en_curso', 'status' => 'PENDING'],
+            ], 201),
+        ]);
+
+        $order = $this->wompiPaidOrder('txn_en_curso');
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->post(route('admin.orders.refund', $order))
+            ->assertSessionHasErrors('order');
+
+        $this->assertSame(RefundStatus::PENDING, $order->fresh()->refund_status);
+        Http::assertSentCount(1);
+    }
+
     public function test_triangulate_cancelar_pedido_wompi_pagado_reembolsa_en_lugar_de_marcar_cancelado(): void
     {
         Http::fake([
@@ -471,9 +633,34 @@ class OrderCancellationRefundTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | Permisos: admin y empleado operan; cliente e invitado no
+    | Permisos: reembolsar es solo del admin; cancelar admite empleado
     |--------------------------------------------------------------------------
     */
+
+    public function test_empleado_puede_cancelar_pero_no_reembolsar(): void
+    {
+        Http::fake();
+
+        $product = $this->product(['stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_permiso_empleado',
+        ]);
+
+        $this->actingAs($this->empleado)
+            ->post(route('admin.orders.refund', $order))
+            ->assertForbidden();
+
+        $this->actingAs($this->empleado)
+            ->get(route('admin.orders.show', $order))
+            ->assertOk()
+            ->assertDontSee('Reembolsar con Wompi');
+
+        $this->assertSame('pagado', $order->fresh()->status);
+        $this->assertSame(4, $product->fresh()->stock);
+        Http::assertNothingSent();
+    }
 
     public function test_cliente_no_puede_cancelar_ni_reembolsar(): void
     {
@@ -515,7 +702,7 @@ class OrderCancellationRefundTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | Botones en el detalle: solo cuando corresponde
+    | Botones y bloqueo del panel
     |--------------------------------------------------------------------------
     */
 
@@ -559,25 +746,39 @@ class OrderCancellationRefundTest extends TestCase
             ->assertDontSee('Reembolsar con Wompi');
     }
 
+    public function test_reembolso_en_curso_muestra_el_estado_y_bloquea_el_avance_del_pedido(): void
+    {
+        $product = $this->product(['stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_bloqueo',
+            'refund_status' => RefundStatus::PENDING,
+            'refund_requested_at' => now(),
+            'refund_idempotency_key' => 'key-bloqueo',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.show', $order))
+            ->assertOk()
+            ->assertSee('En proceso')
+            ->assertDontSee('Marcar como En preparación')
+            ->assertDontSee('Reembolsar con Wompi');
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.show', $order))
+            ->patch(route('admin.orders.status', $order), ['status' => 'en_preparacion'])
+            ->assertSessionHasErrors('status');
+
+        $this->assertSame('pagado', $order->fresh()->status);
+        $this->assertSame(4, $product->fresh()->stock);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | WOMPI_REFUND_TEST_SCENARIO: solo sandbox, nunca producción
     |--------------------------------------------------------------------------
     */
-
-    /**
-     * Pedido Wompi pagado con transacción, listo para reembolsar.
-     */
-    private function wompiPaidOrder(string $transactionId): Order
-    {
-        $product = $this->product(['stock' => 5]);
-
-        return $this->order($product, [
-            'status' => 'pagado',
-            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
-            'wompi_transaction_id' => $transactionId,
-        ]);
-    }
 
     public function test_refund_en_sandbox_incluye_test_scenario_cuando_esta_configurado(): void
     {
@@ -685,32 +886,9 @@ class OrderCancellationRefundTest extends TestCase
         $this->assertSame(['Bearer '.self::PRIVATE_KEY], $sent->header('Authorization'), 'La llave solo viaja en el Bearer');
     }
 
-    public function test_triangulate_refund_rechazado_en_sandbox_con_test_scenario_conserva_pagado(): void
-    {
-        config()->set('services.wompi.api_url', self::API_URL);
-        config()->set('services.wompi.refund_test_scenario', self::TEST_SCENARIO);
-
-        Http::fake([
-            self::REFUND_URL => Http::response([
-                'data' => ['status' => 'DECLINED'],
-            ], 200),
-        ]);
-
-        $order = $this->wompiPaidOrder('txn_scenario_declined');
-
-        $this->actingAs($this->admin)
-            ->from(route('admin.orders.show', $order))
-            ->post(route('admin.orders.refund', $order))
-            ->assertSessionHasErrors('order');
-
-        $order->refresh();
-        $this->assertSame('pagado', $order->status, 'Solo APPROVED marca reembolsado');
-        $this->assertNull($order->wompi_refund_id);
-    }
-
     /*
     |--------------------------------------------------------------------------
-    | Webhook refund.updated sobre un pedido ya reembolsado por el panel
+    | Webhook refund.updated: ambos shapes y estados
     |--------------------------------------------------------------------------
     */
 
@@ -720,9 +898,8 @@ class OrderCancellationRefundTest extends TestCase
      * El checksum usa el algoritmo documentado:
      * sha256(concat(valores de signature.properties) + timestamp + events_secret).
      */
-    private function signedRefundEvent(array $refund, string $eventsSecret): array
+    private function signedRefundEvent(array $refund, string $eventsSecret, array $properties = ['refund.id', 'refund.transaction_id', 'refund.amount_in_cents']): array
     {
-        $properties = ['refund.id', 'refund.transaction_id', 'refund.amount_in_cents'];
         $timestamp = 1700000000;
         $data = ['refund' => $refund];
         $concatenated = '';
@@ -757,8 +934,7 @@ class OrderCancellationRefundTest extends TestCase
      */
     public function test_triangulate_webhook_refund_aprobado_tras_el_reembolso_del_panel_no_duplica_stock_ni_pisa_el_id(): void
     {
-        $eventsSecret = 'test_events_fake_secret';
-        config()->set('services.wompi.events_secret', $eventsSecret);
+        Mail::fake();
 
         Http::fake([
             self::REFUND_URL => Http::response([
@@ -771,6 +947,7 @@ class OrderCancellationRefundTest extends TestCase
             'status' => 'pagado',
             'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
             'wompi_transaction_id' => 'txn_webhook_duplicado',
+            'shipping_address' => ['nombre' => 'Ana Pérez', 'email' => 'ana@example.com'],
         ]);
 
         $this->actingAs($this->admin)
@@ -782,13 +959,14 @@ class OrderCancellationRefundTest extends TestCase
         $this->assertSame('reembolsado', $order->status);
         $this->assertSame('refund_panel', $order->wompi_refund_id);
         $this->assertSame(5, $product->fresh()->stock);
+        Mail::assertSent(OrderStatusMail::class, 1);
 
         $payload = $this->signedRefundEvent([
             'id' => 'refund_wompi',
             'transaction_id' => 'txn_webhook_duplicado',
             'amount_in_cents' => 129000000,
             'status' => 'APPROVED',
-        ], $eventsSecret);
+        ], self::EVENTS_SECRET);
 
         $this->postJson(route('webhooks.wompi'), $payload)
             ->assertOk()
@@ -798,6 +976,189 @@ class OrderCancellationRefundTest extends TestCase
         $this->assertSame('reembolsado', $order->status);
         $this->assertSame('refund_panel', $order->wompi_refund_id, 'El id del panel se conserva');
         $this->assertSame(5, $product->fresh()->stock, 'El stock se restaura exactamente una vez');
+        Mail::assertSent(OrderStatusMail::class, 1, 'El webhook no reenvía el correo');
         Http::assertSentCount(1, 'El webhook no vuelve a llamar a la API de Wompi');
+    }
+
+    public function test_webhook_aprobado_con_shape_v2_por_refund_id_marca_reembolsado(): void
+    {
+        $product = $this->product(['precio' => 1290000, 'stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_webhook_v2',
+            'refund_status' => RefundStatus::PENDING,
+            'refund_requested_at' => now(),
+        ]);
+
+        $payload = $this->signedRefundEvent([
+            'refund_id' => 'COa7Bk9m1',
+            'transaction_id' => 'txn_webhook_v2',
+            'amount_in_cents' => 129000000,
+            'status' => 'APPROVED',
+        ], self::EVENTS_SECRET, ['refund.refund_id', 'refund.transaction_id', 'refund.amount_in_cents']);
+
+        $this->postJson(route('webhooks.wompi'), $payload)
+            ->assertOk()
+            ->assertJson(['result' => 'refunded']);
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status);
+        $this->assertSame('COa7Bk9m1', $order->wompi_refund_id);
+        $this->assertSame(RefundStatus::APPROVED, $order->refund_status);
+        $this->assertSame(5, $product->fresh()->stock);
+    }
+
+    public function test_webhook_pending_conserva_el_pedido_pagado_y_no_restaura_stock(): void
+    {
+        $product = $this->product(['precio' => 1290000, 'stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_webhook_pending',
+            'refund_status' => RefundStatus::PENDING,
+            'refund_requested_at' => now(),
+        ]);
+
+        $payload = $this->signedRefundEvent([
+            'id' => 'refund_pending_webhook',
+            'transaction_id' => 'txn_webhook_pending',
+            'amount_in_cents' => 129000000,
+            'status' => 'PENDING',
+        ], self::EVENTS_SECRET);
+
+        $this->postJson(route('webhooks.wompi'), $payload)
+            ->assertOk()
+            ->assertJson(['result' => 'pending']);
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertSame(RefundStatus::PENDING, $order->refund_status);
+        $this->assertSame(4, $product->fresh()->stock);
+    }
+
+    public function test_webhook_declinado_registra_el_motivo_y_permite_reintentar(): void
+    {
+        $product = $this->product(['precio' => 1290000, 'stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_webhook_declined',
+            'refund_status' => RefundStatus::PENDING,
+            'refund_requested_at' => now(),
+        ]);
+
+        $payload = $this->signedRefundEvent([
+            'id' => 'refund_declined_webhook',
+            'transaction_id' => 'txn_webhook_declined',
+            'amount_in_cents' => 129000000,
+            'status' => 'DECLINED',
+        ], self::EVENTS_SECRET);
+
+        $this->postJson(route('webhooks.wompi'), $payload)
+            ->assertOk()
+            ->assertJson(['result' => 'failed']);
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertSame(RefundStatus::DECLINED, $order->refund_status);
+        $this->assertNotNull($order->refund_error);
+        $this->assertSame(4, $product->fresh()->stock);
+    }
+
+    public function test_webhook_de_un_reembolso_sin_pedido_responde_200_para_no_reintentar(): void
+    {
+        Http::fake();
+
+        $payload = $this->signedRefundEvent([
+            'id' => 'refund_huerfano',
+            'transaction_id' => 'txn_inexistente',
+            'amount_in_cents' => 129000000,
+            'status' => 'APPROVED',
+        ], self::EVENTS_SECRET);
+
+        $this->postJson(route('webhooks.wompi'), $payload)
+            ->assertOk()
+            ->assertJson(['result' => 'not_found']);
+
+        Http::assertNothingSent();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Conciliación programada de reembolsos en curso
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_reconciliacion_aprueba_un_reembolso_pending_consultando_por_id(): void
+    {
+        Http::fake([
+            self::REFUND_URL.'/refund_pendiente' => Http::response([
+                'data' => ['id' => 'refund_pendiente', 'status' => 'APPROVED'],
+            ], 200),
+        ]);
+
+        $product = $this->product(['stock' => 5]);
+        $order = $this->order($product, [
+            'status' => 'pagado',
+            'payment_method' => CheckoutService::WOMPI_PAYMENT_METHOD,
+            'wompi_transaction_id' => 'txn_conciliacion',
+            'wompi_refund_id' => 'refund_pendiente',
+            'refund_status' => RefundStatus::PENDING,
+            'refund_requested_at' => now()->subMinutes(10),
+            'refund_idempotency_key' => 'key-conciliacion',
+        ]);
+
+        $this->artisan('orders:reconcile-refunds')->assertSuccessful();
+
+        $order->refresh();
+        $this->assertSame('reembolsado', $order->status);
+        $this->assertSame(RefundStatus::APPROVED, $order->refund_status);
+        $this->assertSame(5, $product->fresh()->stock);
+    }
+
+    public function test_reconciliacion_reintenta_con_la_misma_idempotency_key_si_no_hay_id(): void
+    {
+        Http::fake([
+            self::REFUND_URL => Http::response([
+                'data' => ['id' => 'refund_recuperado', 'status' => 'PENDING'],
+            ], 201),
+        ]);
+
+        $order = $this->wompiPaidOrder('txn_reconciliacion_key');
+        $order->update([
+            'refund_status' => RefundStatus::PENDING,
+            'refund_requested_at' => now()->subMinutes(10),
+            'refund_idempotency_key' => 'key-reconciliacion',
+        ]);
+
+        $this->artisan('orders:reconcile-refunds')->assertSuccessful();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            return $request->url() === self::REFUND_URL
+                && $request['idempotency_key'] === 'key-reconciliacion';
+        });
+
+        $order->refresh();
+        $this->assertSame('pagado', $order->status);
+        $this->assertSame(RefundStatus::PENDING, $order->refund_status);
+        $this->assertSame('refund_recuperado', $order->wompi_refund_id);
+    }
+
+    public function test_reconciliacion_ignora_reembolsos_solicitados_hace_menos_de_un_minuto(): void
+    {
+        Http::fake();
+
+        $order = $this->wompiPaidOrder('txn_reciente');
+        $order->update([
+            'refund_status' => RefundStatus::PENDING,
+            'refund_requested_at' => now()->subSeconds(20),
+            'refund_idempotency_key' => 'key-reciente',
+        ]);
+
+        $this->artisan('orders:reconcile-refunds')->assertSuccessful();
+
+        Http::assertNothingSent();
+        $this->assertSame(RefundStatus::PENDING, $order->fresh()->refund_status);
     }
 }
