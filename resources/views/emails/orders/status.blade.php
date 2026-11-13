@@ -80,6 +80,40 @@
             </p>
         @endif
 
+        @if ($isCreated && $advanceAmount > 0)
+            <div style="border: 1px solid #e5e7eb; background-color: #f9fafb; border-radius: 6px; padding: 16px; margin: 0 0 16px;">
+                <p style="font-size: 14px; font-weight: bold; margin: 0 0 8px;">
+                    Abono de envío: {{ number_format($advanceAmount, 0, ',', '.') }} COP
+                </p>
+                <p style="font-size: 13px; line-height: 1.6; margin: 0 0 12px;">
+                    Para despachar tu pedido, paga el abono de envío por transferencia. El saldo de
+                    <strong>{{ number_format($balanceDue, 0, ',', '.') }} COP</strong> lo pagas al recibir.
+                </p>
+
+                @if (empty($transferDetails))
+                    <p style="font-size: 13px; line-height: 1.6; margin: 0 0 12px;">
+                        Escribe a la tienda para recibir los datos de la cuenta y enviar el comprobante del abono.
+                    </p>
+                @else
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 12px;">
+                        <tbody>
+                        @foreach ($transferDetails as $detail)
+                            <tr>
+                                <th style="padding: 4px 8px 4px 0; text-align: left; color: #374151;">{{ $detail['label'] }}</th>
+                                <td style="padding: 4px 0;">{{ $detail['value'] }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                @endif
+
+                <p style="font-size: 12px; line-height: 1.6; color: #6b7280; margin: 0;">
+                    Envía el comprobante indicando la referencia <strong>{{ $transferReference }}</strong>.
+                    El pedido avanza cuando confirmemos el abono.
+                </p>
+            </div>
+        @endif
+
         @if (! empty($orderUrl))
             <p style="font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
                 <a href="{{ $orderUrl }}" style="color: #1d4ed8;">Ver el detalle de tu pedido</a>

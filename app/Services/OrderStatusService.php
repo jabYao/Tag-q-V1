@@ -21,6 +21,9 @@ use App\Support\RefundStatus;
  * Wompi sigue siendo la fuente autoritativa de los pagos en línea a través de
  * su webhook; el panel solo puede avanzar el flujo operativo, incluida la
  * confirmación de contraentrega de `pendiente_de_pago` a `pagado`.
+ *
+ * Un pedido contraentrega con abono de envío pendiente no avanza a `pagado`
+ * hasta que el administrador confirme la transferencia del abono.
  */
 class OrderStatusService
 {
@@ -119,6 +122,14 @@ class OrderStatusService
         if (! $this->canTransition($from, $to)) {
             throw new \RuntimeException(
                 "Transición de estado inválida: no se puede pasar de «{$from}» a «{$to}»."
+            );
+        }
+
+        if (in_array($to, ['pagado', 'en_preparacion'], true)
+            && $order->requiresAdvance()
+            && ! $order->hasConfirmedAdvance()) {
+            throw new \RuntimeException(
+                'El pedido contraentrega requiere confirmar el abono de envío antes de avanzar.'
             );
         }
 

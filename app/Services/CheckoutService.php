@@ -6,6 +6,7 @@ use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\ShippingPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
@@ -125,7 +126,7 @@ class CheckoutService
                 $total += $price * $quantity;
             }
 
-            $shippingCost = max(0, (int) config('legal.shipping.cost', 0));
+            $shippingCost = ShippingPolicy::cost($total, $paymentMethod);
 
             $order = Order::create([
                 'code' => $this->generateCode(),

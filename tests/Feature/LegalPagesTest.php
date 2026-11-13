@@ -182,6 +182,28 @@ class LegalPagesTest extends TestCase
         }
     }
 
+    public function test_envios_pagos_y_terminos_publican_el_abono_contraentrega(): void
+    {
+        config()->set('legal.shipping.free_from', 500000);
+        config()->set('legal.shipping.cost', 15000);
+        config()->set('legal.shipping.contraentrega_cost', 30000);
+
+        $shipping = $this->html('legal.shipping');
+        foreach (['$ 500.000', '$ 15.000', '$ 30.000', 'por adelantado', 'abono'] as $needle) {
+            $this->assertStringContainsString($needle, $shipping, "Envíos incluye: {$needle}");
+        }
+
+        $payments = $this->html('legal.payments');
+        foreach (['$ 30.000', '$ 15.000', 'por adelantado', 'transferencia'] as $needle) {
+            $this->assertStringContainsString($needle, $payments, "Pagos incluye: {$needle}");
+        }
+
+        $terms = $this->html('legal.terms');
+        $this->assertStringContainsString('abono de envío', $terms, 'Términos menciona el abono de envío');
+        $this->assertStringContainsString('$ 500.000', $terms, 'Términos publica el umbral de envío gratis');
+        $this->assertStringContainsString('$ 15.000', $terms, 'Términos publica la tarifa estándar');
+    }
+
     public function test_el_footer_enlaza_las_siete_paginas_legales_y_la_sic(): void
     {
         $html = $this->get(route('legal.privacy'))->assertOk()->getContent();

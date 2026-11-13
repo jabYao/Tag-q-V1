@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Services\CheckoutService;
 use App\Support\Legal;
+use App\Support\PaymentInstructions;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -126,6 +127,10 @@ class OrderStatusMail extends Mailable
                 'total' => (int) $this->order->total,
                 'deliveryDays' => (int) config('legal.delivery.max_days', 30),
                 'deliveryDeadline' => Legal::deliveryDeadline($this->order->created_at),
+                'advanceAmount' => $this->order->advanceAmount(),
+                'balanceDue' => $this->order->balanceDue(),
+                'transferDetails' => PaymentInstructions::transferDetails(),
+                'transferReference' => PaymentInstructions::reference($this->order),
                 'items' => $items,
                 'orderUrl' => $this->orderUrl,
             ],

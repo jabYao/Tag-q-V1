@@ -227,6 +227,49 @@
                 </dl>
             </section>
 
+            @if($order->requiresAdvance())
+                <section class="admin-block" aria-labelledby="abono-titulo">
+                    <div class="admin-block-head">
+                        <h2 class="admin-block-title" id="abono-titulo">Abono de envío</h2>
+                    </div>
+
+                    <dl class="admin-kv">
+                        <div class="admin-kv__row">
+                            <dt class="admin-kv__term">Abono requerido</dt>
+                            <dd class="admin-kv__desc">{{ \App\Support\Legal::money($order->advanceAmount()) }}</dd>
+                        </div>
+                        <div class="admin-kv__row">
+                            <dt class="admin-kv__term">Estado del abono</dt>
+                            <dd class="admin-kv__desc">
+                                {{ $order->hasConfirmedAdvance() ? 'Confirmado' : 'Pendiente de confirmar' }}
+                            </dd>
+                        </div>
+                        @if($order->hasConfirmedAdvance())
+                            <div class="admin-kv__row">
+                                <dt class="admin-kv__term">Confirmado</dt>
+                                <dd class="admin-kv__desc">
+                                    {{ $order->advance_confirmed_at->format('d/m/Y H:i') }}
+                                    · {{ $order->advanceConfirmedBy?->name ?? '—' }}
+                                </dd>
+                            </div>
+                        @endif
+                        <div class="admin-kv__row">
+                            <dt class="admin-kv__term">Saldo al recibir</dt>
+                            <dd class="admin-kv__desc">{{ \App\Support\Legal::money($order->balanceDue()) }}</dd>
+                        </div>
+                    </dl>
+
+                    @if($canConfirmAdvance)
+                        <form method="POST" action="{{ route('admin.orders.advance', $order) }}" onsubmit="return confirm('¿Confirmar el abono de envío de este pedido?');">
+                            @csrf
+                            <div class="admin-detail-actions">
+                                <button class="admin-btn admin-btn--primary" type="submit">Confirmar abono</button>
+                            </div>
+                        </form>
+                    @endif
+                </section>
+            @endif
+
             <section class="admin-block" aria-labelledby="acciones-titulo">
                 <div class="admin-block-head">
                     <h2 class="admin-block-title" id="acciones-titulo">Acciones sensibles</h2>

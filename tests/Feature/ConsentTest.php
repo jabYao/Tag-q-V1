@@ -308,9 +308,10 @@ class ConsentTest extends TestCase
         $this->assertStringContainsString('2.580.000', $html, 'El resumen muestra el subtotal y el total');
     }
 
-    public function test_el_costo_de_envio_configurado_se_suma_al_total_del_pedido(): void
+    public function test_el_abono_de_contraentrega_configurado_se_suma_al_total_del_pedido(): void
     {
-        config()->set('legal.shipping.cost', 15000);
+        config()->set('legal.shipping.free_from', 2000000);
+        config()->set('legal.shipping.contraentrega_cost', 15000);
 
         $product = $this->product(['precio' => 1000000]);
         app(CartService::class)->addToSession($product->id, 1);

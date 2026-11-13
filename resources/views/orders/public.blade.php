@@ -15,8 +15,14 @@ $statusLabels = [
     'cancelado' => 'Cancelado',
     'reembolsado' => 'Reembolsado',
 ];
+$advanceRequired = $order->requiresAdvance() && ! $order->hasConfirmedAdvance();
+$isContraentrega = (string) $order->payment_method === 'contraentrega';
 $statusMessages = [
-    'pendiente_de_pago' => 'Estamos confirmando tu pago con Wompi. Esta página se actualiza automáticamente cuando llegue la confirmación.',
+    'pendiente_de_pago' => $advanceRequired
+        ? 'Tu pedido quedó registrado. Para despacharlo debes pagar el abono de envío por transferencia; el saldo lo pagas al recibir.'
+        : ($isContraentrega
+            ? 'Tu pedido quedó registrado. El pago es contraentrega: pagas al recibir.'
+            : 'Estamos confirmando tu pago con Wompi. Esta página se actualiza automáticamente cuando llegue la confirmación.'),
     'pagado' => 'Recibimos tu pago. Ya estamos preparando tu pedido.',
     'en_preparacion' => 'Estamos alistando tu pedido para el envío.',
     'enviado' => 'Tu pedido va en camino.',
@@ -54,7 +60,7 @@ $cardClass = 'rounded border border-border-soft bg-white p-6 sm:p-8';
     <section
         data-order-status="{{ $order->status }}"
         class="{{ $cardClass }} mb-6 border-primary/30"
-        @if($order->status === 'pendiente_de_pago')
+        @if($order->status === 'pendiente_de_pago' && ! $isContraentrega)
             x-data
             x-init="let intentos = 0; const id = setInterval(() => { intentos++; if (intentos > 24) { clearInterval(id); return; } window.location.reload(); }, 5000)"
         @endif
@@ -63,6 +69,44 @@ $cardClass = 'rounded border border-border-soft bg-white p-6 sm:p-8';
         <h2 class="{{ $headingClass }}">{{ $statusLabel }}</h2>
         <p class="mt-3 max-w-2xl font-body text-[15px] leading-6 text-ink-soft">{{ $statusMessage }}</p>
     </section>
+
+    @if($advanceRequired)
+        @php
+            $transferDetails = \App\Support\PaymentInstructions::transferDetails();
+        @endphp
+        <section class="{{ $cardClass }} mb-6" data-order-advance-section>
+            <p class="{{ $kickerClass }}">Pago por adelantado</p>
+            <h2 class="{{ $headingClass }}">Abono de envío</h2>
+            <p class="mt-3 max-w-2xl font-body text-[15px] leading-6 text-ink-soft">
+                Para despachar tu pedido paga el abono de envío de
+                <strong class="font-semibold text-ink" data-order-advance="{{ $order->advanceAmount() }}">$ {{ number_format($order->advanceAmount(), 0, ',', '.') }}</strong>
+                por transferencia. El saldo de
+                <strong class="font-semibold text-ink" data-order-balance="{{ $order->balanceDue() }}">$ {{ number_format($order->balanceDue(), 0, ',', '.') }}</strong>
+                lo pagas al recibir.
+            </p>
+
+            @if($transferDetails === [])
+                <p class="mt-4 border border-border-soft bg-surface-subtle p-4 font-body text-sm leading-6 text-ink-soft">
+                    Escribe a la tienda para recibir los datos de la cuenta y enviar el comprobante del abono.
+                </p>
+            @else
+                <dl class="mt-4 flex flex-col gap-2 border border-border-soft bg-surface-subtle p-4 font-body text-sm">
+                    @foreach($transferDetails as $detail)
+                        <div class="flex items-baseline justify-between gap-4">
+                            <dt class="text-ink-soft">{{ $detail['label'] }}</dt>
+                            <dd class="text-right font-medium text-ink">{{ $detail['value'] }}</dd>
+                        </div>
+                    @endforeach
+                </dl>
+            @endif
+
+            <p class="mt-3 font-body text-xs leading-5 text-ink-muted">
+                Envía el comprobante indicando la referencia
+                <strong class="font-semibold text-ink">{{ \App\Support\PaymentInstructions::reference($order) }}</strong>.
+                El pedido avanza cuando confirmemos el abono.
+            </p>
+        </section>
+    @endif
 
     <div class="grid gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
         <section class="{{ $cardClass }} lg:col-span-7">
@@ -117,7 +161,11 @@ $cardClass = 'rounded border border-border-soft bg-white p-6 sm:p-8';
             </dl>
 
             <p class="mt-6 border border-border-soft bg-surface-subtle p-4 font-body text-xs leading-5 text-ink-soft">
-                Guarda este enlace para consultar tu pedido. El pago lo confirma Wompi directamente con la tienda.
+                @if($isContraentrega)
+                    Guarda este enlace para consultar tu pedido. El abono de envío se confirma por transferencia y el saldo se paga al recibir.
+                @else
+                    Guarda este enlace para consultar tu pedido. El pago lo confirma Wompi directamente con la tienda.
+                @endif
             </p>
         </aside>
     </div>

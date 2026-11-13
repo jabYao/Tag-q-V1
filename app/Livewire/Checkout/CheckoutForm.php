@@ -8,6 +8,8 @@ use App\Services\CheckoutService;
 use App\Services\OrderNotificationService;
 use App\Services\WompiService;
 use App\Support\Legal;
+use App\Support\PaymentInstructions;
+use App\Support\ShippingPolicy;
 use Livewire\Component;
 
 /**
@@ -49,6 +51,13 @@ class CheckoutForm extends Component
 
     /** Página pública del pedido (token en el path): destino al terminar el pago. */
     public string $orderUrl = '';
+
+    /** Resumen del pedido confirmado para la pantalla de éxito. */
+    public ?int $successTotal = null;
+
+    public int $successAdvance = 0;
+
+    public int $successBalance = 0;
 
     /** Aceptación expresa de los términos y condiciones. */
     public bool $acceptTerms = false;
@@ -103,6 +112,9 @@ class CheckoutForm extends Component
         $this->wompiPayload = [];
         $this->wompiFallbackUrl = '';
         $this->orderUrl = '';
+        $this->successTotal = null;
+        $this->successAdvance = 0;
+        $this->successBalance = 0;
         $this->resetErrorBag();
 
         $validated = $this->validate();
@@ -122,6 +134,9 @@ class CheckoutForm extends Component
         }
 
         $this->orderCode = $order->code;
+        $this->successTotal = (int) $order->total;
+        $this->successAdvance = $order->advanceAmount();
+        $this->successBalance = $order->balanceDue();
         app(OrderNotificationService::class)->notifyCreated($order);
         $this->dispatch('cart-updated');
     }
@@ -139,6 +154,9 @@ class CheckoutForm extends Component
         $this->wompiPayload = [];
         $this->wompiFallbackUrl = '';
         $this->orderUrl = '';
+        $this->successTotal = null;
+        $this->successAdvance = 0;
+        $this->successBalance = 0;
         $this->resetErrorBag();
 
         $validated = $this->validate();
@@ -173,15 +191,18 @@ class CheckoutForm extends Component
     {
         $lines = app(CartService::class)->lines($this->user());
         $subtotal = (int) $lines->sum('subtotal');
-        $shippingCost = max(0, (int) config('legal.shipping.cost', 0));
+        $shippingCost = ShippingPolicy::cost($subtotal, $this->paymentMethod);
 
         return view('livewire.checkout.checkout-form', [
             'lines' => $lines,
             'subtotal' => $subtotal,
             'shippingCost' => $shippingCost,
+            'advance' => ShippingPolicy::advance($subtotal, $this->paymentMethod),
+            'balance' => $subtotal,
             'total' => $subtotal + $shippingCost,
             'deliveryDays' => (int) config('legal.delivery.max_days', 30),
             'deliveryDeadline' => Legal::deliveryDeadline(),
+            'transferDetails' => PaymentInstructions::transferDetails(),
         ]);
     }
 
