@@ -15,7 +15,7 @@ Branch: current branch. Delivery: local commits only; push remains unauthorized.
 - **S8 — Acuse de recibo por correo.** El correo de pedido creado incluye fecha del pedido, medio de pago, subtotal, costo de envío, total exacto y plazo máximo de entrega, además del código y los items.
 - **S9 — SIC.** Enlace visible a la Superintendencia de Industria y Comercio en el pie del storefront y en las páginas legales.
 - **S10 — Pruebas.** Se actualizan las pruebas de páginas legales, checkout, registro y correo; se agregan pruebas de consentimiento. `php artisan test` debe pasar completo antes de cada commit.
-- **S11 — Datos no inventados.** Nombre, documento, dirección, ciudad, correos, horario, transportadora y régimen de IVA se leen de variables de entorno. Mientras falten, la página muestra marcadores visibles y un aviso de borrador; no se publica un dato falso.
+- **S11 — Datos no inventados.** Nombre, documento, ciudad, correos, horario, transportadora y régimen de IVA se leen de variables de entorno. La dirección física es opcional: si el vendedor no tiene oficina, el domicilio se publica a nivel municipio (`LEGAL_SELLER_CITY`) y los textos no ofrecen un canal postal. Mientras falten datos obligatorios (nombre, documento, ciudad, correo), la página muestra marcadores visibles y un aviso de borrador; no se publica un dato falso.
 - **S12 — Calidad.** Pint sin cambios pendientes y `npm run build` en verde.
 
 ## Tasks
@@ -27,6 +27,7 @@ Branch: current branch. Delivery: local commits only; push remains unauthorized.
 - **T5** — Correo de acuse de recibo. Specs: S8. Route: inline. Status: done. Evidence: `OrderStatusMail` y `emails/orders/status.blade.php` con fecha, medio de pago, subtotal, envío, total y plazo; `OrderTransactionalEmailsTest`.
 - **T6** — Enlace SIC en footer y pruebas. Specs: S9-S10. Route: inline. Status: done. Evidence: `data-footer-link="sic"` en el footer y `data-legal-sic` en el layout; `LegalPagesTest`.
 - **T7** — Verificación completa: suite, Pint y build. Specs: S10, S12. Route: inline. Status: done. Evidence: `php artisan test` 736 tests / 6026 aserciones en verde; Pint limpio en los archivos tocados; `npm run build` en verde.
+- **T8** — Domicilio a nivel municipio sin oficina. Specs: S11. Route: inline. Status: done. Evidence: `Legal::domicile()`, `isDraft()` sin dirección obligatoria, vistas de privacidad/términos/contacto, `LegalPagesTest` 12/12; suite 737/6033; Pint y build en verde.
 
 ## Log
 
@@ -39,3 +40,4 @@ Branch: current branch. Delivery: local commits only; push remains unauthorized.
 - **L7 — User agent en pruebas Livewire.** El harness de Livewire reemplaza los headers en cada rerender, así que la prueba de checkout verifica que la evidencia guarda un user agent no vacío en lugar de simular un valor fijo. La captura real sigue siendo `request()->userAgent()` en `ConsentService`.
 - **L8 — Estilo.** Pint pasa limpio en todos los archivos tocados. El repositorio conserva archivos ajenos a esta tarea con estilo pendiente (`DashboardController`, `CatalogFilterRequest`, entre otros); no se reformatearon para no mezclar cambios fuera de alcance.
 - **L9 — Verification.** Suite completa: 736 tests, 6026 aserciones, 0 fallos. `npm run build`: correcto. Sin push.
+- **L10 — Datos del vendedor y domicilio sin oficina.** El dueño entregó nombre (Jair Amaya), cédula, ciudad (Dibulla, La Guajira) y un correo transitorio; el número de documento y el correo no se copian aquí para no duplicar datos personales en el repositorio: viven en `.env` local y deben replicarse en Railway. Decisión del dueño: la tienda no tiene oficina, así que se publica solo el municipio; `LEGAL_SELLER_ADDRESS` queda vacío y `Legal::domicile()` omite la dirección postal. Riesgo declarado: el artículo 50 de la Ley 1480 exige dirección de notificación; queda sujeto a la revisión del abogado antes de `LEGAL_DRAFT=false`. Se actualizan las versiones de privacidad, términos y contacto a `2026-11-13`.

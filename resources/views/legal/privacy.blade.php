@@ -15,7 +15,7 @@
     <p>
         El responsable es <strong>{{ $seller('name') }}</strong>, identificado con
         <strong>{{ $seller('document') }}</strong>, con domicilio en
-        <strong>{{ $seller('address') }}, {{ $seller('city') }}</strong>.
+        <strong>{{ \App\Support\Legal::domicile() }}</strong>.
     </p>
     <ul>
         <li>Correo de contacto: <a href="mailto:{{ $seller('email') }}">{{ $seller('email') }}</a></li>
@@ -85,9 +85,12 @@
     </p>
     <p>
         Para ejercer tus derechos escribe a
-        <a href="mailto:{{ $seller('privacy_email') }}">{{ $seller('privacy_email') }}</a> o envía una
-        comunicación a {{ $seller('address') }}, {{ $seller('city') }}. Incluye tu nombre, un medio de
-        contacto, la descripción de la solicitud y los documentos que consideres pertinentes.
+        <a href="mailto:{{ $seller('privacy_email') }}">{{ $seller('privacy_email') }}</a>.
+        @if ($seller('address'))
+            También puedes enviar una comunicación a {{ \App\Support\Legal::domicile() }}.
+        @endif
+        Incluye tu nombre, un medio de contacto, la descripción de la solicitud y los documentos
+        que consideres pertinentes.
     </p>
     <p>
         Si consideras que no atendimos correctamente tu solicitud, puedes acudir a la

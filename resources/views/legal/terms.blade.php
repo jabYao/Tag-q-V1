@@ -20,7 +20,7 @@
     <p>
         El vendedor es <strong>{{ $seller('name') }}</strong>, identificado con
         <strong>{{ $seller('document') }}</strong>, con domicilio en
-        <strong>{{ $seller('address') }}, {{ $seller('city') }}</strong>. Nombre comercial:
+        <strong>{{ \App\Support\Legal::domicile() }}</strong>. Nombre comercial:
         <strong>{{ $seller('trade_name') }}</strong>.
     </p>
     <ul>

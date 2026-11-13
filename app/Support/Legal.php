@@ -23,7 +23,6 @@ final class Legal
         'name' => '[Completar: nombre completo del vendedor]',
         'trade_name' => 'Tag Q',
         'document' => '[Completar: NIT o cédula]',
-        'address' => '[Completar: dirección del domicilio]',
         'city' => '[Completar: ciudad]',
         'email' => '[Completar: correo de contacto]',
         'privacy_email' => '[Completar: correo de protección de datos]',
@@ -50,6 +49,20 @@ final class Legal
         return self::SELLER_FALLBACKS[$key] ?? null;
     }
 
+    /**
+     * Domicilio publicado: dirección y ciudad, o solo la ciudad cuando el
+     * vendedor no tiene dirección física.
+     */
+    public static function domicile(): string
+    {
+        $parts = array_filter(
+            [self::seller('address'), self::seller('city')],
+            static fn (?string $part): bool => $part !== null && trim($part) !== ''
+        );
+
+        return implode(', ', $parts);
+    }
+
     public static function version(string $document): string
     {
         return (string) config("legal.versions.{$document}", '2026-11-12');
@@ -72,6 +85,9 @@ final class Legal
 
     /**
      * ¿Falta revisión profesional o algún dato obligatorio del vendedor?
+     *
+     * La dirección física es opcional: sin oficina, el domicilio se publica
+     * solo con el municipio (`city`).
      */
     public static function isDraft(): bool
     {
@@ -79,7 +95,7 @@ final class Legal
             return true;
         }
 
-        foreach (['name', 'document', 'address', 'city', 'email'] as $key) {
+        foreach (['name', 'document', 'city', 'email'] as $key) {
             $fallback = self::SELLER_FALLBACKS[$key] ?? null;
 
             if ($fallback !== null && self::seller($key) === $fallback) {

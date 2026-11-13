@@ -6,9 +6,11 @@
 |--------------------------------------------------------------------------
 |
 | Ningún dato personal del vendedor se escribe en el código: nombre,
-| documento, dirección, ciudad, correos, horario y transportadora se inyectan
-| por variables de entorno. Mientras falten, `App\Support\Legal` devuelve
-| marcadores visibles y las páginas muestran el aviso de borrador.
+| documento, ciudad, correos, horario y transportadora se inyectan por
+| variables de entorno. La dirección física es opcional: si el vendedor no
+| tiene oficina, el domicilio se publica a nivel municipio (`city`). Mientras
+| falten datos obligatorios, `App\Support\Legal` devuelve marcadores visibles
+| y las páginas muestran el aviso de borrador.
 |
 | `LEGAL_DRAFT` debe permanecer en `true` hasta que un abogado apruebe los
 | textos y todos los datos del vendedor estén completos.
@@ -19,26 +21,27 @@ return [
 
     'draft' => (bool) env('LEGAL_DRAFT', true),
 
-    'updated_at' => env('LEGAL_UPDATED_AT', '12 de noviembre de 2026'),
+    'updated_at' => env('LEGAL_UPDATED_AT', '13 de noviembre de 2026'),
 
     /*
     | Versión de cada documento. Se guarda junto al consentimiento para probar
     | qué texto aceptó el titular. Cambiar un texto exige cambiar su versión.
     */
     'versions' => [
-        'terms' => env('LEGAL_TERMS_VERSION', '2026-11-12'),
-        'privacy' => env('LEGAL_PRIVACY_VERSION', '2026-11-12'),
+        'terms' => env('LEGAL_TERMS_VERSION', '2026-11-13'),
+        'privacy' => env('LEGAL_PRIVACY_VERSION', '2026-11-13'),
         'cookies' => env('LEGAL_COOKIES_VERSION', '2026-11-12'),
         'returns' => env('LEGAL_RETURNS_VERSION', '2026-11-12'),
         'shipping' => env('LEGAL_SHIPPING_VERSION', '2026-11-12'),
         'payments' => env('LEGAL_PAYMENTS_VERSION', '2026-11-12'),
-        'contact' => env('LEGAL_CONTACT_VERSION', '2026-11-12'),
+        'contact' => env('LEGAL_CONTACT_VERSION', '2026-11-13'),
     ],
 
     'seller' => [
         'name' => env('LEGAL_SELLER_NAME'),
         'trade_name' => env('LEGAL_SELLER_TRADE_NAME', 'Tag Q'),
         'document' => env('LEGAL_SELLER_DOCUMENT'),
+        // Opcional: sin oficina, el domicilio se publica solo con `city`.
         'address' => env('LEGAL_SELLER_ADDRESS'),
         'city' => env('LEGAL_SELLER_CITY'),
         'email' => env('LEGAL_SELLER_EMAIL'),
