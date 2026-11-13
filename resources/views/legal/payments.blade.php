@@ -3,6 +3,9 @@
 @section('legal-content')
     @php
         $seller = fn (string $key): ?string => \App\Support\Legal::seller($key);
+        $freeFrom = \App\Support\ShippingPolicy::freeFrom();
+        $standardCost = (int) config('legal.shipping.cost', 15000);
+        $contraentregaCost = (int) config('legal.shipping.contraentrega_cost', 30000);
     @endphp
 
     <p>
@@ -14,8 +17,11 @@
     <h2>1. Medios de pago disponibles</h2>
     <ul>
         <li>
-            <strong>Contraentrega:</strong> pagas en efectivo o por el medio que acuerdes con la
-            transportadora al recibir el producto.
+            <strong>Contraentrega:</strong> el valor de los productos se paga al recibir. Cuando el
+            subtotal es inferior a {{ \App\Support\Legal::money($freeFrom) }}, el envío de
+            {{ \App\Support\Legal::money($contraentregaCost) }} se paga por adelantado mediante
+            transferencia manual (Nequi o cuenta bancaria) y el pedido se despacha cuando la tienda
+            confirma el abono.
         </li>
         <li>
             <strong>Wompi:</strong> pasarela de pagos en línea que habilita tarjeta débito y crédito,
@@ -40,14 +46,19 @@
         Al confirmar el pedido autorizas el cobro por el valor total informado. Con Wompi, la
         confirmación del pago llega por la notificación de la pasarela; el pedido pasa a pagado cuando
         Wompi confirma la transacción. Si el pago no se completa, el pedido queda pendiente y el stock
-        reservado se libera según la política de la tienda.
+        reservado se libera según la política de la tienda. En contraentrega, el pedido pasa a
+        preparación cuando la tienda confirma el abono de envío.
     </p>
 
     <h2>4. Precios y cobros</h2>
     <p>
         El precio aplicable es el que se muestra en el resumen del pedido al momento de confirmar. El
-        costo de envío, cuando exista, se informa por separado y se suma al total. No cobramos valores
-        adicionales no informados.
+        costo de envío, cuando exista, se informa por separado y se suma al total. En pagos en línea con
+        subtotal inferior a {{ \App\Support\Legal::money($freeFrom) }}, el envío es de
+        {{ \App\Support\Legal::money($standardCost) }}. En contraentrega con
+        subtotal inferior a {{ \App\Support\Legal::money($freeFrom) }}, el total incluye el envío de
+        {{ \App\Support\Legal::money($contraentregaCost) }}, que se paga por adelantado; el saldo de los
+        productos se paga al recibir. No cobramos valores adicionales no informados.
     </p>
 
     <h2>5. Reembolsos y reversión</h2>

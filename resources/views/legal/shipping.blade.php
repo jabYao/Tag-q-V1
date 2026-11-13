@@ -4,7 +4,9 @@
     @php
         $seller = fn (string $key): ?string => \App\Support\Legal::seller($key);
         $deliveryDays = (int) config('legal.delivery.max_days', 30);
-        $shippingCost = (int) config('legal.shipping.cost', 0);
+        $freeFrom = \App\Support\ShippingPolicy::freeFrom();
+        $standardCost = (int) config('legal.shipping.cost', 15000);
+        $contraentregaCost = (int) config('legal.shipping.contraentrega_cost', 30000);
     @endphp
 
     <p>
@@ -32,13 +34,16 @@
 
     <h2>3. Costo de envío</h2>
     <p>
-        @if ($shippingCost > 0)
-            El costo de envío es de <strong>{{ \App\Support\Legal::money($shippingCost) }}</strong> y se
-            informa por separado antes de pagar. El total del pedido incluye este valor.
-        @else
-            El envío no tiene costo adicional para el comprador en las condiciones vigentes. Cuando
-            exista un costo, se informará por separado antes de pagar y se sumará al total.
-        @endif
+        El envío es <strong>gratis</strong> en pedidos con subtotal igual o superior a
+        <strong>{{ \App\Support\Legal::money($freeFrom) }}</strong>, sin importar el medio de pago,
+        incluido contraentrega.
+    </p>
+    <p>
+        En pedidos con subtotal inferior a {{ \App\Support\Legal::money($freeFrom) }}, el envío tiene un
+        costo de <strong>{{ \App\Support\Legal::money($standardCost) }}</strong> para pagos en línea y de
+        <strong>{{ \App\Support\Legal::money($contraentregaCost) }}</strong> para contraentrega. En
+        contraentrega ese valor se paga por adelantado, según la sección 5. El costo se informa por
+        separado antes de pagar y se suma al total del pedido.
     </p>
 
     <h2>4. Despacho y seguimiento</h2>
@@ -50,10 +55,17 @@
 
     <h2>5. Pago Contraentrega</h2>
     <p>
-        Con el pago <strong>Contraentrega</strong> pagas al recibir el producto. En esa modalidad el
-        pedido se despacha después de confirmar los datos de envío y la disponibilidad del producto. Si
-        no hay stock, te informaremos antes del despacho y ofreceremos la devolución del dinero o un
-        producto equivalente.
+        Con el pago <strong>Contraentrega</strong>, el valor de los productos se paga al recibir. Si el
+        subtotal es inferior a {{ \App\Support\Legal::money($freeFrom) }}, el envío de
+        {{ \App\Support\Legal::money($contraentregaCost) }} se paga <strong>por adelantado</strong>
+        mediante transferencia manual (Nequi o cuenta bancaria) antes del despacho. Cuando el subtotal
+        alcanza el umbral de envío gratis, no hay abono que pagar. Los datos de la cuenta se entregan en
+        la pantalla de confirmación, en la página pública del pedido y en el correo de acuse.
+    </p>
+    <p>
+        El pedido queda pendiente hasta que la tienda confirme el abono. Solo entonces se programa el
+        despacho; no se despacha ningún pedido contraentrega con abono pendiente. Si el abono no se
+        confirma, el pedido puede cancelarse y el stock reservado se libera.
     </p>
 
     <h2>6. Recibo del pedido</h2>

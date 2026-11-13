@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Services\CheckoutService;
 use App\Services\OrderCancellationService;
 use App\Services\OrderNotificationService;
 use App\Services\OrderStatusService;
@@ -84,7 +85,7 @@ class OrderController extends Controller
 
     public function show(Order $order): View
     {
-        $order->load(['user', 'items.product']);
+        $order->load(['user', 'items.product', 'advanceConfirmedBy']);
 
         return view('admin.orders.show', [
             'order' => $order,
@@ -97,6 +98,11 @@ class OrderController extends Controller
             'canCancel' => $this->cancellations->canCancel($order),
             // Reembolsar es exclusivo del admin: el empleado no ve el botón.
             'canRefund' => $this->cancellations->canRefund($order) && (bool) auth()->user()?->isAdmin(),
+            // Confirmar el abono es exclusivo del admin: el empleado no lo ve.
+            'canConfirmAdvance' => $order->requiresAdvance()
+                && $order->status === OrderStatusService::STATUS_PENDING
+                && ! $order->hasConfirmedAdvance()
+                && (bool) auth()->user()?->isAdmin(),
             'refundStatusLabel' => RefundStatus::label($order->refund_status),
         ]);
     }
@@ -120,6 +126,37 @@ class OrderController extends Controller
         return redirect()
             ->route('admin.orders.show', $order)
             ->with('success', 'Estado del pedido actualizado.');
+    }
+
+    /**
+     * Confirma el abono de envío de un pedido contraentrega.
+     *
+     * El cliente transfiere el abono (Nequi o cuenta bancaria) y el admin
+     * registra la confirmación; sin ella el pedido no avanza a pagado. La
+     * actualización es condicional para que dos confirmaciones simultáneas no
+     * sobrescriban la evidencia original.
+     */
+    public function confirmAdvance(Order $order): RedirectResponse
+    {
+        $confirmed = Order::whereKey($order->getKey())
+            ->whereNull('advance_confirmed_at')
+            ->where('status', OrderStatusService::STATUS_PENDING)
+            ->where('payment_method', CheckoutService::PAYMENT_METHOD)
+            ->where('shipping_cost', '>', 0)
+            ->update([
+                'advance_confirmed_at' => now(),
+                'advance_confirmed_by_id' => auth()->id(),
+            ]);
+
+        if ($confirmed === 0) {
+            return redirect()
+                ->route('admin.orders.show', $order)
+                ->withErrors(['advance' => 'Este pedido no requiere abono, ya fue confirmado o no está pendiente de pago.']);
+        }
+
+        return redirect()
+            ->route('admin.orders.show', $order)
+            ->with('success', 'Abono de envío confirmado. El pedido puede avanzar a pagado.');
     }
 
     /**

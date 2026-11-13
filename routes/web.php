@@ -125,8 +125,10 @@ Route::middleware(['auth', 'role:admin,empleado'])->prefix('admin')->name('admin
     Route::patch('orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
 });
 
-// Reembolsos — solo admin: el empleado no puede devolver dinero (403).
+// Reembolsos y abono de contraentrega — solo admin: el empleado no puede
+// devolver dinero ni confirmar transferencias (403).
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('orders/{order}/advance', [OrderController::class, 'confirmAdvance'])->name('orders.advance');
     Route::post('orders/{order}/refund', [OrderController::class, 'refund'])->name('orders.refund');
 });
 

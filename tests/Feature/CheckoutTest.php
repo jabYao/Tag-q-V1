@@ -519,7 +519,8 @@ class CheckoutTest extends TestCase
             ->assertHasNoErrors();
 
         $order = Order::firstOrFail();
-        $this->assertSame(265860, $order->total, 'El total cobra la oferta por la cantidad');
+        $this->assertSame(30000, $order->shipping_cost, 'El envío contraentrega se suma al pedido');
+        $this->assertSame(295860, $order->total, 'El total cobra la oferta por la cantidad más el envío contraentrega');
 
         $this->assertDatabaseHas('order_items', [
             'order_id' => $order->id,
@@ -532,6 +533,6 @@ class CheckoutTest extends TestCase
         $product->update(['precio_oferta' => null]);
 
         $this->assertSame(132930, OrderItem::where('product_id', $product->id)->firstOrFail()->price);
-        $this->assertSame(265860, $order->fresh()->total);
+        $this->assertSame(295860, $order->fresh()->total);
     }
 }

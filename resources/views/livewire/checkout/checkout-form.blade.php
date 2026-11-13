@@ -104,8 +104,44 @@
             <p class="mt-3 max-w-2xl font-body text-[15px] leading-6 text-ink-soft">
                 Tu pedido
                 <span data-order-code="{{ $orderCode }}" class="font-display font-semibold text-ink">{{ $orderCode }}</span>
-                quedó registrado. El pago es <strong class="font-semibold text-ink">contraentrega</strong>: pagas al recibirlo.
+                quedó registrado.
+                @if($successAdvance > 0)
+                    El envío es <strong class="font-semibold text-ink">contraentrega</strong>:
+                    para despacharlo debes pagar por adelantado el
+                    <strong class="font-semibold text-ink" data-order-advance="{{ $successAdvance }}">abono de envío de $ {{ number_format($successAdvance, 0, ',', '.') }}</strong>
+                    por transferencia. El saldo de
+                    <strong class="font-semibold text-ink" data-order-balance="{{ $successBalance }}">$ {{ number_format($successBalance, 0, ',', '.') }}</strong>
+                    lo pagas al recibir.
+                @else
+                    El pago es <strong class="font-semibold text-ink">contraentrega</strong>: pagas al recibirlo.
+                @endif
             </p>
+
+            @if($successAdvance > 0)
+                <div class="mt-6 rounded border border-border-soft bg-surface-subtle p-4">
+                    <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-soft">Abono de envío</p>
+
+                    @if($transferDetails === [])
+                        <p class="mt-2 font-body text-sm leading-6 text-ink-soft">
+                            Escribe a la tienda para recibir los datos de la cuenta y enviar el comprobante del abono.
+                        </p>
+                    @else
+                        <dl class="mt-2 flex flex-col gap-2 font-body text-sm">
+                            @foreach($transferDetails as $detail)
+                                <div class="flex items-baseline justify-between gap-4">
+                                    <dt class="text-ink-soft">{{ $detail['label'] }}</dt>
+                                    <dd class="text-right font-medium text-ink">{{ $detail['value'] }}</dd>
+                                </div>
+                            @endforeach
+                        </dl>
+                    @endif
+
+                    <p class="mt-3 font-body text-xs leading-5 text-ink-muted">
+                        Envía el comprobante indicando el código del pedido. El despacho se programa cuando confirmemos el abono.
+                    </p>
+                </div>
+            @endif
+
             <a href="{{ route('catalog.index') }}" class="mt-6 {{ $ghostLinkClass }}">Volver al catálogo</a>
         </section>
     @endif
@@ -259,7 +295,13 @@
                                 >
                                 <span>
                                     <span class="block font-display text-sm font-semibold text-ink">Contraentrega</span>
-                                    <span class="mt-1 block font-body text-xs leading-5 text-ink-soft">Pagas al recibir tu pedido.</span>
+                                    <span class="mt-1 block font-body text-xs leading-5 text-ink-soft">
+                                        @if($advance > 0)
+                                            Pagas el abono de envío por adelantado y el saldo al recibir.
+                                        @else
+                                            Pagas al recibir tu pedido.
+                                        @endif
+                                    </span>
                                 </span>
                             </label>
 
@@ -363,16 +405,32 @@
                             </dd>
                         </div>
 
-                        <div class="flex items-center justify-between gap-4">
-                            <dt class="font-body text-sm text-ink-soft">Envío</dt>
-                            <dd data-checkout-shipping="{{ $shippingCost }}" class="font-display text-sm font-semibold tabular-nums text-ink">
-                                @if ($shippingCost > 0)
-                                    $ {{ number_format($shippingCost, 0, ',', '.') }} COP
-                                @else
-                                    Sin costo
-                                @endif
-                            </dd>
-                        </div>
+                        @if ($advance > 0)
+                            <div class="flex items-center justify-between gap-4">
+                                <dt class="font-body text-sm text-ink-soft">Envío contraentrega (abono por adelantado)</dt>
+                                <dd data-checkout-shipping="{{ $shippingCost }}" data-checkout-advance="{{ $advance }}" class="font-display text-sm font-semibold tabular-nums text-ink">
+                                    $ {{ number_format($advance, 0, ',', '.') }} COP
+                                </dd>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-4">
+                                <dt class="font-body text-sm text-ink-soft">Saldo al recibir</dt>
+                                <dd data-checkout-balance="{{ $balance }}" class="font-display text-sm font-semibold tabular-nums text-ink">
+                                    $ {{ number_format($balance, 0, ',', '.') }} COP
+                                </dd>
+                            </div>
+                        @else
+                            <div class="flex items-center justify-between gap-4">
+                                <dt class="font-body text-sm text-ink-soft">Envío</dt>
+                                <dd data-checkout-shipping="{{ $shippingCost }}" class="font-display text-sm font-semibold tabular-nums text-ink">
+                                    @if ($shippingCost > 0)
+                                        $ {{ number_format($shippingCost, 0, ',', '.') }} COP
+                                    @else
+                                        Sin costo
+                                    @endif
+                                </dd>
+                            </div>
+                        @endif
 
                         <div class="flex items-end justify-between gap-4 border-t border-border-soft pt-4">
                             <dt class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-soft">Total</dt>

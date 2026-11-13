@@ -28,12 +28,12 @@ return [
     | qué texto aceptó el titular. Cambiar un texto exige cambiar su versión.
     */
     'versions' => [
-        'terms' => env('LEGAL_TERMS_VERSION', '2026-11-13'),
+        'terms' => env('LEGAL_TERMS_VERSION', '2026-11-13.1'),
         'privacy' => env('LEGAL_PRIVACY_VERSION', '2026-11-13'),
         'cookies' => env('LEGAL_COOKIES_VERSION', '2026-11-12'),
         'returns' => env('LEGAL_RETURNS_VERSION', '2026-11-12'),
-        'shipping' => env('LEGAL_SHIPPING_VERSION', '2026-11-12'),
-        'payments' => env('LEGAL_PAYMENTS_VERSION', '2026-11-12'),
+        'shipping' => env('LEGAL_SHIPPING_VERSION', '2026-11-13'),
+        'payments' => env('LEGAL_PAYMENTS_VERSION', '2026-11-13'),
         'contact' => env('LEGAL_CONTACT_VERSION', '2026-11-13'),
     ],
 
@@ -61,7 +61,9 @@ return [
     ],
 
     'shipping' => [
-        'cost' => (int) env('LEGAL_SHIPPING_COST', 0),
+        'free_from' => (int) env('LEGAL_SHIPPING_FREE_FROM', 500000),
+        'cost' => (int) env('LEGAL_SHIPPING_COST', 15000),
+        'contraentrega_cost' => (int) env('LEGAL_SHIPPING_CONTRAENTREGA_COST', 30000),
         'carrier' => env('LEGAL_SHIPPING_CARRIER'),
     ],
 

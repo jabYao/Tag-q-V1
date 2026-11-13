@@ -6,6 +6,9 @@
         $deliveryDays = (int) config('legal.delivery.max_days', 30);
         $refundDays = (int) config('legal.retract.refund_calendar_days', 15);
         $warrantyMonths = (int) config('legal.warranty.months', 12);
+        $freeFrom = \App\Support\ShippingPolicy::freeFrom();
+        $standardCost = (int) config('legal.shipping.cost', 15000);
+        $contraentregaCost = (int) config('legal.shipping.contraentrega_cost', 30000);
     @endphp
 
     <p>
@@ -60,7 +63,7 @@
         <li>En el checkout ves el resumen con descripción, precio unitario, subtotal, costo de envío, total, medio de pago y plazo máximo de entrega. Puedes volver al carrito o cancelar antes de confirmar.</li>
         <li>Marcas las casillas de términos y privacidad y confirmas el pedido.</li>
         <li>Recibes un <strong>acuse de recibo</strong> por correo, a más tardar el día calendario siguiente, con el código del pedido, la fecha, el medio de pago, el precio exacto, el costo de envío y el plazo máximo de entrega.</li>
-        <li>Cuando el pago es en línea, Wompi confirma la transacción y el pedido pasa a pagado. Con contraentrega, el pago se realiza al recibir el producto.</li>
+        <li>Cuando el pago es en línea, Wompi confirma la transacción y el pedido pasa a pagado. Con contraentrega, el valor de los productos se paga al recibir y el abono de envío, cuando aplica, se paga por adelantado por transferencia antes del despacho.</li>
     </ol>
     <p>
         El contrato se entiende celebrado cuando recibes el acuse de recibo. Si detectas un error en el
@@ -77,7 +80,12 @@
 
     <h2>7. Envíos y entregas</h2>
     <p>
-        Realizamos envíos a toda Colombia. El plazo máximo de entrega es de
+        Realizamos envíos a toda Colombia. El envío es gratis desde
+        {{ \App\Support\Legal::money($freeFrom) }} de subtotal; por debajo de ese valor, el envío
+        estándar es de {{ \App\Support\Legal::money($standardCost) }}. En contraentrega con subtotal
+        inferior a ese valor, el envío de {{ \App\Support\Legal::money($contraentregaCost) }} se paga por
+        adelantado por transferencia manual y el pedido se despacha cuando la tienda confirma el abono.
+        El plazo máximo de entrega es de
         <strong>{{ $deliveryDays }} días calendario</strong> contados desde la confirmación del pago,
         salvo que antes de la compra se pacte un plazo distinto. El costo de envío y la transportadora
         se informan en el resumen o en el acuse de recibo. Consulta la

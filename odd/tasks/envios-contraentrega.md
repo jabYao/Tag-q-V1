@@ -1,0 +1,32 @@
+# Envíos y abono contraentrega
+
+Objective: aplicar la política de envíos del dueño (gratis desde $500.000, $15.000 estándar, $30.000 en contraentrega pagados por adelantado) y registrar la confirmación manual del abono antes de despachar, sin inventar datos de la cuenta receptora.
+Branch: feature/legal-colombia. Delivery: local commits only; push remains unauthorized. Test runner: `php artisan test` against PostgreSQL `tagq_testing`; asset check: `npm run build`.
+
+## Specs
+
+- **S1 — Envío gratis.** Todo pedido con subtotal igual o superior a $500.000 tiene envío $0, sin importar el método de pago, incluido contraentrega.
+- **S2 — Envío contraentrega.** Un pedido contraentrega con subtotal inferior a $500.000 paga $30.000 de envío por adelantado; el saldo de productos se paga al recibir.
+- **S3 — Envío estándar.** Cualquier otro pedido con subtotal inferior a $500.000 paga $15.000 de envío.
+- **S4 — Cobro manual del abono.** El abono de $30.000 se cobra por transferencia manual (Nequi o cuenta bancaria). El pedido contraentrega queda pendiente hasta que un administrador confirme el abono; solo entonces puede avanzar a pagado y preparación. Los datos de la cuenta se leen de variables de entorno; no se inventan.
+- **S5 — Trazabilidad.** El pedido guarda quién confirmó el abono y cuándo. La confirmación es irreversible y solo aplica a pedidos contraentrega con abono pendiente.
+- **S6 — Visibilidad.** Checkout, pantalla de éxito, página pública del pedido, correo de acuse y panel administrativo muestran el abono requerido y el saldo que se paga al recibir.
+- **S7 — Páginas legales.** Envíos, pagos y términos publican la política real: gratis desde $500.000, $15.000 estándar y $30.000 de abono en contraentrega. Se actualizan versiones y fecha.
+- **S8 — Pruebas y calidad.** En dinero, el test va primero. `php artisan test` completo en verde, Pint limpio en archivos tocados y `npm run build` correcto antes del commit.
+
+## Tasks
+
+- **T1** — `ShippingPolicy` y configuración de costos. Specs: S1-S3. Route: inline. Status: done. Evidence: `App\Support\ShippingPolicy`, claves `legal.shipping.free_from/cost/contraentrega_cost`, checkout y `CheckoutService` usan la política; `ShippingPolicyTest` 4/4 y `CheckoutTest`/`ConsentTest` ajustados.
+- **T2** — Migración, modelo, confirmación administrativa y bloqueo de transición sin abono. Specs: S4-S5. Route: inline. Status: done. Evidence: migración `2026_11_13_000000_add_contraentrega_advance_to_orders_table.php`, helpers `requiresAdvance/advanceAmount/hasConfirmedAdvance/balanceDue`, ruta admin-only `admin.orders.advance`, `OrderController::confirmAdvance` con actualización condicional, gate en `OrderStatusService`, bloque en el detalle admin; `ContraentregaAdvanceTest` 8/8.
+- **T3** — Checkout, éxito, página pública y correo con abono y saldo. Specs: S6. Route: inline. Status: done. Evidence: `PaymentInstructions`, `config/payments.php`, líneas de abono/saldo en checkout, pantalla de éxito, página pública y correo de acuse; `ContraentregaVisibilityTest` 7/7.
+- **T4** — Páginas legales y versiones. Specs: S7. Route: inline. Status: done. Evidence: envíos, pagos y términos publican umbral, tarifas y abono; versiones `2026-11-13`; `LegalPagesTest` ampliado.
+- **T5** — Suite completa, Pint, build y verificación independiente. Specs: S8. Route: inline + verifier. Status: done. Evidence: verifier independiente PASS con 0 bloqueantes y 4 advertencias; corregidas las 3 accionables (línea duplicada de $30.000 en checkout, gate también en `pagado → en_preparacion`, tarifa de $15.000 en pagos/términos con versión `2026-11-13.1`); test de regresión del verifier adoptado como `tests/Feature/ShippingPolicyRegressionTest.php` (7/7). Suite final 764 tests / 6169 aserciones en verde; Pint limpio; `npm run build` correcto.
+
+## Log
+
+- **L1 — Solicitud original.** "apartir de 500000 los envios son gratis, en los envios contraentrega se debe cancelar 30000 por adelantado, de resto tienen un costo de 15000". Decisión de cobro: "Transferencia manual". Se interpreta que los $30.000 son el envío contraentrega pagado antes del despacho y que el envío gratis desde $500.000 aplica también a contraentrega; si el dueño corrige la precedencia, se reabre S2.
+- **L2 — Estado actual.** El checkout usa un envío plano `config('legal.shipping.cost')`; el pedido no tiene campo de abono; Wompi valida el pago contra `order.total * 100`, por lo que un pago parcial no es viable; el flujo de estados es lineal `pendiente_de_pago → pagado → en_preparacion → enviado → entregado`.
+- **L3 — Implementación T1-T2.** `ShippingPolicy` resuelve gratis desde el umbral, abono contraentrega y tarifa estándar. El abono se modela como el costo de envío del pedido contraentrega: no se agrega un campo de monto, solo la evidencia `advance_confirmed_at` y `advance_confirmed_by_id`. La confirmación es admin-only y condicional (pendiente, contraentrega, envío mayor a cero, sin confirmación previa) para que dos solicitudes simultáneas no sobrescriban la evidencia. `OrderStatusService` bloquea `pendiente_de_pago → pagado` si el abono sigue pendiente.
+- **L4 — Implementación T3-T4.** `PaymentInstructions` lee los datos de la cuenta de `PAYMENT_TRANSFER_*` y no inventa cuentas: sin configurar, la tienda pide escribir para recibir los datos. Checkout, éxito, página pública y correo muestran abono y saldo. La página pública deja de refrescarse y de hablar de Wompi en pedidos contraentrega. Las páginas legales publican las tres reglas y se actualizan versiones.
+- **L5 — Verificación inicial.** Suite completa 756 tests / 6119 aserciones en verde; Pint limpio en archivos tocados; `npm run build` correcto. Sin push.
+- **L6 — Verificación independiente y correcciones.** El verifier independiente devolvió PASS con 0 bloqueantes y 4 advertencias. Corregidas: (1) el checkout mostraba dos líneas de $30.000 al mostrar envío y abono por separado; ahora una sola línea «Envío contraentrega (abono por adelantado)»; (2) el gate del abono ahora cubre también `pagado → en_preparacion`, no solo el paso a pagado; (3) pagos y términos publican la tarifa estándar de $15.000 y términos sube a versión `2026-11-13.1`. Su test de regresión se adoptó como `tests/Feature/ShippingPolicyRegressionTest.php`. Queda como nota de despliegue: un `.env` de producción con `LEGAL_SHIPPING_COST=0` anularía la tarifa estándar; hay que definir `LEGAL_SHIPPING_COST=15000` y las claves `PAYMENT_TRANSFER_*`. Suite final 764/6169 en verde; Pint limpio; build correcto.
