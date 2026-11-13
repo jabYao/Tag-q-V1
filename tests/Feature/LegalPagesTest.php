@@ -94,6 +94,27 @@ class LegalPagesTest extends TestCase
 
         $this->assertStringNotContainsString('data-legal-draft', $html);
         $this->assertStringContainsString('Vendedor de Prueba', $html);
+        $this->assertStringContainsString('Calle 1 # 2-3, Bogotá', $html);
+    }
+
+    public function test_el_domicilio_se_publica_a_nivel_municipio_cuando_no_hay_direccion(): void
+    {
+        config()->set('legal.draft', false);
+        config()->set('legal.seller.name', 'Vendedor de Prueba');
+        config()->set('legal.seller.document', '900123456-7');
+        config()->set('legal.seller.address', null);
+        config()->set('legal.seller.city', 'Dibulla, La Guajira');
+        config()->set('legal.seller.email', 'ventas@example.com');
+
+        $privacy = $this->html('legal.privacy');
+
+        $this->assertStringContainsString('Dibulla, La Guajira', $privacy);
+        $this->assertStringNotContainsString('[Completar: dirección del domicilio]', $privacy);
+        $this->assertStringNotContainsString('data-legal-draft', $privacy);
+
+        $contact = $this->html('legal.contact');
+
+        $this->assertStringContainsString('Domicilio: Dibulla, La Guajira', $contact);
     }
 
     public function test_privacidad_cubre_contenido_minimo_derechos_y_plazos(): void

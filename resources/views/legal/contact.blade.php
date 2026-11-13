@@ -18,7 +18,7 @@
         <li>Correo para protección de datos: <a href="mailto:{{ $seller('privacy_email') }}">{{ $seller('privacy_email') }}</a></li>
         <li>Teléfono: <a href="tel:{{ $seller('phone') }}">{{ $seller('phone') }}</a></li>
         <li>Horario de atención: {{ $seller('hours') }}</li>
-        <li>Domicilio: {{ $seller('address') }}, {{ $seller('city') }}</li>
+        <li>Domicilio: {{ \App\Support\Legal::domicile() }}</li>
     </ul>
 
     <h2>2. Radicado de las PQRS</h2>
