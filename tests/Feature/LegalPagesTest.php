@@ -154,9 +154,13 @@ class LegalPagesTest extends TestCase
     {
         $html = $this->html('legal.cookies');
 
-        foreach (['tag-q-session', 'XSRF-TOKEN', 'Wompi', 'No utilizamos cookies de analítica ni de publicidad'] as $needle) {
+        foreach (['tag-q-session', 'XSRF-TOKEN', 'Wompi', '_ga', 'Google Analytics 4', 'tagq_analytics_consent'] as $needle) {
             $this->assertStringContainsString($needle, $html, "Cookies incluye: {$needle}");
         }
+
+        // La analítica exige consentimiento previo: la política no puede seguir
+        // afirmando que la tienda no usa cookies de analítica.
+        $this->assertStringNotContainsString('No utilizamos cookies de analítica', $html);
     }
 
     public function test_devoluciones_envios_pagos_y_contacto_cubren_los_plazos_legales(): void

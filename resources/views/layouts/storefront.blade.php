@@ -9,6 +9,7 @@
          widget de Wompi en el checkout). Se apilan aquí para que sigan dentro
          del <head> y una sola vez por documento. --}}
     @stack('head')
+    <x-analytics.scripts />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -1109,6 +1110,8 @@
             </div>
         </div>
     </div>
+    {{-- Aviso de analítica: solo se pinta mientras no haya una decisión previa. --}}
+    <x-analytics.consent />
     @livewireScripts
 </body>
 </html>

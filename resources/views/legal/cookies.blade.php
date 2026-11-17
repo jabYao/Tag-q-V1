@@ -20,8 +20,8 @@
 
     <h2>2. Cookies que utilizamos</h2>
     <p>
-        Hoy la tienda solo usa cookies y almacenamiento estrictamente necesarios para funcionar y
-        proteger la sesión. Este es el inventario real:
+        La tienda usa cookies estrictamente necesarias para funcionar y proteger la sesión, y cookies
+        de analítica que solo se instalan si las autorizas. Este es el inventario real:
     </p>
     <table>
         <thead>
@@ -46,31 +46,74 @@
                 <td>Hasta 2 horas de inactividad</td>
             </tr>
             <tr>
+                <td><strong>tagq_analytics_consent</strong></td>
+                <td>Tag Q</td>
+                <td>Guarda si aceptaste o rechazaste la analítica, para no preguntarte en cada visita. No identifica personas ni se usa para seguimiento.</td>
+                <td>1 año</td>
+            </tr>
+            <tr>
                 <td><strong>Cookies de Wompi</strong></td>
                 <td>Wompi</td>
                 <td>Se cargan solo cuando abres el widget de pago para procesar la transacción y prevenir fraude.</td>
                 <td>Según la política de Wompi</td>
             </tr>
+            <tr>
+                <td><strong>_ga</strong></td>
+                <td>Google (Google Analytics 4)</td>
+                <td>Distingue navegadores y sesiones para medir visitas y uso de la tienda de forma agregada. Solo se instala si aceptas la analítica.</td>
+                <td>2 años</td>
+            </tr>
+            <tr>
+                <td><strong>_ga_&lt;ID&gt;</strong></td>
+                <td>Google (Google Analytics 4)</td>
+                <td>Conserva el estado de la sesión de medición. Solo se instala si aceptas la analítica.</td>
+                <td>2 años</td>
+            </tr>
         </tbody>
     </table>
 
-    <h2>3. Lo que no usamos</h2>
+    <h2>3. Analítica y consentimiento</h2>
     <p>
-        <strong>No utilizamos cookies de analítica ni de publicidad</strong>, ni perfiles de seguimiento
-        entre sitios. Por eso hoy no mostramos un banner de consentimiento: las cookies estrictamente
-        necesarias están exentas de autorización previa. Si en el futuro incorporamos analítica o
-        publicidad, publicaremos una nueva versión de esta política y pediremos tu consentimiento antes
-        de activarlas.
+        Usamos <strong>Google Analytics 4</strong> para entender qué páginas se visitan, desde qué
+        dispositivos y cómo se recorre el catálogo antes de comprar. Esta medición
+        <strong>no es necesaria</strong> para que la tienda funcione, así que no se activa sola:
+        mientras no la aceptes, el script de Google no se carga en absoluto y no se instala ninguna
+        cookie de analítica.
+    </p>
+    <p>
+        El aviso aparece en tu primera visita y ofrece aceptar o rechazar con la misma facilidad.
+        Rechazar no limita nada: puedes buscar, agregar al carrito y comprar con normalidad. Tu
+        decisión queda guardada en la cookie <strong>tagq_analytics_consent</strong> para no volver a
+        preguntarte.
+    </p>
+    <p>
+        <strong>No usamos cookies de publicidad</strong>, ni creamos perfiles para mostrarte anuncios
+        en otros sitios, ni vendemos datos de navegación.
     </p>
 
-    <h2>4. Cómo gestionarlas</h2>
+    <h2>4. Transferencia internacional</h2>
     <p>
-        Puedes bloquear o eliminar las cookies desde la configuración de tu navegador. Ten en cuenta que
-        si bloqueas las cookies necesarias, el carrito, el inicio de sesión y el checkout pueden dejar
-        de funcionar. La configuración es distinta en cada navegador; consulta su ayuda oficial.
+        Al aceptar la analítica, los datos de uso se envían a Google LLC, con domicilio en Estados
+        Unidos. Esa transmisión es una transferencia internacional de datos personales y se rige por
+        lo descrito en la
+        <a href="{{ route('legal.privacy') }}">política de privacidad</a>, que explica las garantías
+        aplicables y cómo ejercer tus derechos.
     </p>
 
-    <h2>5. Vigencia y cambios</h2>
+    <h2>5. Cómo gestionarlas y revocar tu decisión</h2>
+    <p>
+        Puedes bloquear o eliminar las cookies desde la configuración de tu navegador. Ten en cuenta
+        que si bloqueas las cookies necesarias, el carrito, el inicio de sesión y el checkout pueden
+        dejar de funcionar. La configuración es distinta en cada navegador; consulta su ayuda oficial.
+    </p>
+    <p>
+        Para <strong>retirar el consentimiento de analítica</strong>, elimina la cookie
+        <strong>tagq_analytics_consent</strong> desde la configuración de tu navegador: el aviso
+        volverá a aparecer y podrás rechazar. También puedes borrar el resto de cookies en cualquier
+        momento; la analítica dejará de medir en tu siguiente visita.
+    </p>
+
+    <h2>6. Vigencia y cambios</h2>
     <p>
         Esta política rige desde la fecha de actualización indicada al inicio. Cualquier cambio en las
         cookies utilizadas se reflejará en una nueva versión con su fecha.

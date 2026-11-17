@@ -42,6 +42,13 @@ return [
         ],
     ],
 
+    'google' => [
+        // ID de medición de Google Analytics 4 (formato G-XXXXXXXXXX). Sin
+        // valor, el storefront no carga gtag ni muestra el aviso de
+        // consentimiento: local y staging no miden nada por accidente.
+        'analytics_id' => env('GOOGLE_ANALYTICS_ID'),
+    ],
+
     'wompi' => [
         'public_key' => env('WOMPI_PUBLIC_KEY'),
         'private_key' => env('WOMPI_PRIVATE_KEY'),

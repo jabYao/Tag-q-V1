@@ -134,8 +134,10 @@
     <h2>10. Cookies</h2>
     <p>
         Usamos cookies y tecnologías similares estrictamente necesarias para el funcionamiento del
-        sitio y la seguridad de la sesión. El detalle y la forma de gestionarlas están en la
-        <a href="{{ route('legal.cookies') }}">política de cookies</a>.
+        sitio y la seguridad de la sesión. Además, y solo si lo autorizas, cargamos Google Analytics 4
+        para medir de forma agregada cómo se usa la tienda; puedes rechazarlo sin afectar tu compra.
+        El detalle de las cookies, el tercero que las provee y la forma de revocar tu decisión están
+        en la <a href="{{ route('legal.cookies') }}">política de cookies</a>.
     </p>
 
     <h2>11. Vigencia y cambios</h2>

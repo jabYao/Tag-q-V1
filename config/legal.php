@@ -29,8 +29,8 @@ return [
     */
     'versions' => [
         'terms' => env('LEGAL_TERMS_VERSION', '2026-11-13.1'),
-        'privacy' => env('LEGAL_PRIVACY_VERSION', '2026-11-13'),
-        'cookies' => env('LEGAL_COOKIES_VERSION', '2026-11-12'),
+        'privacy' => env('LEGAL_PRIVACY_VERSION', '2026-11-17'),
+        'cookies' => env('LEGAL_COOKIES_VERSION', '2026-11-17.1'),
         'returns' => env('LEGAL_RETURNS_VERSION', '2026-11-12'),
         'shipping' => env('LEGAL_SHIPPING_VERSION', '2026-11-13'),
         'payments' => env('LEGAL_PAYMENTS_VERSION', '2026-11-13'),

@@ -28,6 +28,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'webhooks/wompi',
         ]);
+
+        // La decisión de analítica la escribe el banner desde el navegador, así
+        // que llega en texto plano. Sin esta exclusión `EncryptCookies` la
+        // descarta al no poder descifrarla, y el aviso reaparecería en cada
+        // carga sin llegar nunca a activar la medición.
+        $middleware->encryptCookies(except: [
+            'tagq_analytics_consent',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -747,3 +747,78 @@ function initProductDetailAnimations() {
 }
 
 initProductDetailAnimations();
+
+/**
+ * Consentimiento de analítica.
+ *
+ * El servidor decide la parte fácil: sin cookie válida no pinta el cargador de
+ * Google y, sin decisión, pinta el aviso. Este módulo cubre el hueco que queda
+ * —el visitante acaba de pulsar— y lo hace sin recargar, para no perder el
+ * pageview de la primera página, que es justo la que más importa.
+ *
+ * Aceptar escribe la cookie de un año y arma `gtag` con el mismo ID que ya
+ * viaja en `data-analytics-id`. Rechazar solo escribe la cookie: la siguiente
+ * carga ya no muestra el aviso y el servidor sigue sin incluir nada. La cookie
+ * está excluida del cifrado de Laravel (`bootstrap/app.php`), porque la escribe
+ * el navegador y no la app.
+ *
+ * Ganchos declarativos que conecta:
+ *   - `data-analytics-consent`  contenedor del aviso; lleva el ID de medición.
+ *   - `data-analytics-accept`   botón de aceptar.
+ *   - `data-analytics-reject`   botón de rechazar.
+ */
+const ANALYTICS_CONSENT_COOKIE = 'tagq_analytics_consent';
+const ANALYTICS_CONSENT_MAX_AGE = 60 * 60 * 24 * 365;
+
+function writeAnalyticsConsent(decision) {
+    document.cookie = [
+        `${ANALYTICS_CONSENT_COOKIE}=${decision}`,
+        'path=/',
+        `max-age=${ANALYTICS_CONSENT_MAX_AGE}`,
+        'samesite=lax',
+    ].join('; ');
+}
+
+function loadAnalytics(measurementId) {
+    if (!measurementId || document.querySelector('[data-analytics-script]')) {
+        return;
+    }
+
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function gtag() {
+        window.dataLayer.push(arguments);
+    };
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.dataset.analyticsScript = '';
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
+
+    document.head.appendChild(script);
+
+    window.gtag('js', new Date());
+    window.gtag('config', measurementId);
+}
+
+function initAnalyticsConsent() {
+    const banner = document.querySelector('[data-analytics-consent]');
+
+    if (!banner) {
+        return;
+    }
+
+    const decide = (decision) => {
+        writeAnalyticsConsent(decision);
+
+        if (decision === 'accepted') {
+            loadAnalytics(banner.dataset.analyticsId);
+        }
+
+        banner.hidden = true;
+    };
+
+    banner.querySelector('[data-analytics-accept]')?.addEventListener('click', () => decide('accepted'));
+    banner.querySelector('[data-analytics-reject]')?.addEventListener('click', () => decide('rejected'));
+}
+
+initAnalyticsConsent();
