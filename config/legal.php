@@ -21,7 +21,18 @@ return [
 
     'draft' => (bool) env('LEGAL_DRAFT', true),
 
+    /*
+    | Fecha de actualización por documento. Cada política declara cuándo se
+    | revisó por última vez de verdad: cambiar solo la política de cookies no
+    | debe hacer que las otras seis afirmen una actualización que no tuvieron.
+    | `updated_at` es el valor por defecto para los documentos sin fecha propia.
+    */
     'updated_at' => env('LEGAL_UPDATED_AT', '13 de noviembre de 2026'),
+
+    'updated_at_by_document' => [
+        'privacy' => env('LEGAL_PRIVACY_UPDATED_AT', '17 de noviembre de 2026'),
+        'cookies' => env('LEGAL_COOKIES_UPDATED_AT', '17 de noviembre de 2026'),
+    ],
 
     /*
     | Versión de cada documento. Se guarda junto al consentimiento para probar

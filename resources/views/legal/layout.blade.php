@@ -54,7 +54,7 @@
                 {{ $title }}
             </h1>
             <p data-legal-updated class="mt-3 font-body text-sm leading-6 text-ink-soft">
-                Última actualización: {{ config('legal.updated_at') }} · Versión {{ \App\Support\Legal::version($document) }}
+                Última actualización: {{ \App\Support\Legal::updatedAt($document) }} · Versión {{ \App\Support\Legal::version($document) }}
             </p>
 
             @if ($isDraft)

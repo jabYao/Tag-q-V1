@@ -69,6 +69,23 @@ final class Legal
     }
 
     /**
+     * Fecha de actualización publicada para un documento.
+     *
+     * Cada política tiene su propia fecha; si no la define, hereda la global.
+     * Así una revisión parcial no reescribe la fecha de las demás.
+     */
+    public static function updatedAt(string $document): string
+    {
+        $own = config("legal.updated_at_by_document.{$document}");
+
+        if (is_string($own) && trim($own) !== '') {
+            return $own;
+        }
+
+        return (string) config('legal.updated_at');
+    }
+
+    /**
      * Huella SHA-256 del texto publicado.
      *
      * Se calcula sobre la plantilla Blade del documento más su versión. Es

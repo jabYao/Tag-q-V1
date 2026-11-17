@@ -43,6 +43,8 @@ Cambiar el texto exige subir la versión del documento en `config/legal.php`.
 - **T4** — Inserción en `layouts/storefront`. S2, S3, S5. inline. ✅ hecho.
 - **T5** — Política de cookies y de privacidad + versión legal + `LegalPagesTest`. S6. inline. ✅ hecho.
 - **T6** — `tests/Feature/AnalyticsConsentTest.php`. S1–S5. inline. ✅ hecho.
+- **T7** — Fecha de actualización por documento (`config/legal.php`,
+  `App\Support\Legal::updatedAt`, `legal/layout`) + test. S6. inline. ✅ hecho.
 
 ## Log
 
@@ -62,3 +64,12 @@ la cookie del banner se descarta en la siguiente petición.
 implementar: 19/19. Suite completa: 770 tests, 0 fallos. `npm run build` OK.
 La cookie local quedó con `GOOGLE_ANALYTICS_ID=G-CMD9M44Q1W` en `.env` (no se
 versiona); el valor de producción se configura en Railway.
+
+**L5 (17 nov 2026) —** «si que cada documento tenga su propia fecha de actualkizacion»
+(verbatim). Decisión: `cookies` y `privacy` declaran 17 de noviembre de 2026; los otros
+cinco documentos conservan el 13 de noviembre de 2026 como valor por defecto.
+
+**L6 —** RED del test nuevo antes de implementar (cookies mostraba la fecha global).
+GREEN: `LegalPagesTest` 14/14; suite completa 771 tests, 0 fallos. La fecha no entra
+en `documentHash`, así que el consentimiento ya registrado sigue siendo válido y no
+hizo falta subir la versión otra vez.
