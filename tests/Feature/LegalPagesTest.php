@@ -276,4 +276,32 @@ class LegalPagesTest extends TestCase
         $this->assertStringContainsString('Tag Q', $html);
         $this->assertStringContainsString('&copy; '.date('Y').' Tag Q. Todos los derechos reservados.', $html);
     }
+
+    public function test_cada_documento_muestra_su_propia_fecha_de_actualizacion(): void
+    {
+        // Solo las políticas que cambiaron declaran la fecha nueva. Una fecha
+        // global compartida haría que seis políticas afirmaran una
+        // actualización que nunca tuvieron.
+        foreach (['legal.cookies', 'legal.privacy'] as $route) {
+            $this->assertStringContainsString(
+                'Última actualización: 17 de noviembre de 2026',
+                $this->html($route),
+                "{$route} declara su propia fecha de actualización"
+            );
+        }
+
+        foreach (['legal.terms', 'legal.shipping', 'legal.returns', 'legal.payments', 'legal.contact'] as $route) {
+            $this->assertStringContainsString(
+                'Última actualización: 13 de noviembre de 2026',
+                $this->html($route),
+                "{$route} conserva su fecha de actualización"
+            );
+        }
+
+        $this->assertStringNotContainsString(
+            '17 de noviembre de 2026',
+            $this->html('legal.terms'),
+            'La fecha de cookies no se filtra al resto de documentos'
+        );
+    }
 }
