@@ -132,3 +132,14 @@ un mismo enlace abierto en otro dispositivo volvería a medir la compra; (c) un
 visitante que compra sin haber decidido el consentimiento no genera `purchase` en
 esa visita —no hay cola previa al consentimiento—, pero sí al volver al enlace con
 la decisión ya tomada.
+
+**L10 —** Commits locales de la feature: `8814644` (consentimiento y cargador,
+T1–T6), `eb522c6` (fecha de actualización por documento, T7) y `971dc27` (embudo
+completo y `user_id`, T8–T10). Ninguno se publicó: la rama no tiene upstream y el
+push sigue sin autorización. El CI de GitHub nunca corrió esta rama porque
+`ci.yml` solo dispara en push o PR hacia `main`. Al auditar el CI de `main` se
+encontraron dos tests Dusk desactualizados —no bugs del producto— corregidos en
+`fabbae2`: `AuthResponsiveTest` usaba varias sentencias en `assertScript()`, que
+antepone `return`; `HomeMobileTest` buscaba el icono `compact` en favoritos, que
+usa la variante `bag`. Las 39 expresiones `assertScript` de `tests/Browser` se
+compilaron como cuerpo de función con Node: todas válidas. Suite 778/778.
