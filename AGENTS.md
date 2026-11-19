@@ -75,7 +75,7 @@ Léelo completo antes de escribir código. Si algo no está aquí, **pregunta**,
 | Servicio | Uso |
 |---|---|
 | Railway | Hosting (backend + frontend juntos, al ser monolito). |
-| GitHub Actions | CI. **Estado: pendiente** (ver §7). |
+| GitHub Actions | CI. `.github/workflows/ci.yml` corre la suite PHPUnit contra PostgreSQL (job `tests`) y los E2E de Dusk (job `dusk`) en cada push a `main` y cada PR hacia `main`. Réplica local: `php artisan test` y `php artisan dusk`. |
 
 ### Descartado explícitamente (no proponer)
 - React, arquitectura headless con API separada.
@@ -106,6 +106,7 @@ Reglas:
 3. **Los tests corren contra PostgreSQL** (`tagq_testing`), no SQLite: `enum`, `json` y las FK no se comportan igual.
 4. **En dinero y stock, el test va primero:** se escribe el test que falla, luego el arreglo, y queda como regresión permanente.
 5. **`php artisan test` debe pasar completo antes de cada commit.** La suite es la que impide que una rotura se cuele.
+6. **En Dusk, `assertScript()` recibe una sola expresión.** El helper antepone `return`, así que varias sentencias fallan con `Unexpected token`. Para varias líneas, envuélvelas en una IIFE: `(function () { … })()`. Y en dinero, un selector que ya no existe en la vista no es un fallo del producto: es un test desactualizado; se corrige contra el marcado real.
 
 ---
 
