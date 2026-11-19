@@ -77,11 +77,14 @@ class AuthResponsiveTest extends DuskTestCase
                 ->assertScript(
                     // `assertScript` antepone `return`: varias sentencias no
                     // son una expresión válida (`return const …`). La IIFE
-                    // conserva el retorno único.
+                    // conserva el retorno único. El centro se compara con
+                    // `clientWidth`, no con `innerWidth`: este último incluye
+                    // la barra de desplazamiento (~15 px) y el contenido se
+                    // centra en el área visible.
                     '(function () {'
                     .'const shell = document.querySelector("[data-auth] .auth-shell");'
                     .'const r = shell.getBoundingClientRect();'
-                    .'return Math.abs((r.left + r.right) / 2 - window.innerWidth / 2) <= 2;'
+                    .'return Math.abs((r.left + r.right) / 2 - document.documentElement.clientWidth / 2) <= 2;'
                     .'})()',
                     true,
                 )

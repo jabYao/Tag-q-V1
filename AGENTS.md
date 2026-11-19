@@ -106,7 +106,7 @@ Reglas:
 3. **Los tests corren contra PostgreSQL** (`tagq_testing`), no SQLite: `enum`, `json` y las FK no se comportan igual.
 4. **En dinero y stock, el test va primero:** se escribe el test que falla, luego el arreglo, y queda como regresión permanente.
 5. **`php artisan test` debe pasar completo antes de cada commit.** La suite es la que impide que una rotura se cuele.
-6. **En Dusk, `assertScript()` recibe una sola expresión.** El helper antepone `return`, así que varias sentencias fallan con `Unexpected token`. Para varias líneas, envuélvelas en una IIFE: `(function () { … })()`. Y en dinero, un selector que ya no existe en la vista no es un fallo del producto: es un test desactualizado; se corrige contra el marcado real.
+6. **En Dusk, `assertScript()` recibe una sola expresión.** El helper antepone `return`, así que varias sentencias fallan con `Unexpected token`. Para varias líneas, envuélvelas en una IIFE: `(function () { … })()`. Para medir centrado usa `document.documentElement.clientWidth`, no `window.innerWidth`: el segundo incluye la barra de desplazamiento y produce una desviación falsa. Y en dinero, un selector que ya no existe en la vista no es un fallo del producto: es un test desactualizado; se corrige contra el marcado real y completando los campos obligatorios vigentes (por ejemplo, las casillas de consentimiento del checkout).
 
 ---
 
