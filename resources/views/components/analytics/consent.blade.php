@@ -8,12 +8,20 @@
     // rechazar escribe `tagq_analytics_consent`, y desde ahí el servidor deja
     // de pintarlo: no se pregunta dos veces.
     $decided = in_array($decision, ['accepted', 'rejected'], true);
+
+    // Si el visitante acepta aquí mismo, app.js carga gtag sin recargar y debe
+    // enviar el `user_id` en esa primera carga: el mismo id que lleva el
+    // cargador del servidor cuando ya venía aceptado.
+    $userId = auth()->check() ? (string) auth()->id() : null;
 @endphp
 
 @if ($measurementId && ! $decided)
     <section
         data-analytics-consent
         data-analytics-id="{{ $measurementId }}"
+        @if ($userId !== null)
+            data-analytics-user-id="{{ $userId }}"
+        @endif
         aria-label="Consentimiento de cookies de analítica"
         class="fixed inset-x-0 bottom-0 z-[80] border-t border-border-soft bg-surface shadow-[0_-6px_24px_rgba(0,5,44,0.12)]"
     >

@@ -31,7 +31,7 @@ return [
 
     'updated_at_by_document' => [
         'privacy' => env('LEGAL_PRIVACY_UPDATED_AT', '17 de noviembre de 2026'),
-        'cookies' => env('LEGAL_COOKIES_UPDATED_AT', '17 de noviembre de 2026'),
+        'cookies' => env('LEGAL_COOKIES_UPDATED_AT', '19 de noviembre de 2026'),
     ],
 
     /*
@@ -41,7 +41,7 @@ return [
     'versions' => [
         'terms' => env('LEGAL_TERMS_VERSION', '2026-11-13.1'),
         'privacy' => env('LEGAL_PRIVACY_VERSION', '2026-11-17'),
-        'cookies' => env('LEGAL_COOKIES_VERSION', '2026-11-17.1'),
+        'cookies' => env('LEGAL_COOKIES_VERSION', '2026-11-19.1'),
         'returns' => env('LEGAL_RETURNS_VERSION', '2026-11-12'),
         'shipping' => env('LEGAL_SHIPPING_VERSION', '2026-11-13'),
         'payments' => env('LEGAL_PAYMENTS_VERSION', '2026-11-13'),

@@ -46,6 +46,16 @@ $cardClass = 'rounded border border-border-soft bg-white p-6 sm:p-8';
 @endphp
 
 <div class="site-container py-10 lg:py-14">
+    @if (\App\Support\Analytics::purchaseIsCountable($order) && ! \App\Support\Analytics::purchaseWasTracked($order))
+        {{-- Una sola vez por pedido y navegador: app.js anota el código en la
+             cookie y el servidor deja de declararlo en las recargas. --}}
+        <x-analytics.event
+            name="purchase"
+            :params="\App\Support\Analytics::orderParams($order)"
+            :once="$order->code"
+        />
+    @endif
+
     <header class="mb-8 flex flex-col gap-4 border-b border-border-soft pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <p class="font-display text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">Confirmación de compra</p>

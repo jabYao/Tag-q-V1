@@ -154,7 +154,7 @@ class LegalPagesTest extends TestCase
     {
         $html = $this->html('legal.cookies');
 
-        foreach (['tag-q-session', 'XSRF-TOKEN', 'Wompi', '_ga', 'Google Analytics 4', 'tagq_analytics_consent'] as $needle) {
+        foreach (['tag-q-session', 'XSRF-TOKEN', 'Wompi', '_ga', 'Google Analytics 4', 'tagq_analytics_consent', 'tagq_purchase_tracked'] as $needle) {
             $this->assertStringContainsString($needle, $html, "Cookies incluye: {$needle}");
         }
 
@@ -279,16 +279,20 @@ class LegalPagesTest extends TestCase
 
     public function test_cada_documento_muestra_su_propia_fecha_de_actualizacion(): void
     {
-        // Solo las políticas que cambiaron declaran la fecha nueva. Una fecha
-        // global compartida haría que seis políticas afirmaran una
-        // actualización que nunca tuvieron.
-        foreach (['legal.cookies', 'legal.privacy'] as $route) {
-            $this->assertStringContainsString(
-                'Última actualización: 17 de noviembre de 2026',
-                $this->html($route),
-                "{$route} declara su propia fecha de actualización"
-            );
-        }
+        // Cada política que cambió declara su propia fecha. Una fecha global
+        // compartida haría que seis políticas afirmaran una actualización que
+        // nunca tuvieron.
+        $this->assertStringContainsString(
+            'Última actualización: 19 de noviembre de 2026',
+            $this->html('legal.cookies'),
+            'legal.cookies declara la fecha en que se agregó la cookie de deduplicación'
+        );
+
+        $this->assertStringContainsString(
+            'Última actualización: 17 de noviembre de 2026',
+            $this->html('legal.privacy'),
+            'legal.privacy conserva su propia fecha'
+        );
 
         foreach (['legal.terms', 'legal.shipping', 'legal.returns', 'legal.payments', 'legal.contact'] as $route) {
             $this->assertStringContainsString(
@@ -299,7 +303,7 @@ class LegalPagesTest extends TestCase
         }
 
         $this->assertStringNotContainsString(
-            '17 de noviembre de 2026',
+            '19 de noviembre de 2026',
             $this->html('legal.terms'),
             'La fecha de cookies no se filtra al resto de documentos'
         );

@@ -8,6 +8,9 @@
 @section('main-attributes', ' data-product-detail')
 
 @section('content')
+    {{-- Ficha vista. Sin consentimiento el componente no pinta nada. --}}
+    <x-analytics.event name="view_item" :params="\App\Support\Analytics::productParams($product)" />
+
     @php
         $imagenes = array_values(array_filter($product->imagenes ?? []));
         $imagenesWebp = array_map(fn ($imagen) => CloudinaryUrl::webp($imagen), $imagenes);
