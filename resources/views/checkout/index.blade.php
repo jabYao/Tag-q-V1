@@ -39,6 +39,16 @@
             </a>
         </header>
 
+        @php
+            // El embudo empieza con lo que el visitante va a pagar de verdad:
+            // las mismas líneas que ve el resumen, no la sesión cruda.
+            $analyticsLines = app(\App\Services\CartService::class)->lines(auth()->user());
+        @endphp
+
+        @if ($analyticsLines->isNotEmpty())
+            <x-analytics.event name="begin_checkout" :params="\App\Support\Analytics::cartParams($analyticsLines)" />
+        @endif
+
         @livewire('checkout.checkout-form')
     </div>
 @endsection

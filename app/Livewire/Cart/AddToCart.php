@@ -99,8 +99,23 @@ class AddToCart extends Component
             return;
         }
 
-        $this->quantity = 1;
         $this->addedMessage = 'Producto agregado al carrito.';
+
+        // Medición del embudo. Solo se despacha si el visitante ya aceptó: sin
+        // consentimiento no hay `gtag` al otro lado y el evento no debe salir
+        // del servidor. Lleva la cantidad realmente agregada, no el total del
+        // carrito.
+        if (\App\Support\Analytics::enabled()) {
+            $this->dispatch(
+                'analytics-event',
+                name: 'add_to_cart',
+                currency: \App\Support\Analytics::CURRENCY,
+                value: $product->precioFinal() * $this->quantity,
+                items: [\App\Support\Analytics::item($product, $this->quantity)],
+            );
+        }
+
+        $this->quantity = 1;
 
         // Lleva el conteo real de líneas activas: es el número que pinta el
         // globo de la bolsa en la navbar. `CartService::lines()` omite

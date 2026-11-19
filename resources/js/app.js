@@ -779,7 +779,7 @@ function writeAnalyticsConsent(decision) {
     ].join('; ');
 }
 
-function loadAnalytics(measurementId) {
+function loadAnalytics(measurementId, userId) {
     if (!measurementId || document.querySelector('[data-analytics-script]')) {
         return;
     }
@@ -797,7 +797,122 @@ function loadAnalytics(measurementId) {
     document.head.appendChild(script);
 
     window.gtag('js', new Date());
+
+    if (userId) {
+        window.gtag('set', 'user_id', userId);
+    }
+
     window.gtag('config', measurementId);
+
+    // El visitante acaba de aceptar: los eventos de esta misma página ya
+    // estaban declarados en el HTML y ahora sí pueden emitirse.
+    flushAnalyticsEvents();
+}
+
+/**
+ * Eventos de negocio (`view_item`, `add_to_cart`, `begin_checkout`,
+ * `purchase`).
+ *
+ * El servidor escribe cada evento como JSON en un `<script type="application/json">`
+ * que solo existe si hay consentimiento. Aquí solo se traduce a `gtag`: los
+ * datos nunca se interpolaron en JavaScript ejecutable.
+ *
+ * `purchase` se emite una sola vez por pedido en cada navegador. El código ya
+ * medido queda en `tagq_purchase_tracked` (separado por `|`), y el servidor
+ * deja de declarar el evento cuando ve esa cookie. Así recargar la
+ * confirmación no infla los ingresos.
+ */
+const ANALYTICS_PURCHASE_COOKIE = 'tagq_purchase_tracked';
+
+function readAnalyticsCookie(name) {
+    const prefix = `${name}=`;
+
+    for (const part of document.cookie.split(';')) {
+        const entry = part.trim();
+
+        if (entry.startsWith(prefix)) {
+            return decodeURIComponent(entry.slice(prefix.length));
+        }
+    }
+
+    return null;
+}
+
+function trackedAnalyticsPurchases() {
+    const raw = readAnalyticsCookie(ANALYTICS_PURCHASE_COOKIE);
+
+    return raw ? raw.split('|').filter(Boolean) : [];
+}
+
+function markAnalyticsOnce(code) {
+    const codes = trackedAnalyticsPurchases();
+
+    if (!code || codes.includes(code)) {
+        return;
+    }
+
+    codes.push(code);
+
+    document.cookie = [
+        `${ANALYTICS_PURCHASE_COOKIE}=${encodeURIComponent(codes.join('|'))}`,
+        'path=/',
+        `max-age=${ANALYTICS_CONSENT_MAX_AGE}`,
+        'samesite=lax',
+    ].join('; ');
+}
+
+/**
+ * Emite un evento si `gtag` ya existe. Sin consentimiento devuelve `false` y el
+ * evento se descarta: no hay cola previa al consentimiento.
+ */
+function dispatchAnalyticsEvent(payload) {
+    if (!payload || typeof payload.name !== 'string' || typeof window.gtag !== 'function') {
+        return false;
+    }
+
+    if (payload.once && trackedAnalyticsPurchases().includes(payload.once)) {
+        return true;
+    }
+
+    const { name, once, ...params } = payload;
+
+    window.gtag('event', name, params);
+
+    if (once) {
+        markAnalyticsOnce(once);
+    }
+
+    return true;
+}
+
+function flushAnalyticsEvents() {
+    document.querySelectorAll('[data-analytics-event]').forEach((node) => {
+        if (node.dataset.analyticsEventSent) {
+            return;
+        }
+
+        let payload;
+
+        try {
+            payload = JSON.parse(node.textContent);
+        } catch {
+            return;
+        }
+
+        if (dispatchAnalyticsEvent(payload)) {
+            node.dataset.analyticsEventSent = '1';
+        }
+    });
+}
+
+function initAnalyticsEvents() {
+    // Livewire no recarga la página, así que `add_to_cart` llega como evento del
+    // navegador desde el componente, no como HTML nuevo.
+    window.addEventListener('analytics-event', (event) => {
+        dispatchAnalyticsEvent(event.detail ?? {});
+    });
+
+    flushAnalyticsEvents();
 }
 
 function initAnalyticsConsent() {
@@ -811,7 +926,7 @@ function initAnalyticsConsent() {
         writeAnalyticsConsent(decision);
 
         if (decision === 'accepted') {
-            loadAnalytics(banner.dataset.analyticsId);
+            loadAnalytics(banner.dataset.analyticsId, banner.dataset.analyticsUserId);
         }
 
         banner.hidden = true;
@@ -822,3 +937,4 @@ function initAnalyticsConsent() {
 }
 
 initAnalyticsConsent();
+initAnalyticsEvents();

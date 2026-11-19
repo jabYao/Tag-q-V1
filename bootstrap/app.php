@@ -29,12 +29,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'webhooks/wompi',
         ]);
 
-        // La decisión de analítica la escribe el banner desde el navegador, así
-        // que llega en texto plano. Sin esta exclusión `EncryptCookies` la
-        // descarta al no poder descifrarla, y el aviso reaparecería en cada
-        // carga sin llegar nunca a activar la medición.
+        // La decisión de analítica y los pedidos ya medidos los escribe el
+        // navegador, así que llegan en texto plano. Sin esta exclusión
+        // `EncryptCookies` las descarta al no poder descifrarlas: el aviso
+        // reaparecería en cada carga y `purchase` se contaría en cada recarga.
         $middleware->encryptCookies(except: [
             'tagq_analytics_consent',
+            'tagq_purchase_tracked',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

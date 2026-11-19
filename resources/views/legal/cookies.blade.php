@@ -69,6 +69,12 @@
                 <td>Conserva el estado de la sesión de medición. Solo se instala si aceptas la analítica.</td>
                 <td>2 años</td>
             </tr>
+            <tr>
+                <td><strong>tagq_purchase_tracked</strong></td>
+                <td>Tag Q</td>
+                <td>Anota los pedidos que ya se midieron, para que recargar la confirmación no cuente la misma compra dos veces. Solo se escribe si aceptas la analítica.</td>
+                <td>1 año</td>
+            </tr>
         </tbody>
     </table>
 
@@ -85,6 +91,12 @@
         Rechazar no limita nada: puedes buscar, agregar al carrito y comprar con normalidad. Tu
         decisión queda guardada en la cookie <strong>tagq_analytics_consent</strong> para no volver a
         preguntarte.
+    </p>
+    <p>
+        Si aceptas, la confirmación de tu pedido anota su código en
+        <strong>tagq_purchase_tracked</strong> después de medir la compra. Esa marca evita que
+        recargar la página o volver al enlace cuente el mismo pedido dos veces y duplique los
+        ingresos que ves en los informes.
     </p>
     <p>
         <strong>No usamos cookies de publicidad</strong>, ni creamos perfiles para mostrarte anuncios
