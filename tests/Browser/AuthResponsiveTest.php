@@ -75,9 +75,14 @@ class AuthResponsiveTest extends DuskTestCase
                 ->assertMissing('[data-auth-editorial]')
                 ->assertVisible('[data-auth="login"] button[type="submit"]')
                 ->assertScript(
-                    'const shell = document.querySelector("[data-auth] .auth-shell");'
+                    // `assertScript` antepone `return`: varias sentencias no
+                    // son una expresión válida (`return const …`). La IIFE
+                    // conserva el retorno único.
+                    '(function () {'
+                    .'const shell = document.querySelector("[data-auth] .auth-shell");'
                     .'const r = shell.getBoundingClientRect();'
-                    .'return Math.abs((r.left + r.right) / 2 - window.innerWidth / 2) <= 2;',
+                    .'return Math.abs((r.left + r.right) / 2 - window.innerWidth / 2) <= 2;'
+                    .'})()',
                     true,
                 )
                 ->assertScript(

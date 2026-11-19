@@ -79,10 +79,12 @@ jobs:
       - name: Instalar dependencias PHP
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      # `key:generate` busca en `.env` el valor de APP_KEY del entorno, no la
+      # sola presencia de la variable: como la clave desechable ya está definida
+      # arriba, el comando no encuentra su marca y termina con un ERROR falso.
+      # El proceso ya trae la clave, así que basta con copiar el archivo.
       - name: Preparar entorno
-        run: |
-          cp .env.example .env
-          php artisan key:generate
+        run: cp .env.example .env
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -180,10 +182,12 @@ jobs:
       - name: Instalar dependencias PHP
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      # `key:generate` busca en `.env` el valor de APP_KEY del entorno, no la
+      # sola presencia de la variable: como la clave desechable ya está definida
+      # arriba, el comando no encuentra su marca y termina con un ERROR falso.
+      # El proceso ya trae la clave, así que basta con copiar el archivo.
       - name: Preparar entorno
-        run: |
-          cp .env.example .env
-          php artisan key:generate
+        run: cp .env.example .env
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -198,6 +202,12 @@ jobs:
       # build real y no un dev server de Vite que no existe en el runner.
       - name: Build de assets (Vite)
         run: npm run build
+
+      # El servidor escucha antes de la primera migración de Dusk, así que sin
+      # esto cada petición inicial del health check ensucia el log con
+      # `relation "sessions" does not exist` (SESSION_DRIVER=database).
+      - name: Preparar base de datos
+        run: php artisan migrate --force
 
       - name: Instalar ChromeDriver
         run: php artisan dusk:chrome-driver --detect

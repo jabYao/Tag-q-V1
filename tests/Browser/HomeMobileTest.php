@@ -287,7 +287,10 @@ class HomeMobileTest extends DuskTestCase
                     .' && hidden("[data-home-card-discount]")'
                     .' && hidden("[data-home-card-price-before]")'
                     .' && hidden("[data-compact-cart-label]")'
-                    .' && getComputedStyle(card.querySelector("[data-compact-cart-icon]")).display !== "none"'
+                    // Favoritos usa la variante `bag` (cuadro `+` sobre la
+                    // foto), no la `compact` del catálogo: el icono que debe
+                    // quedar visible es el `+`, no `data-compact-cart-icon`.
+                    .' && getComputedStyle(card.querySelector("[data-bag-plus]")).display !== "none"'
                     .' && getComputedStyle(card.querySelector("[data-product-card-name]")).display !== "none"'
                     .' && getComputedStyle(card.querySelector("[data-home-card-price]")).display !== "none";'
                     .'})()',
