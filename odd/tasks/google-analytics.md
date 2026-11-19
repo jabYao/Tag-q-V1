@@ -143,3 +143,9 @@ encontraron dos tests Dusk desactualizados —no bugs del producto— corregidos
 antepone `return`; `HomeMobileTest` buscaba el icono `compact` en favoritos, que
 usa la variante `bag`. Las 39 expresiones `assertScript` de `tests/Browser` se
 compilaron como cuerpo de función con Node: todas válidas. Suite 778/778.
+
+**L11 —** Verificación E2E local con Chrome for Testing 157 y Chromedriver 157:
+`tests/Browser` 20/20 en verde, 1 omitido (`OrderCancellationRefundTest`
+requiere una transacción aprobada real de Wompi Sandbox). `HomeMobileTest` y
+`AuthResponsiveTest` quedaron verdes tras corregir la variante `bag` y comparar
+el centrado con `clientWidth`.
