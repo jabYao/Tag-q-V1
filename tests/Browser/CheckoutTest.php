@@ -123,6 +123,11 @@ class CheckoutTest extends DuskTestCase
                 ->type('#checkout-telefono', self::SHIPPING['telefono'])
                 ->type('#checkout-direccion', self::SHIPPING['direccion'])
                 ->type('#checkout-ciudad', self::SHIPPING['ciudad'])
+                // El checkout exige aceptar términos y privacidad (rama legal).
+                // Sin estas casillas el submit responde con errores de
+                // validación y nunca aparece el bloque de éxito.
+                ->check('[data-consent="terms"]')
+                ->check('[data-consent="privacy"]')
                 ->press('[data-checkout-form] form button[type="submit"]')
                 // Éxito: espera el bloque de confirmación y su texto.
                 ->waitFor('[data-order-success]', 15)
